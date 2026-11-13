@@ -15,7 +15,8 @@ def source(resolver, c, context, invocation_id, conversation):
     require(
         resolver is not None
         and resolver.enabled is True
-        and resolver.profile.adapter_revision == "v3-relation-adoption"
+        and resolver.profile.adapter_revision
+        in {"v3-relation-adoption", "v3-relation-adoption-source"}
         and resolver.routing.experience.root is resolver.root
         and resolver.routing.experience.routing_document.scopeMode
         == "EXISTING_WORK_AND_INITIAL_UNDERSTANDING",
@@ -69,11 +70,10 @@ def source(resolver, c, context, invocation_id, conversation):
         result is not None
         and result.state is DraftInvocationState.SUCCEEDED
         and result.result_kind is DraftResultKind.DRAFT_READY
-        and result.profile_revision_id == resolver.profile.profile_revision_id
-        and result.snapshot is not None
-        and result.snapshot.profile_digest == resolver.profile.profile_digest,
+        and result.snapshot is not None,
         "RESULT_NOT_ADOPTABLE",
     )
+    resolver.for_result(result)
     origin_id = chain[-1]["target"]["original_context_id"]
     require(
         all(item["target"]["conversation_id"] == conversation for item in chain),
@@ -86,13 +86,16 @@ def source(resolver, c, context, invocation_id, conversation):
         rows[identity] = row
         record = row["record"]
         original = identity == origin_id
+        selected = None if original else resolver.for_record(record)
+        if selected is not None:
+            selected.routing.experience._require(selected.routing, c, context)
         require(
             (row["tenant_id"], row["security_domain"]) == scope
             and row["subject_id"] == context.principal_id
             and record.get("conversation_id") == conversation
             and record.get("experience_policy_digest") == root.experience.policy_digest
             and record.get("configuration")
-            == (root.configuration if original else routing.configuration)
+            == (root.configuration if original else selected.routing.configuration)
             and record.get("account_id") == account["account_id"]
             and record.get("budget_allowance_id")
             == root.experience.document.allowanceId,
@@ -107,7 +110,7 @@ def source(resolver, c, context, invocation_id, conversation):
             else (
                 record.get("question_only") is True
                 and record.get("owned_understanding_policy_digest")
-                == routing.experience.understanding_policy_digest
+                == selected.routing.experience.understanding_policy_digest
             ),
             "BUSINESS_SCOPE_DENIED",
         )

@@ -86,15 +86,15 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   await verify();
   let route:ExactRoute;
   try{route=await conversationRequest<ExactRoute>('/'+encodeURIComponent(conversation)+'/understanding-results/'+encodeURIComponent(request.messageId)+'/route?'+new URLSearchParams({requestKey:request.key}));}
-  catch(e){if(e instanceof WorkbenchRequestError&&[400,403,404,409,410,422].includes(e.status))persist({...request,phase:'REVIEW'});throw e;}
+  catch(e){if(e instanceof WorkbenchRequestError&&[400,403,404,409,410,422].includes(e.status))persist({...request,phase:request.ownerTarget?.kind==='UNDERSTANDING'?'APPLYING':'REVIEW'});throw e;}
   await verify();
   if(route.relation!=='CURRENT_QUESTION'||route.messageId!==request.messageId||route.originalText!==request.text||!route.target)throw Error('原问题对应关系已变化，未提交或改投其他任务。');
   const matches=[...owners.current.values()].filter(owner=>sameTarget(owner.target,route.target!));
   if(matches.length!==1)throw Error('原问题当前不可续接，已保留回复，不会提交给其他问题。');
   persist({...request,phase:'APPLYING',ownerTarget:route.target});
   const receipt=await matches[0].onAnswer(route.originalText,route.messageId,{requestKey:request.key});
-  if(typeof receipt==='object'&&receipt.state==='REJECTED'){persist({...request,phase:'REVIEW'});setNotice('原问题未接受这条回答，输入已保留，请核对后修改；不会自动重发。');return false}
-  if(receipt!==true&&!(typeof receipt==='object'&&receipt.state==='ACCEPTED')){setNotice('原回答的接收状态尚待核实，请查看原工作进展；不会自动重发。');return false}
+  if(typeof receipt==='object'&&receipt.state==='REJECTED'){persist({...request,phase:'REVIEW'});setNotice(receipt.notice??'原问题未接受这条回答，输入已保留，请核对后修改；不会自动重发。');return false}
+  if(receipt!==true&&!(typeof receipt==='object'&&receipt.state==='ACCEPTED')){setNotice(typeof receipt==='object'&&receipt.notice?receipt.notice:'原回答的接收状态尚待核实，请查看原工作进展；不会自动重发。');return false}
   persist({...request,phase:'DONE'});setNotice('回答已提交到原问题，后续进展继续在本会话显示。');await refresh.current();return true;
  }
  async function readSaved(){
@@ -113,7 +113,16 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
      setNotice('原回答的接收状态尚待核实，正在读取原记录；不会重发。');return Boolean(question&&!question.expired&&!question.answer);
     }
     if(request.ownerTarget?.kind==='UNDERSTANDING'){
-     const receipt=await conversationRequest<{adoption:{actualResult:{invocationId:string}}}>('/'+encodeURIComponent(conversation)+'/understanding-results/'+encodeURIComponent(request.messageId)+'/adoption?'+new URLSearchParams({requestKey:request.key}));
+     let receipt:{adoption:{actualResult:{invocationId:string}}};
+     const path='/'+encodeURIComponent(conversation)+'/understanding-results/'+encodeURIComponent(request.messageId),query='?'+new URLSearchParams({requestKey:request.key});
+     try{receipt=await conversationRequest<typeof receipt>(path+'/adoption'+query)}catch(e){
+      if(!(e instanceof WorkbenchRequestError&&e.status===404&&e.reasonCode==='UNDERSTANDING_ADOPTION_NOT_FOUND'))throw e;
+      const result=await readConversationUnderstandingResult(conversation,request.messageId,request.key);
+      const route=await conversationRequest<ExactRoute>(path+'/route'+query);await verify();
+      if(route.relation!=='CURRENT_QUESTION'||route.messageId!==request.messageId||route.originalText!==request.text||route.target?.kind!=='UNDERSTANDING'||!sameTarget(request.ownerTarget,route.target)||[...owners.current.values()].filter(o=>sameTarget(o.target,route.target!)).length!==1)throw Error('原问题对应关系尚未核实，未重复提交。',{cause:e});
+      if(result.state!=='SUCCEEDED'||result.conversationDelivery?.state!=='SAVED'||result.conversationRoute?.relation!=='CURRENT_QUESTION'||!['DRAFT_READY','NEEDS_DATA','NEEDS_CLARIFICATION'].includes(result.resultKind??''))throw Error('原回答结果尚未核实，未重复提交。',{cause:e});
+      persist({...request,phase:'READY_TO_APPLY',persistentRecovery:true});setNotice('已核对原回答与当前问题，尚未读到采用回执。可明确继续已有回答，不会重新调用模型。');return false;
+     }
      const journal=await conversationRequest<{state:{draft?:{invocationId:string}}|null}>('/'+encodeURIComponent(conversation)+'/journey');await verify();
      if(journal.state?.draft?.invocationId===receipt.adoption.actualResult.invocationId){persist({...request,phase:'DONE'});setNotice('已核实原会话接续记录，没有重复理解。');await refresh.current();return false;}
      persist({...request,phase:'READY_TO_APPLY'});setNotice('理解结果已采用。可继续把已保存结果接回原会话，不会重新调用模型。');return false;
@@ -164,7 +173,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   finally{flight.current=false;if(alive.current)setBusy(false)}
  }
  useEffect(()=>{sendHandler.current=send});
- async function continueAnswer(){if(flight.current||current.current?.phase!=='READY_TO_APPLY')return;flight.current=true;setBusy(true);try{await applyOwner(current.current)}catch(e){if(alive.current)setNotice(String(e))}finally{flight.current=false;if(alive.current)setBusy(false)}}
+ async function continueAnswer(){if(flight.current||current.current?.phase!=='READY_TO_APPLY')return;flight.current=true;setBusy(true);try{await applyOwner(current.current)}catch(e){if(alive.current)setNotice(failureNotice(e))}finally{flight.current=false;if(alive.current)setBusy(false)}}
  const blocked=Boolean(saved&&!['DONE','REVIEW'].includes(saved.phase));
  return {context,send,busy,blocked,notice,preview,readSaved,continueAnswer,canResume,resumeUnstarted,acceptedKey:saved?.phase==='DONE'?saved.key:undefined,acceptedText:saved?.phase==='DONE'?saved.text:undefined,persistentRecovery:saved?.persistentRecovery===true,readyToApply:saved?.phase==='READY_TO_APPLY'};
 }

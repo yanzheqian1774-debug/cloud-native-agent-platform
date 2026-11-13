@@ -33,7 +33,10 @@ class AdoptionExperience(RelationExperience):
 def configure(service, root, previous, grants, authorizer, policy_path):
     from .draft_assistance_authorization import GrantAdministrationDraftAuthorization
 
-    if service.profile.adapter_revision != "v3-relation-adoption":
+    if service.profile.adapter_revision not in {
+        "v3-relation-adoption",
+        "v3-relation-adoption-source",
+    }:
         raise AuthorityError("UNDERSTANDING_ADOPTION_PROFILE_INVALID")
     configuration = configured_limits(
         service.profile, service.transport.configuration, service.budget
@@ -47,15 +50,29 @@ def configure(service, root, previous, grants, authorizer, policy_path):
         or service.budget.allowance_id != root.experience.document.allowanceId
     ):
         raise AuthorityError("UNDERSTANDING_ADOPTION_ALLOWANCE_MISMATCH")
+    previous_origin = getattr(root, "understanding_adoption", None)
+    if service.profile.adapter_revision == "v3-relation-adoption-source" and (
+        previous_origin is None
+        or previous_origin.routing is not previous
+        or previous_origin.profile.adapter_revision != "v3-relation-adoption"
+    ):
+        raise AuthorityError("UNDERSTANDING_ADOPTION_PREDECESSOR_MISMATCH")
     service.authorization = GrantAdministrationDraftAuthorization(
         grants, authorizer, clock=grants.clock
     )
     service.authorization.context_admission = admission
     service.budget.context_admission = admission
     service.budget.delegation_configuration = configuration
-    root.retained_conversation_relations = (previous,)
+    root.retained_conversation_relations = (
+        previous,
+        *getattr(root, "retained_conversation_relations", ()),
+    )
     root.conversation_relation = admission
     root.understanding_adoption = AdoptionOrigin(
-        root, admission, service.profile, enabled=True
+        root,
+        admission,
+        service.profile,
+        enabled=True,
+        retained=(previous_origin,) if previous_origin is not None else (),
     )
     return admission

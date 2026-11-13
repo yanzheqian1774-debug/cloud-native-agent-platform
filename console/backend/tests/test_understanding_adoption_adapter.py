@@ -27,6 +27,10 @@ from test_openai_responses_draft_adapter import _real_runtime_document
             "v3-relation-adoption",
             "conversation-understanding-output.v3-relation-adoption",
         ),
+        (
+            "v3-relation-adoption-source",
+            "conversation-understanding-output.v3-relation-adoption",
+        ),
     ],
 )
 def test_complete_runtime_reaches_real_prepare_without_dispatch(
@@ -103,7 +107,7 @@ def test_complete_runtime_reaches_real_prepare_without_dispatch(
         }
     )
     with bind_snapshot(snapshot), bind_attachment(attachment):
-        if revision == "v3-relation-adoption":
+        if revision in {"v3-relation-adoption", "v3-relation-adoption-source"}:
             bounded = transport.prepare(
                 invocation_id="metadata-only",
                 content=json.dumps(envelope),
@@ -118,7 +122,7 @@ def test_complete_runtime_reaches_real_prepare_without_dispatch(
                     content=json.dumps(envelope),
                     profile=profile,
                 )
-    if revision == "v3-relation-adoption":
+    if revision in {"v3-relation-adoption", "v3-relation-adoption-source"}:
         from agent_console.draft_assistance import ObservationState
         from test_openai_responses_draft_adapter import _completed
         from test_understanding_adoption_policy import full
@@ -178,6 +182,35 @@ def test_complete_runtime_reaches_real_prepare_without_dispatch(
         ):
             transport.prepare(
                 invocation_id="forged", content=json.dumps(forged), profile=profile
+            )
+    if revision == "v3-relation-adoption-source":
+        from test_understanding_source_body import selected
+        from test_understanding_source_body import snapshot as source_snapshot
+
+        source = selected()
+        current = source_snapshot(source)
+        with bind_snapshot(current), bind_attachment(json.dumps(source)):
+            body_request = transport.prepare(
+                invocation_id="same-selected-source",
+                content=json.dumps(envelope),
+                profile=profile,
+            )
+        frames = json.loads(body_request.payload)["input"]
+        assert (
+            json.loads(frames[1]["content"][0]["text"])["originalContent"]
+            == source["originalContent"]
+        )
+        assert body_request.quote.input_token_upper_bound == len(body_request.payload)
+        source["originalContent"]["body"] = "x" * 70000
+        with (
+            bind_snapshot(current),
+            bind_attachment(json.dumps(source)),
+            pytest.raises(DraftAssistanceError, match="PROVIDER_INPUT_BOUND_EXCEEDED"),
+        ):
+            transport.prepare(
+                invocation_id="oversized-selected-source",
+                content=json.dumps(envelope),
+                profile=profile,
             )
     assert budget["allowanceId"] == "allowance:original"
     assert not (tmp_path / "credential").exists()

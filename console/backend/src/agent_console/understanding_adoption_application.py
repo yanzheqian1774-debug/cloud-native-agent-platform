@@ -23,6 +23,7 @@ class UnderstandingAdoptionApplication:
         payload,
         *,
         source_transaction=None,
+        retained=(),
     ):
         self.actions, self.primary, self.routing = actions, primary, routing
         self.service_for, self.reader, self.source_reader = (
@@ -32,10 +33,12 @@ class UnderstandingAdoptionApplication:
         )
         self.payload = payload
         self.source_transaction = source_transaction or nullcontext
+        self.retained = tuple(retained)
 
     def result(self, context, conversation, message, key):
         require(
-            self.routing.profile.adapter_revision == "v3-relation-adoption",
+            self.routing.profile.adapter_revision
+            in {"v3-relation-adoption", "v3-relation-adoption-source"},
             "UNAVAILABLE",
         )
         require(isinstance(key, str) and 0 < len(key) <= 128, "KEY_INVALID")
@@ -47,7 +50,10 @@ class UnderstandingAdoptionApplication:
         )
         require(invocation is not None, "RESULT_NOT_FOUND")
         owner = self.service_for(context, invocation.invocation_id)
-        require(owner is self.routing, "PROFILE_MISMATCH")
+        require(
+            any(owner is candidate for candidate in (self.routing, *self.retained)),
+            "PROFILE_MISMATCH",
+        )
         invocation = owner.read(context, invocation.invocation_id).invocation
         require(
             invocation.snapshot is not None
@@ -80,8 +86,16 @@ class UnderstandingAdoptionApplication:
             owner = self.service_for(context, invocation.invocation_id)
             current = owner.read(context, invocation.invocation_id).invocation
             require(current == invocation, "REFERENCE_CHANGED")
-        admission = self.routing.authorization.context_admission
-        admission.experience._require(admission, connection, context)
+            if owner is not self.primary:
+                require(
+                    any(
+                        owner is candidate
+                        for candidate in (self.routing, *self.retained)
+                    ),
+                    "PROFILE_MISMATCH",
+                )
+                admission = owner.authorization.context_admission
+                admission.experience._require(admission, connection, context)
 
     def read(self, context, conversation, message, key):
         result, _target, value = self.result(context, conversation, message, key)
@@ -174,7 +188,9 @@ class UnderstandingAdoptionApplication:
                 return dict(
                     current_snapshot=current,
                     retained_source=retained,
-                    expected_profile_revision=self.routing.profile.profile_revision_id,
+                    expected_profile_revision=self.service_for(
+                        ctx, actual.invocation_id
+                    ).profile.profile_revision_id,
                     settled_invocations=frozenset(settled),
                     now=datetime.now(UTC),
                     selected_source=selected,

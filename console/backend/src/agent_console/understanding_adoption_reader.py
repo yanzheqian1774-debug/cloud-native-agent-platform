@@ -8,7 +8,7 @@ from .draft_assistance import DraftInvocationState, DraftResultKind, DraftScope
 from .private_conversation import ConversationError, digest
 
 
-def reader(existing_reader, records, primary, routing):
+def reader(existing_reader, records, primary, routing, *, retained=()):
     def read(context, conversation, message_id, _service):
         journal = _journal(records, context, conversation)
         state = journal["state"] or {}
@@ -35,7 +35,7 @@ def reader(existing_reader, records, primary, routing):
         selected = next(
             (
                 s
-                for s in (primary, routing)
+                for s in (primary, routing, *retained)
                 if s and s.profile.profile_revision_id == raw.profile_revision_id
             ),
             None,
@@ -70,7 +70,7 @@ def reader(existing_reader, records, primary, routing):
                     owner = next(
                         (
                             service
-                            for service in (primary, routing)
+                            for service in (primary, routing, *retained)
                             if service
                             and service.profile.profile_revision_id
                             == invocation.profile_revision_id

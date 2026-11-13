@@ -233,7 +233,7 @@ def install_draft_assistance_routes(
                     "initialUnderstandingAdoption": (
                         routing_service is not None
                         and routing_service.profile.adapter_revision
-                        == "v3-relation-adoption"
+                        in {"v3-relation-adoption", "v3-relation-adoption-source"}
                         and getattr(app.state, "understanding_adoption", None)
                         is not None
                         and available(routing_service, context)
@@ -314,7 +314,11 @@ def install_draft_assistance_routes(
                 if body.conversationRouting and (
                     active_service is None
                     or active_service.profile.adapter_revision
-                    not in {"v3-relation", "v3-relation-adoption"}
+                    not in {
+                        "v3-relation",
+                        "v3-relation-adoption",
+                        "v3-relation-adoption-source",
+                    }
                     or not conversation
                     or body.parentContextId
                     or body.parentTurnId
@@ -335,6 +339,7 @@ def install_draft_assistance_routes(
                         "v3-execution",
                         "v3-relation",
                         "v3-relation-adoption",
+                        "v3-relation-adoption-source",
                     }:
                         raise DraftAssistanceError(
                             "CONVERSATION_UNDERSTANDING_UNAVAILABLE"
@@ -378,7 +383,7 @@ def install_draft_assistance_routes(
                     adoption = (
                         body.conversationRouting
                         and active_service.profile.adapter_revision
-                        == "v3-relation-adoption"
+                        in {"v3-relation-adoption", "v3-relation-adoption-source"}
                     )
                     reader = getattr(
                         request.app.state,

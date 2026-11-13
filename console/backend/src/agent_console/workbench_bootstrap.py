@@ -91,6 +91,7 @@ def build_workbench_composition(
     draft_assistance: DraftAssistanceService | None = None,
     conversation_routing: DraftAssistanceService | None = None,
     conversation_adoption: DraftAssistanceService | None = None,
+    conversation_source_adoption: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
     model_repository=None,
     planning_v2_enabled: bool = False,
@@ -565,6 +566,23 @@ def build_workbench_composition(
                         os.environ.get("F3_UNDERSTANDING_ADOPTION_POLICY", ""),
                     )
                     migrate_adoption(conversation_adoption.repository)
+                if conversation_source_adoption is not None:
+                    if (
+                        conversation_adoption is None
+                        or conversation_adoption.profile.adapter_revision
+                        != "v3-relation-adoption"
+                        or conversation_source_adoption.profile.adapter_revision
+                        != "v3-relation-adoption-source"
+                    ):
+                        raise ValueError("UNDERSTANDING_SOURCE_PREDECESSOR_REQUIRED")
+                    configure_adoption(
+                        conversation_source_adoption,
+                        admission,
+                        conversation_adoption.authorization.context_admission,
+                        foundation.grants,
+                        authorizer,
+                        os.environ.get("F3_UNDERSTANDING_SOURCE_ADOPTION_POLICY", ""),
+                    )
                 from .conversation_history_access import install_history_access
 
                 delegation_routes += (
@@ -1007,8 +1025,15 @@ def build_workbench_composition(
                             (
                                 install_draft_assistance_routes(
                                     draft_assistance,
-                                    conversation_adoption or conversation_routing,
-                                    retained_routing_services=(conversation_routing,)
+                                    conversation_source_adoption
+                                    or conversation_adoption
+                                    or conversation_routing,
+                                    retained_routing_services=(
+                                        conversation_adoption,
+                                        conversation_routing,
+                                    )
+                                    if conversation_source_adoption is not None
+                                    else (conversation_routing,)
                                     if conversation_adoption is not None
                                     else (),
                                 ),
@@ -1095,7 +1120,10 @@ def build_workbench_composition(
                     application.state.conversation_relation_reader,
                     application.state.conversation_actions.records,
                     draft_assistance,
-                    conversation_adoption,
+                    conversation_source_adoption or conversation_adoption,
+                    retained=(conversation_adoption,)
+                    if conversation_source_adoption is not None
+                    else (),
                 )
                 adoption_source = source_reader(
                     resource_automation,
@@ -1124,12 +1152,15 @@ def build_workbench_composition(
                 adoption_owner = UnderstandingAdoptionApplication(
                     application.state.conversation_actions,
                     draft_assistance,
-                    conversation_adoption,
+                    conversation_source_adoption or conversation_adoption,
                     application.state.conversation_draft_service_for,
                     application.state.conversation_relation_reader,
                     source_metadata,
                     _payload,
                     source_transaction=owned_source_access.authorizer.controller.protected_request,
+                    retained=(conversation_adoption,)
+                    if conversation_source_adoption is not None
+                    else (),
                 )
                 application.state.understanding_adoption = adoption_owner
         if continuation_path:

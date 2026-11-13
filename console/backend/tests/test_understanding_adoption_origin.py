@@ -12,6 +12,12 @@ from agent_console.understanding_adoption_origin import AdoptionOrigin
     "enabled,revision,scope_mode",
     [
         (False, "v3-relation-adoption", "EXISTING_WORK_AND_INITIAL_UNDERSTANDING"),
+        (
+            False,
+            "v3-relation-adoption-source",
+            "EXISTING_WORK_AND_INITIAL_UNDERSTANDING",
+        ),
+        (True, "v3-relation-adoption-source", "EXISTING_BUSINESS_WORK"),
         (True, "v3-relation", "EXISTING_BUSINESS_WORK"),
         (True, "v3-execution", "EXISTING_WORK_AND_INITIAL_UNDERSTANDING"),
         (True, "v3-relation-adoption", "EXISTING_BUSINESS_WORK"),

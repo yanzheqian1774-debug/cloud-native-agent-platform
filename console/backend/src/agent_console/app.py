@@ -1901,6 +1901,7 @@ _workbench_composition = None
 _draft_assistance_composition = None
 _conversation_routing_composition = None
 _understanding_adoption_composition = None
+_understanding_source_adoption_composition = None
 workbench_app = None
 _workbench_startup_error = "WORKBENCH_DISABLED"
 
@@ -1910,7 +1911,8 @@ def _configure_workbench() -> None:
         _draft_assistance_composition, \
         _workbench_composition, \
         _conversation_routing_composition, \
-        _understanding_adoption_composition
+        _understanding_adoption_composition, \
+        _understanding_source_adoption_composition
     global workbench_app, _workbench_startup_error
     from agent_console.draft_assistance_bootstrap import (
         build_draft_assistance_composition,
@@ -1922,6 +1924,7 @@ def _configure_workbench() -> None:
     allowed_origin = os.environ.get("WORKBENCH_ALLOWED_ORIGIN", "")
     _workbench_composition = None
     _draft_assistance_composition = None
+    _understanding_source_adoption_composition = None
     workbench_app = None
     if not runtime_path or not allowed_host or not allowed_origin:
         _workbench_startup_error = "WORKBENCH_DISABLED"
@@ -1987,6 +1990,19 @@ def _configure_workbench() -> None:
                 database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
                 runtime_configuration_path=Path(adoption_path),
                 migrations_path=_MIGRATIONS,
+            )
+        source_adoption_path = os.environ.get(
+            "UNDERSTANDING_SOURCE_ADOPTION_RUNTIME_FILE", ""
+        )
+        if source_adoption_path:
+            if _understanding_adoption_composition is None:
+                raise ValueError("UNDERSTANDING_SOURCE_REQUIRES_RETAINED_ADOPTION")
+            _understanding_source_adoption_composition = (
+                build_draft_assistance_composition(
+                    database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+                    runtime_configuration_path=Path(source_adoption_path),
+                    migrations_path=_MIGRATIONS,
+                )
             )
         prepared_coordinator = None
         prepared_resource_services = None
@@ -2061,6 +2077,11 @@ def _configure_workbench() -> None:
                 if _understanding_adoption_composition is not None
                 else None
             ),
+            conversation_source_adoption=(
+                _understanding_source_adoption_composition.service
+                if _understanding_source_adoption_composition is not None
+                else None
+            ),
             managed_closeables=(
                 (_draft_assistance_composition,)
                 if _draft_assistance_composition is not None
@@ -2076,6 +2097,11 @@ def _configure_workbench() -> None:
                 if _understanding_adoption_composition is not None
                 else ()
             )
+            + (
+                (_understanding_source_adoption_composition,)
+                if _understanding_source_adoption_composition is not None
+                else ()
+            )
             + ((planning_runtime,) if planning_runtime is not None else ())
             + ((prepared_knowledge_pool,) if prepared_knowledge_pool else ()),
         )
@@ -2086,6 +2112,9 @@ def _configure_workbench() -> None:
             prepared_knowledge_pool.close()
         if planning_runtime is not None:
             planning_runtime.close()
+        if _understanding_source_adoption_composition is not None:
+            _understanding_source_adoption_composition.close()
+            _understanding_source_adoption_composition = None
         if _understanding_adoption_composition is not None:
             _understanding_adoption_composition.close()
             _understanding_adoption_composition = None

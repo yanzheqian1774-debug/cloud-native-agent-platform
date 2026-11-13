@@ -7,7 +7,7 @@ async function fixture(page:Page,needsData=false,retained?:Awaited<ReturnType<ty
 }
 function freshState(needsData=false){
  const initial={state:'SUCCEEDED',resultKind:needsData?'NEEDS_DATA':'NEEDS_CLARIFICATION',invocationId:'initial',contextId:'initial-context',turnId:'initial-turn',turnVersion:1,aggregateVersion:5,clarificationQuestion:needsData?null:'请确认需要检查的环境。',dataNeeds:needsData?['请提供交接材料']:[],draft:null,conversationDelivery:{state:'SAVED',messageId:'original-answer'}};
- const state={calls:[] as Record<string,unknown>[],adoptions:[] as Record<string,unknown>[],writes:[] as string[],version:2,relation:'CURRENT_QUESTION',stale:false,lost:false,reject:false,receipt:null as Record<string,unknown>|null,last:null as Record<string,unknown>|null,target:null as Record<string,unknown>|null,denyReads:false,
+ const state={calls:[] as Record<string,unknown>[],adoptions:[] as Record<string,unknown>[],writes:[] as string[],version:2,relation:'CURRENT_QUESTION',stale:false,lost:false,reject:false,receipt:null as Record<string,unknown>|null,last:null as Record<string,unknown>|null,target:null as Record<string,unknown>|null,denyReads:false,rejectCode:'UNDERSTANDING_ADOPTION_BUDGET_UNRESOLVED',rejectStatus:409,adoptionReadStatus:0,journalFailure:false,guardAfterCommit:false,
  journal:{version:7,state:{key:'work',phase:'CLARIFY',understandingProtocol:3,userMessageId:'original',question:'请检查交接材料',messages:[{id:'user:original',text:'请检查交接材料'}],draft:initial,sources:needsData?[source]:[],source:undefined as typeof source|undefined,log:[] as string[]}},
  messages:[{message_id:'original',content:'请检查交接材料',author_id:'human:alice',disposition:'GOAL_RECORDED'},{message_id:'original-answer',content:initial.clarificationQuestion??'请提供交接材料',kind:'SOURCE',facts:{assistantResponse:true,state:'SUCCEEDED',response:initial,source:{kind:'DRAFT',invocationId:initial.invocationId,contextId:initial.contextId,turnId:initial.turnId,turnVersion:initial.turnVersion}}}] as Record<string,unknown>[]};
  return state;
@@ -20,7 +20,7 @@ async function installRoutes(page:Page,state:ReturnType<typeof freshState>,initi
   if(p.endsWith('/development-administrator'))return result({enabled:false});
   if(p.endsWith('/conversations/capabilities'))return result({enabled:true});
   if(p.endsWith('/draft-assistance/capabilities'))return result({conversationUnderstanding:true,conversationRelationRouting:true,initialUnderstandingAdoption:true});
-  if(p.endsWith('/conversations/adoption/journey')){if(b){expect(b.expectedVersion).toBe(state.journal.version);state.journal={version:state.journal.version+1,state:b.state}}return result(state.journal)}
+  if(p.endsWith('/conversations/adoption/journey')){if(b){if(state.journalFailure)return route.fulfill({status:503,json:{reasonCode:'JOURNAL_UNAVAILABLE'}});expect(b.expectedVersion).toBe(state.journal.version);state.journal={version:state.journal.version+1,state:b.state}}return result(state.journal)}
   if(p.endsWith('/conversations/adoption/messages')){expect(b.expectedVersion).toBe(state.version);state.version++;const id='user-'+state.version;state.messages.push({message_id:id,content:b.content,author_id:'human:alice',disposition:'FOLLOWUP_RECORDED',request_key:b.idempotencyKey});return result({identity:id})}
   if(p.endsWith('/conversations/adoption/head'))return result({conversation:{conversation_id:'adoption',version:state.version,title:'交接检查'}});
   if(p.endsWith('/conversations/adoption'))return result({conversation:{conversation_id:'adoption',version:state.version,title:'交接检查'},messages:state.messages,links:[]});
@@ -35,7 +35,8 @@ async function installRoutes(page:Page,state:ReturnType<typeof freshState>,initi
    const last=state.calls.at(-1)!;return result({relation:state.relation,originalText:JSON.parse(last.content as string).messages.at(-1).text,messageId:last.conversationMessageId,target:state.target});
   }
   if(p.includes('/understanding-results/')&&p.endsWith('/adoption')){
-   if(b){state.adoptions.push(b);if(state.reject)return route.fulfill({status:409,json:{reasonCode:'UNDERSTANDING_ADOPTION_BUDGET_UNRESOLVED'}});const old=state.journal;state.receipt={adoption:{target:{original_invocation_id:old.state.draft.invocationId,journal_version:old.version,journey_key:old.state.key,message_id:state.calls.at(-1)!.conversationMessageId},actualResult:{invocationId:state.last!.invocationId}},understanding:state.last,modelDispatched:false};if(state.lost)return route.abort();}
+   if(!b&&state.adoptionReadStatus)return route.fulfill({status:state.adoptionReadStatus,json:{reasonCode:'ADOPTION_READ_UNAVAILABLE'}});
+   if(b){state.adoptions.push(b);if(state.reject)return route.fulfill({status:state.rejectStatus,json:{reasonCode:state.rejectCode}});const old=state.journal;state.receipt={adoption:{target:{original_invocation_id:old.state.draft.invocationId,journal_version:old.version,journey_key:old.state.key,message_id:state.calls.at(-1)!.conversationMessageId},actualResult:{invocationId:state.last!.invocationId}},understanding:state.last,modelDispatched:false};if(state.guardAfterCommit)return route.fulfill({status:409,json:{reasonCode:'UNDERSTANDING_ADOPTION_QUESTION_CHANGED'}});if(state.lost)return route.abort();}
    return state.receipt?result(state.receipt):route.fulfill({status:404,json:{reasonCode:'UNDERSTANDING_ADOPTION_NOT_FOUND'}});
   }
   if(p.includes('/understanding-results/'))return result(state.last);
@@ -54,7 +55,7 @@ test('initial reply adopts saved full result using one model call',async({page},
 test('unrelated answer preserves the initial pending question and journal',async({page})=>{const s=await fixture(page);s.relation='INDEPENDENT';const before=JSON.stringify(s.journal);await page.goto('/work?conversation=adoption');await send(page,'HTTP 是什么？');await expect(page.getByText('HTTP 是传输协议。',{exact:true})).toBeVisible();expect(s.adoptions).toHaveLength(0);expect(JSON.stringify(s.journal)).toBe(before);expect(s.calls).toHaveLength(1)});
 test('explicit source selection routes once without replacing original question',async({page})=>{const s=await fixture(page,true);await page.goto('/work?conversation=adoption');await page.getByRole('button',{name:'使用现有交付测试资料'}).click();await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);expect(s.journal.state.source?.source).toEqual(source.source);expect(s.journal.state.question).toBe('请检查交接材料')});
 test('stale question never adopts or sends a second model call',async({page})=>{const s=await fixture(page);s.stale=true;const before=JSON.stringify(s.journal);await page.goto('/work?conversation=adoption');await send(page,'生产环境');await expect(input(page)).toHaveValue('生产环境');await expect(page.getByText('暂未确认这条回复的处理结果。原问题已保留，请核查状态；不会自动重复提交。',{exact:true})).toBeVisible();expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(0);expect(JSON.stringify(s.journal)).toBe(before)});
-test('unsettled budget rejection preserves original question and input',async({page})=>{const s=await fixture(page);s.reject=true;const before=JSON.stringify(s.journal);await page.goto('/work?conversation=adoption');await send(page,'生产环境');await expect(page.getByText('原问题未接受这条回答，输入已保留，请核对后修改；不会自动重发。',{exact:true})).toBeVisible();expect(JSON.stringify(s.journal)).toBe(before);await expect(input(page)).toHaveValue('生产环境');expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1)});
+test('unsettled budget rejection preserves original question and input',async({page})=>{const s=await fixture(page);s.reject=true;const before=JSON.stringify(s.journal);await page.goto('/work?conversation=adoption');await send(page,'生产环境');await expect(page.getByText('原问题和回答均已保留，将先核对是否已有接续记录。无需重新提问，也无需修改回答来解决平台校验问题。',{exact:true}).first()).toBeVisible();expect(JSON.stringify(s.journal)).toBe(before);await expect(input(page)).toHaveValue('生产环境');expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1)});
 test('lost adoption receipt refresh is read only and explicit continuation reuses result',async({page})=>{const s=await fixture(page);s.lost=true;await page.goto('/work?conversation=adoption');await send(page,'生产环境');await expect.poll(()=>s.adoptions.length).toBe(1);await page.reload();await expect(page.getByRole('button',{name:'继续提交这条回答'})).toBeVisible();expect(s.journal.state.draft.invocationId).toBe('initial');expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);await page.getByRole('button',{name:'继续提交这条回答'}).click();await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1)});
 
 test('ready draft waiting for data uses the same adoption path after explicit source selection',async({page})=>{const s=await fixture(page,true);s.journal.state.draft={...s.journal.state.draft,resultKind:'DRAFT_READY',dataNeeds:[]};await page.goto('/work?conversation=adoption');await page.getByRole('button',{name:'使用现有交付测试资料'}).click();await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);expect(s.journal.state.source?.source).toEqual(source.source)});
@@ -87,4 +88,52 @@ test('persisted owner is available while source listing is delayed',async({page,
  let release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve});
  await fresh.route('**/conversations/adoption/sources',async route=>{await pending;await route.fulfill({json:{result:{items:[source]}}})});
  await fresh.goto(base+'/work?conversation=adoption');const button=fresh.getByRole('button',{name:'核对并继续已有回答'});await expect(button).toBeVisible();expect(s.calls).toHaveLength(1);await button.click();await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');release();await expect(button).toHaveCount(0);expect(s.calls).toHaveLength(1);await context.close();
+});
+
+for(const mode of ['guard','access','read','server','journal'] as const)test(`adoption feedback distinguishes ${mode} without execution UNKNOWN`,async({page})=>{
+ const s=await fixture(page);
+ if(mode==='guard'){s.reject=true;s.rejectCode='UNDERSTANDING_ADOPTION_RESULT_NOT_ADOPTABLE'}
+ if(mode==='access')s.adoptionReadStatus=403;
+ if(mode==='read')s.adoptionReadStatus=503;
+ if(mode==='server'){s.reject=true;s.rejectStatus=503;s.rejectCode='UPSTREAM_UNAVAILABLE'}
+ if(mode==='journal')s.journalFailure=true;
+ await page.goto('/work?conversation=adoption');await send(page,'生产环境');
+ const titles={guard:'本次接续校验未通过',access:'当前无法核对回答的接续记录',read:'暂时无法读取回答的接续记录',server:'正在核对回答是否已接回',journal:'正在核对原会话接续记录'};
+ await expect(page.getByRole('heading',{name:titles[mode],exact:true})).toBeVisible();
+ await expect(page.getByText('不会自动重发可能已执行的请求。恢复后仍在本会话继续。',{exact:true})).toHaveCount(0);
+ const alert=page.locator('.conversation-journey [role="alert"]');await expect(alert.locator('details')).not.toHaveAttribute('open','');await expect(alert.locator('details p')).not.toBeVisible();
+ expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(['access','read'].includes(mode)?0:1);expect(s.journal.state.draft.invocationId).toBe('initial');
+ if(mode==='journal')expect(s.receipt).not.toBeNull();
+});
+
+for(const code of ['CONVERSATION_INPUT_ACCESS_DENIED','OUTCOME_UNKNOWN'])test(`existing ${code} semantics stay distinct from adoption`,async({page})=>{
+ const s=await fixture(page);Object.assign(s.journal.state,{error:code});await page.goto('/work?conversation=adoption');
+ if(code==='OUTCOME_UNKNOWN')await expect(page.getByText('结果待核实',{exact:true})).toBeVisible();
+ else await expect(page.getByText('当前访问校验未通过，原提问已保留。请在访问恢复后继续，无需重新描述问题。',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'本次接续校验未通过',exact:true})).toHaveCount(0);expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);
+});
+
+test('NEEDS_DATA renders exact requested document content before generic hints',async({page})=>{
+ const s=await fixture(page,true);s.journal.state.source=source;s.journal.state.draft.dataNeeds=['请提供上线交接说明正文。','请补充文中引用的清单与附件。'];await page.goto('/work?conversation=adoption');
+ const needs=page.getByRole('list',{name:'需要补充的资料'});await expect(needs).toContainText('请提供上线交接说明正文。');await expect(needs).toContainText('请补充文中引用的清单与附件。');await expect(page.getByText('请补充你最关注的问题，例如关注的指标、时间或对象。',{exact:true})).toHaveCount(0);expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);
+});
+
+test('guard response cannot erase a concurrent saved adoption or enable model replay',async({page})=>{
+ const s=await fixture(page);s.guardAfterCommit=true;await page.goto('/work?conversation=adoption');await send(page,'生产环境');
+ await expect(page.getByRole('heading',{name:'本次接续校验未通过',exact:true})).toBeVisible();const button=page.getByRole('button',{name:'继续提交这条回答',exact:true});await expect(button).toBeVisible();expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);expect(s.journal.state.draft.invocationId).toBe('initial');
+ await button.click();await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);
+});
+
+test('prewrite rejection can explicitly continue the same saved answer after repair',async({page})=>{
+ const s=await fixture(page);s.reject=true;s.rejectCode='UNDERSTANDING_ADOPTION_RESULT_NOT_ADOPTABLE';await page.goto('/work?conversation=adoption');await send(page,'生产环境');
+ const button=page.getByRole('button',{name:'核对并继续已有回答',exact:true});await expect(button).toBeVisible();expect(s.adoptions).toHaveLength(1);expect(s.calls).toHaveLength(1);const key=s.adoptions[0].requestKey;s.reject=false;
+ await button.click();await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');expect(s.adoptions).toHaveLength(2);expect(s.adoptions[1].requestKey).toBe(key);expect(s.calls).toHaveLength(1);
+});
+
+test('explicit continuation rechecks stale route without exposing its technical code',async({page})=>{
+ const s=await fixture(page);s.reject=true;await page.goto('/work?conversation=adoption');await send(page,'生产环境');const button=page.getByRole('button',{name:'核对并继续已有回答',exact:true});await expect(button).toBeVisible();s.stale=true;await button.click();await expect(page.getByText('暂未确认这条回复的处理结果。原问题已保留，请核查状态；不会自动重复提交。',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'发送',exact:true})).toBeDisabled();await page.reload();await expect(page.getByRole('button',{name:'发送',exact:true})).toBeDisabled();await expect(page.getByText('Error: CONVERSATION_ROUTING_CONTEXT_CHANGED',{exact:true})).toHaveCount(0);expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);
+});
+
+test('permission loss during uncertain adoption continuation preserves readback without new model',async({page})=>{
+ const s=await fixture(page);s.reject=true;await page.goto('/work?conversation=adoption');await send(page,'生产环境');const button=page.getByRole('button',{name:'核对并继续已有回答',exact:true});await expect(button).toBeVisible();s.denyReads=true;await button.click();await expect(page.getByRole('button',{name:'发送',exact:true})).toBeDisabled();await page.reload();await expect(page.getByRole('button',{name:'发送',exact:true})).toBeDisabled();expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);
 });

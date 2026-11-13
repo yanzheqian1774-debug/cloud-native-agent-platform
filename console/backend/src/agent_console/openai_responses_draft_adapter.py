@@ -198,6 +198,10 @@ class ExactFileOpenAICredentialResolver:
                     "v3-relation-adoption",
                     "conversation-understanding-output.v3-relation-adoption",
                 ),
+                (
+                    "v3-relation-adoption-source",
+                    "conversation-understanding-output.v3-relation-adoption",
+                ),
             }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
@@ -266,6 +270,10 @@ class OpenAIResponsesDraftTransport:
                     "v3-relation-adoption",
                     "conversation-understanding-output.v3-relation-adoption",
                 ),
+                (
+                    "v3-relation-adoption-source",
+                    "conversation-understanding-output.v3-relation-adoption",
+                ),
             }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
@@ -280,14 +288,24 @@ class OpenAIResponsesDraftTransport:
                 "v3-execution",
                 "v3-relation",
                 "v3-relation-adoption",
+                "v3-relation-adoption-source",
             }:
                 (
                     conversation_context_references
                     if policy.revision
-                    in {"v3", "v3-execution", "v3-relation", "v3-relation-adoption"}
+                    in {
+                        "v3",
+                        "v3-execution",
+                        "v3-relation",
+                        "v3-relation-adoption",
+                        "v3-relation-adoption-source",
+                    }
                     else context_references
                 )(content)
-                if policy.revision == "v3-relation-adoption" and any(
+                if policy.revision in {
+                    "v3-relation-adoption",
+                    "v3-relation-adoption-source",
+                } and any(
                     r.startswith("server-message:")
                     for r in conversation_context_references(content)
                 ):
@@ -331,9 +349,14 @@ class OpenAIResponsesDraftTransport:
                 "v3-execution",
                 "v3-relation",
                 "v3-relation-adoption",
+                "v3-relation-adoption-source",
             }:
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
-            if policy.revision == "v3-relation-adoption":
+            if policy.revision == "v3-relation-adoption-source":
+                from .understanding_source_body import provider_attachment
+
+                attachment = provider_attachment(attachment)
+            elif policy.revision == "v3-relation-adoption":
                 selected = json.loads(attachment)
                 attachment = json.dumps(
                     {
@@ -354,7 +377,11 @@ class OpenAIResponsesDraftTransport:
                     "content": [{"type": "input_text", "text": attachment}],
                 }
             )
-        if policy.revision in {"v3-relation", "v3-relation-adoption"}:
+        if policy.revision in {
+            "v3-relation",
+            "v3-relation-adoption",
+            "v3-relation-adoption-source",
+        }:
             from .conversation_relation_context import provider_input
 
             if attachment is not None and policy.revision == "v3-relation":
@@ -710,15 +737,25 @@ class OpenAIResponsesDraftTransport:
                 "v3-execution",
                 "v3-relation",
                 "v3-relation-adoption",
+                "v3-relation-adoption-source",
             }:
                 sent = json.loads(request.payload)
                 refs = (
                     conversation_context_references
                     if policy.revision
-                    in {"v3", "v3-execution", "v3-relation", "v3-relation-adoption"}
+                    in {
+                        "v3",
+                        "v3-execution",
+                        "v3-relation",
+                        "v3-relation-adoption",
+                        "v3-relation-adoption-source",
+                    }
                     else context_references
                 )(sent["input"][0]["content"][0]["text"])
-            if policy.revision == "v3-relation-adoption":
+            if policy.revision in {
+                "v3-relation-adoption",
+                "v3-relation-adoption-source",
+            }:
                 from .understanding_adoption_policy import server_references
 
                 refs |= server_references(request.payload)
@@ -728,7 +765,10 @@ class OpenAIResponsesDraftTransport:
                 from .conversation_relation_context import validated_route
 
                 route = validated_route(result, request.payload)
-            elif policy.revision == "v3-relation-adoption":
+            elif policy.revision in {
+                "v3-relation-adoption",
+                "v3-relation-adoption-source",
+            }:
                 from .understanding_adoption_policy import route as adoption_route
 
                 route = adoption_route(result, request.payload)
@@ -748,6 +788,7 @@ class OpenAIResponsesDraftTransport:
         if kind == "CURRENT_QUESTION_ANSWER" and policy.revision in {
             "v3-relation",
             "v3-relation-adoption",
+            "v3-relation-adoption-source",
         }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),
@@ -764,6 +805,7 @@ class OpenAIResponsesDraftTransport:
             "v3-execution",
             "v3-relation",
             "v3-relation-adoption",
+            "v3-relation-adoption-source",
         }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),

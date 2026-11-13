@@ -14,14 +14,39 @@ from .understanding_result_adoption import require
 
 
 class AdoptionOrigin:
-    def __init__(self, root, routing, profile, *, enabled=False):
+    def __init__(self, root, routing, profile, *, enabled=False, retained=()):
         self.root, self.routing, self.profile = root, routing, profile
         self.enabled = enabled
+        self.retained = tuple(retained)
+
+    def for_result(self, invocation):
+        matches = [
+            candidate
+            for candidate in (self, *self.retained)
+            if invocation is not None
+            and invocation.profile_revision_id == candidate.profile.profile_revision_id
+            and invocation.snapshot is not None
+            and invocation.snapshot.profile_digest == candidate.profile.profile_digest
+        ]
+        require(len(matches) == 1, "PROFILE_MISMATCH")
+        return matches[0]
+
+    def for_record(self, record):
+        matches = [
+            candidate
+            for candidate in (self, *self.retained)
+            if record.get("configuration") == candidate.routing.configuration
+            and record.get("owned_understanding_policy_digest")
+            == candidate.routing.experience.understanding_policy_digest
+        ]
+        require(len(matches) == 1, "CONFIGURATION_CHANGED")
+        return matches[0]
 
     def business_source(self, connection, context, invocation_id):
         require(
             self.enabled is True
-            and self.profile.adapter_revision == "v3-relation-adoption"
+            and self.profile.adapter_revision
+            in {"v3-relation-adoption", "v3-relation-adoption-source"}
             and self.routing.experience.root is self.root
             and self.routing.experience.routing_document.scopeMode
             == "EXISTING_WORK_AND_INITIAL_UNDERSTANDING",
@@ -30,6 +55,12 @@ class AdoptionOrigin:
         root = self.root
         account, now, expires = root.experience._require(root, connection, context)
         self.routing.experience._require(self.routing, connection, context)
+        observed = PostgresDraftAssistanceRepository._latest(
+            connection, DraftScope.from_context(context), invocation_id
+        )
+        selected = self.for_result(observed)
+        if selected is not self:
+            return selected.business_source(connection, context, invocation_id)
         grants = root.delegation.grants
 
         def authorize(c, ctx, original, current):
