@@ -720,6 +720,9 @@ class OpenAIResponsesDraftTransport:
         try:
             result = json.loads(texts[0])
         except json.JSONDecodeError:
+            from .output_validation_diagnostic import record_failure
+
+            record_failure(self._measurement, "JSON_PARSE")
             return self._failure(
                 invocation_id,
                 correlation,
@@ -728,6 +731,7 @@ class OpenAIResponsesDraftTransport:
                 output_tokens=output_tokens,
                 latency_ms=latency_ms,
             )
+        validation_stage = "REQUEST_REFERENCES"
         try:
             refs = frozenset()
             if policy.revision in {
@@ -759,7 +763,9 @@ class OpenAIResponsesDraftTransport:
                 from .understanding_adoption_policy import server_references
 
                 refs |= server_references(request.payload)
+            validation_stage = "LOCAL_RESULT"
             understanding = validate_result(result, policy, refs)
+            validation_stage = "ROUTE_BINDING"
             route = None
             if policy.revision == "v3-relation":
                 from .conversation_relation_context import validated_route
@@ -772,7 +778,10 @@ class OpenAIResponsesDraftTransport:
                 from .understanding_adoption_policy import route as adoption_route
 
                 route = adoption_route(result, request.payload)
-        except (PolicyValidationError, ValueError, KeyError, TypeError):
+        except (PolicyValidationError, ValueError, KeyError, TypeError) as exc:
+            from .output_validation_diagnostic import record_failure
+
+            record_failure(self._measurement, validation_stage, exc)
             return self._failure(
                 invocation_id,
                 correlation,
@@ -864,6 +873,9 @@ class OpenAIResponsesDraftTransport:
                 )
         else:
             reason = "OUTPUT_SCHEMA_INVALID"
+        from .output_validation_diagnostic import record_failure
+
+        record_failure(self._measurement, "FINAL_RESULT")
         return self._failure(
             invocation_id,
             correlation,

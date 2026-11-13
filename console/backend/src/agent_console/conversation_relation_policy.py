@@ -63,7 +63,7 @@ SCHEMA = {
 def validate(value, refs):
     relation, token = value["relation"], value["currentQuestionToken"]
     if relation not in SCHEMA["properties"]["relation"]["enum"]:
-        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID", diagnostic="RELATION")
     if relation == "CURRENT_QUESTION":
         if (
             value["kind"] != "CURRENT_QUESTION_ANSWER"
@@ -77,12 +77,16 @@ def validate(value, refs):
             )
             or any(value[k] != [] for k in ("questions", "understanding", "dataNeeds"))
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="RELATION_ANSWER"
+            )
         return []
     if token is not None or (
         relation == "AMBIGUOUS" and value["kind"] != "NEEDS_CLARIFICATION"
     ):
-        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+        raise PolicyValidationError(
+            "OUTPUT_SCHEMA_INVALID", diagnostic="RELATION_TOKEN"
+        )
     return validate_result(
         {
             k: v

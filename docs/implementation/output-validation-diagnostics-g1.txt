@@ -1,0 +1,5 @@
+G1 输出校验安全诊断；base83bc485，隔离f3-output-schema-diagnostics。
+事实：实际8e1444... completed、usage可结算、FAILED OUTPUT_SCHEMA_INVALID、CONTENT_NOT_RETAINED。无法追溯具体字段。RESULT_ACCEPTED仅子进程结果收集，不等于业务结构成功。
+差异：strict schema只声明字段类型/枚举/required等；本地额外检查kind互斥、数组数量/长度、understanding必需字段及重复、USER_STATEMENT与refs一致、refs属于实际请求、路由token和owner类型一致。schema通过不保证这些语义通过；不能由1397characters/818tokens推断哪项失败。
+实施：不改schema/instructions/model profile/接受条件。PolicyValidationError增加可选静态诊断标签，原reason字符串保持；标记已知本地检查。adapter在现measurement追加output_validation：version/stage/category/path，仅固定枚举和静态路径，无原输出、值、引用ID、异常文本、未知key、source正文；无法分类就UNCLASSIFIED/$。标记JSON解析/可信引用准备/本地字段规则/路由绑定各阶段。原失败/usage/cleanup/UNKNOWN语义不动，不增加调用。历史记录不回填。
+测试：纯validator拒绝语义与敏感字段负例；adapter真实本地transport观察含诊断且输出原文不出现；原正常结果不增加诊断；既有adapter/policy回归。仅隔离测试无真实模型/DB写。

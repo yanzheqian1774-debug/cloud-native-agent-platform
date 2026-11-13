@@ -258,6 +258,10 @@ class DraftPolicy:
 class PolicyValidationError(ValueError):
     """Constant, non-content error. Never report the rejected content."""
 
+    def __init__(self, reason, *, diagnostic=None):
+        super().__init__(reason)
+        self.diagnostic = diagnostic
+
 
 def policy_for(adapter_revision: str, schema_version: str) -> DraftPolicy:
     if (adapter_revision, schema_version) == ("v1", V1_SCHEMA_VERSION):
@@ -360,7 +364,9 @@ def context_references(content: str) -> frozenset[str]:
 
 def validate_understanding(value: object, refs: frozenset[str]) -> list[dict]:
     if not isinstance(value, list) or not 5 <= len(value) <= 12:
-        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+        raise PolicyValidationError(
+            "OUTPUT_SCHEMA_INVALID", diagnostic="UNDERSTANDING_COUNT"
+        )
     fields: set[str] = set()
     for item in value:
         if not isinstance(item, dict) or set(item) != {
@@ -369,7 +375,9 @@ def validate_understanding(value: object, refs: frozenset[str]) -> list[dict]:
             "source",
             "sourceRefs",
         }:
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="UNDERSTANDING_SHAPE"
+            )
         field, text, source, cited = (
             item["field"],
             item["value"],
@@ -383,20 +391,30 @@ def validate_understanding(value: object, refs: frozenset[str]) -> list[dict]:
             or not text.strip()
             or len(text) > 240
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="UNDERSTANDING_VALUE"
+            )
         if field in fields and field != "openItem":
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="UNDERSTANDING_DUPLICATE"
+            )
         fields.add(field)
         if (
             not isinstance(cited, list)
             or len(cited) > 8
             or any(not isinstance(ref, str) or ref not in refs for ref in cited)
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="UNDERSTANDING_REFERENCE"
+            )
         if (source == "USER_STATEMENT") != bool(cited):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="UNDERSTANDING_PROVENANCE"
+            )
     if not set(FIELDS[:-1]).issubset(fields):
-        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+        raise PolicyValidationError(
+            "OUTPUT_SCHEMA_INVALID", diagnostic="UNDERSTANDING_REQUIRED"
+        )
     return value
 
 
@@ -404,7 +422,7 @@ def validate_result(
     result: object, policy: DraftPolicy, refs: frozenset[str]
 ) -> list[dict] | None:
     if not isinstance(result, dict) or set(result) != set(policy.schema["required"]):
-        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID", diagnostic="RESULT_SHAPE")
     if policy.revision in {"v3-relation-adoption", "v3-relation-adoption-source"}:
         from .understanding_adoption_policy import validate
 
@@ -423,14 +441,18 @@ def validate_result(
             or (intent == "TASK" and kind == "DIRECT_ANSWER")
             or (intent == "ANSWER" and kind == "DRAFT_READY")
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="INTENT_KIND"
+            )
     if policy.revision in {"v3", V3_EXECUTION_REVISION}:
         answer, needs, kind = result["answer"], result["dataNeeds"], result["kind"]
         if (
             not isinstance(kind, str)
             or kind not in V3_SCHEMA["properties"]["kind"]["enum"]
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="RESULT_KIND"
+            )
         if (
             not isinstance(needs, list)
             or len(needs) > 6
@@ -438,7 +460,9 @@ def validate_result(
                 not isinstance(n, str) or not n.strip() or len(n) > 400 for n in needs
             )
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="DATA_NEEDS"
+            )
         if kind in {"DIRECT_ANSWER", "NEEDS_DATA"}:
             if (
                 result["understanding"] != []
@@ -448,7 +472,9 @@ def validate_result(
                     for k in ("title", "description", "clarificationQuestion")
                 )
             ):
-                raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+                raise PolicyValidationError(
+                    "OUTPUT_SCHEMA_INVALID", diagnostic="EMPTY_FIELDS"
+                )
             if kind == "DIRECT_ANSWER":
                 if (
                     not isinstance(answer, str)
@@ -456,12 +482,18 @@ def validate_result(
                     or len(answer) > 8000
                     or needs
                 ):
-                    raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+                    raise PolicyValidationError(
+                        "OUTPUT_SCHEMA_INVALID", diagnostic="DIRECT_ANSWER"
+                    )
             elif answer is not None or not needs:
-                raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+                raise PolicyValidationError(
+                    "OUTPUT_SCHEMA_INVALID", diagnostic="NEEDS_DATA"
+                )
             return []
         if answer is not None or needs:
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="ANSWER_DATA_EXCLUSIVE"
+            )
     understanding = validate_understanding(result["understanding"], refs)
     questions = result["questions"]
     if (
@@ -471,10 +503,12 @@ def validate_result(
             not isinstance(q, str) or not q.strip() or len(q) > 400 for q in questions
         )
     ):
-        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID", diagnostic="QUESTIONS")
     if result["kind"] == "NEEDS_CLARIFICATION":
         if not questions or result["clarificationQuestion"] != "\n".join(questions):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="CLARIFICATION"
+            )
     elif result["kind"] == "DRAFT_READY":
         if (
             questions
@@ -483,9 +517,11 @@ def validate_result(
             or not isinstance(result["description"], str)
             or len(result["description"]) > 2000
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="DRAFT_READY"
+            )
     else:
-        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+        raise PolicyValidationError("OUTPUT_SCHEMA_INVALID", diagnostic="RESULT_KIND")
     if policy.revision == "v2-zh-CN":
         from .planning_language import issues
 

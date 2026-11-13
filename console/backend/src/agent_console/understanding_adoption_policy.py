@@ -62,7 +62,9 @@ def validate(value, refs):
             or len(token) != 64
             or any(c not in "0123456789abcdef" for c in token)
         ):
-            raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+            raise PolicyValidationError(
+                "OUTPUT_SCHEMA_INVALID", diagnostic="ADOPTION_TOKEN_KIND"
+            )
         return validate_result(
             {
                 k: v

@@ -1,9 +1,10 @@
+import {routedUnderstandingFailure} from '../../src/problems/sourceInputFeedback';
 import {routingReceiptNotice} from '../../src/problems/conversationRoutingReceipt';
 import {test,expect,type Page} from '@playwright/test';
 const digest='a'.repeat(64),problem={business_problem_id:'problem',revision_id:'revision',digest:'b'.repeat(64)},ref={resource_id:problem.business_problem_id,revision_id:problem.revision_id,digest:problem.digest};
 async function fixture(page:Page,phase='PLAN',enabled=true){
  const question={invocationId:'native-one',questionKey:'question-one',questionDigest:'c'.repeat(64),question:'请确认采用内部交接规范还是外部规范？',expiresAt:'2099-01-01T00:00:00Z',answer:null as string|null,expired:false};
- const state={question,phase,longRail:false,executionState:'RUNNING',failureReason:null as string|null,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
+ const state={question,phase,longRail:false,streamFailure:false,streamUnknown:false,executionState:'RUNNING',failureReason:null as string|null,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
   messages:[{message_id:'original',content:'帮我检查交接材料',author_id:'human:alice',disposition:'GOAL_RECORDED',request_key:'original'}] as Record<string,unknown>[],version:1,last:null as Record<string,unknown>|null,
   journal:{version:7,state:{key:'original-work',phase,pending:phase==='PLAN'?'planning':phase==='EXECUTE'?'execute':undefined,error:phase==='EXECUTE'?'上次执行结果尚待核实':undefined,question:'帮我检查交接材料',problem,messages:[{id:'user:original',text:'帮我检查交接材料'}],log:['原工作已保存'],...(phase==='RUNNING'?{execution:digest}:{})}}};
  await page.route('**/api/**',async route=>{
@@ -23,6 +24,7 @@ async function fixture(page:Page,phase='PLAN',enabled=true){
    state.modelCalls.push(body);expect(body.conversationRouting).toBe(true);expect(body.parentContextId).toBeUndefined();expect(body.predecessorInvocationId).toBeUndefined();expect(body.conversationId).toBe('routing');
    if(state.rejectBefore)return route.fulfill({status:404,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
    if(state.hold)await state.hold;
+   if(state.streamFailure||state.streamUnknown){const terminal={state:state.streamUnknown?'OUTCOME_UNKNOWN':'FAILED',reasonCode:state.streamUnknown?null:'OUTPUT_SCHEMA_INVALID',invocationId:'failed-routing',resultKind:null};state.last=terminal;return route.fulfill({headers:{'Content-Type':'text/event-stream'},body:'event: progress\ndata: '+JSON.stringify({kind:'preview',preview:'尚未采纳的生成文字'})+'\n\n'+(state.streamUnknown?'':'event: result\ndata: '+JSON.stringify({status:200,body:{result:terminal}})+'\n\n')})}
    const relation=state.relation,kind=relation==='INDEPENDENT'||state.directCurrentWork?'DIRECT_ANSWER':relation==='CURRENT_QUESTION'?'CURRENT_QUESTION_ANSWER':'NEEDS_CLARIFICATION',n=state.modelCalls.length;
    const response={state:'SUCCEEDED',resultKind:kind,invocationId:'route-'+n,contextId:'route-context',turnId:'route-turn-'+n,turnVersion:1,aggregateVersion:2,answer:kind==='DIRECT_ANSWER'?'HTTP 是传输网页内容的协议。':null,clarificationQuestion:kind==='NEEDS_CLARIFICATION'?'你是补充当前交接检查，还是提出一个独立问题？':null,draft:null,conversationDelivery:{state:'SAVED',messageId:'answer-'+n},conversationRoute:{relation,currentQuestionToken:relation==='CURRENT_QUESTION'?'token':null,contextDigest:'d'.repeat(64)}};
    state.last=response;state.version++;state.messages.push({message_id:'answer-'+n,content:response.answer??response.clarificationQuestion??'已核对这条回答，等待提交原问题。',kind:'SOURCE',facts:{assistantResponse:true,state:'SUCCEEDED',response,source:{kind:'DRAFT',invocationId:response.invocationId,contextId:'route-context',turnId:'route-turn-'+n,turnVersion:1}}});
@@ -156,4 +158,27 @@ for(const width of [1440,900,390])test(`long Native progress rail scrolls indepe
  const bottom=await rail.locator('[data-native-step="step-19"]').boundingBox();expect(bottom!.y+bottom!.height).toBeLessThanOrEqual(measure.y+measure.height+1);
  expect(await dock.boundingBox()).toEqual(before);expect(s.modelCalls).toHaveLength(0);expect(s.ownerPosts).toHaveLength(0);
  await page.screenshot({path:info.outputPath(`rail-${width}.png`),fullPage:true});
+});
+
+for(const unknown of [false,true])test(`stream preview distinguishes terminal from unknown ${unknown}`,async({page},info)=>{
+ const s=await fixture(page,'RUNNING');s.streamFailure=!unknown;s.streamUnknown=unknown;await page.goto('/work?conversation=routing');await send(page,'继续核对原资料');
+ await expect(page.getByLabel(unknown?'本条回复待核实':'本条回复未被采纳',{exact:true})).toContainText('尚未采纳的生成文字');await expect(page.getByLabel('本条回复生成中',{exact:true})).toHaveCount(0);
+ if(!unknown)await expect(page.getByText('本次补充的回复格式校验未通过，生成文字未被采纳。原问题、输入与原任务均保留，不会自动重试。',{exact:true})).toBeVisible();
+ expect(s.ownerPosts).toHaveLength(0);expect(s.modelCalls).toHaveLength(1);await expect(input(page)).toHaveValue('继续核对原资料');
+ await page.screenshot({path:info.outputPath(unknown?'unknown-preview.png':'failed-preview.png'),fullPage:true});await page.reload();await expect(input(page)).toHaveValue('继续核对原资料');
+ if(!unknown)await expect(page.getByLabel('本条回复未被采纳',{exact:true})).toContainText('尚未采纳的生成文字');expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
+});
+
+test('routing failure takes priority only for its complete captured understanding target',()=>{
+ const target={kind:'UNDERSTANDING' as const,journeyKey:'original',invocationId:'draft-one',journalVersion:7,contextId:'context',turnId:'turn',turnVersion:1,aggregateVersion:2};
+ const failure={state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',target};
+ expect(routedUnderstandingFailure(failure,target)?.title).toBe('本次补充回复格式校验未通过');
+ for(const field of ['invocationId','journeyKey','journalVersion','contextId','turnId','turnVersion','aggregateVersion'] as const){expect(routedUnderstandingFailure(failure,{...target,[field]:typeof target[field]==='number'?Number(target[field])+1:'other'})).toBeUndefined();expect(routedUnderstandingFailure({...failure,target:{...target,[field]:undefined}},target)).toBeUndefined()}
+ expect(routedUnderstandingFailure(failure,{...target,problemId:'other'})).toBeUndefined();expect(routedUnderstandingFailure(failure,undefined)).toBeUndefined();expect(routedUnderstandingFailure(failure,{...target,kind:'NATIVE'})).toBeUndefined();
+});
+
+test('pre-update REVIEW receipt reload reads exact failure without a new model request',async({page})=>{
+ const s=await fixture(page,'RUNNING');s.streamFailure=true;await page.goto('/work?conversation=routing');await send(page,'核对原资料');await expect(page.getByLabel('本条回复未被采纳',{exact:true})).toBeVisible();
+ await page.evaluate(()=>{const key=Object.keys(sessionStorage).find(k=>k.startsWith('conversation-routing.v1:'))!;const v=JSON.parse(sessionStorage.getItem(key)!);delete v.lastResult;delete v.observedOwner;delete v.unacceptedPreview;sessionStorage.setItem(key,JSON.stringify(v))});await page.reload();
+ await expect(page.getByText('本次补充的回复格式校验未通过，生成文字未被采纳。原问题、输入与原任务均保留，不会自动重试。',{exact:true})).toBeVisible();expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
 });
