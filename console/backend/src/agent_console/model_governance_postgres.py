@@ -918,6 +918,14 @@ class PostgresModelGovernanceRepository:
                 ModelLifecycleAction.PUBLISHED,
             ): ModelEligibilityState.PUBLISHED_ENABLED,
             (
+                ModelEligibilityState.VALIDATED,
+                ModelLifecycleAction.POLICY_APPROVED,
+            ): ModelEligibilityState.POLICY_APPROVED,
+            (
+                ModelEligibilityState.POLICY_APPROVED,
+                ModelLifecycleAction.PUBLISHED,
+            ): ModelEligibilityState.PUBLISHED_ENABLED,
+            (
                 ModelEligibilityState.PUBLISHED_ENABLED,
                 ModelLifecycleAction.DISABLED,
             ): ModelEligibilityState.PUBLISHED_DISABLED,
@@ -987,6 +995,28 @@ class PostgresModelGovernanceRepository:
                     ),
                 ).fetchall()
                 existing = tuple(self._fact(row) for row in rows)
+                if fact.action is ModelLifecycleAction.POLICY_APPROVED or (
+                    fact.action is ModelLifecycleAction.PUBLISHED
+                    and any(
+                        f.action is ModelLifecycleAction.POLICY_APPROVED
+                        for f in existing
+                    )
+                ):
+                    raise ModelGovernanceError("MODEL_POLICY_OWNER_REQUIRED")
+                if any(
+                    f.action is ModelLifecycleAction.POLICY_APPROVED for f in existing
+                ):
+                    from .model_policy_approval_postgres import validate_history
+
+                    revision_row = connection.execute(
+                        "SELECT * FROM model_governance.model_revisions WHERE namespace=%s AND security_domain=%s AND model_id=%s AND revision_id=%s",
+                        (
+                            *self._scope(fact.scope),
+                            fact.model.model_id,
+                            fact.model.revision_id,
+                        ),
+                    ).fetchone()
+                    validate_history(connection, self._revision(revision_row), existing)
                 expected_ordinal = len(existing) + 1
                 if fact.ordinal != expected_ordinal:
                     raise ModelGovernanceConflict("MODEL_LIFECYCLE_CONFLICT")
@@ -1056,6 +1086,13 @@ class PostgresModelGovernanceRepository:
                     + " ORDER BY ordinal",
                     parameters,
                 ).fetchall()
+                from .model_policy_approval_postgres import validate_history
+
+                validate_history(
+                    connection,
+                    self._revision(revision_row),
+                    tuple(self._fact(row) for row in rows),
+                )
         except ModelGovernanceNotFound:
             raise
         except PsycopgError as exc:

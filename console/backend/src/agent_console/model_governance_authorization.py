@@ -478,6 +478,9 @@ class CallerOwnedPostgresModelGovernanceReader:
             for expected, fact in enumerate(facts, 1)
         ):
             raise ModelGovernanceError("MODEL_GOVERNANCE_STORAGE_CORRUPT")
+        from .model_policy_approval_postgres import validate_history
+
+        validate_history(self.connection, revision, facts)
         state = self.repository._reduce_lifecycle(facts, corrupt=True)
         latest = facts[-1]
         return ModelEligibility(
