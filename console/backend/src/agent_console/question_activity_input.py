@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from psycopg import Error as StorageError
 from pydantic import BaseModel, ConfigDict, Field
 
-from .authority_contracts import AuthorityError
+from .authority_contracts import AuthorityError, ExactGrant
 from .plan_suggestion_domain import (
     ExactReference,
     Identity,
@@ -23,6 +23,7 @@ from .plan_suggestion_invocation import PlanningRequest
 from .planning_candidates import read_published, require_read
 from .planning_contracts import PlanningPolicy
 from .planning_source_change import approved_source
+from .question_member_capabilities import observe
 from .resource_automation_validation import validate
 from .resource_use_domain import canonical_digest
 from .workbench_business_problem import OwnerPrincipal
@@ -36,6 +37,15 @@ class QuestionActivityRequest(BaseModel):
     contextToken: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     problemId: Identity | None = None
     source: ExactReference | None = None
+
+
+def entry_grants(context, path, payload, query):
+    identity = payload.get("problemId")
+    return (
+        (ExactGrant("BUSINESS_PROBLEM", "READ", "business-problem:" + identity),)
+        if identity is not None
+        else (ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),)
+    )
 
 
 def member_contract_answers(operations):
@@ -233,7 +243,9 @@ class QuestionActivityInput:
                     **current,
                     **selected_source,
                     "sourceName": selected_source["name"],
-                    "_work": a.work(call.context, target.problem, now),
+                    "_work": a.work(
+                        call.context, target.problem, now, connection=call.connection
+                    ),
                     "contextToken": canonical_digest(
                         [current["target"], selected_source["source"]]
                     ),
@@ -301,8 +313,6 @@ class QuestionActivityInput:
                 "planningRequest": None,
             }
         source = ExactReference.model_validate(selected["source"])
-        from .question_member_capabilities import observe
-
         capabilities = observe(
             a, call, source, selected["sourceSchema"], selected["_work"]
         )

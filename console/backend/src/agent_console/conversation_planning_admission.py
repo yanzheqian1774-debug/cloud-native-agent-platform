@@ -43,6 +43,13 @@ class ConversationPlanningAdmission:
             "AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s",
             (context.scope.tenant_id, context.scope.security_domain, problem),
         ).fetchone()
+        owned = getattr(self.understanding, "owned_business", None)
+        if (
+            source
+            and owned is not None
+            and owned.supports(c, context, source["source_invocation"])
+        ):
+            return owned.bound_source(c, context, problem)
         resolver = getattr(self.understanding, "understanding_adoption", None)
         if (
             source
@@ -180,6 +187,16 @@ class ConversationPlanningAdmission:
             maximum_new_calls=1,
             **({"recovery_id": recovery["recovery_id"]} if recovery else {}),
             understanding_input_source=source["understanding_input_source"],
+            **(
+                {
+                    "owned_business": {
+                        "admissionId": source["owned_business_admission_id"],
+                        "recordDigest": source["owned_business_record_digest"],
+                    }
+                }
+                if source.get("owned_business_admission_id")
+                else {}
+            ),
             **(
                 {
                     "budget_allowance_id": source["record"]["budget_allowance_id"],
@@ -358,7 +375,13 @@ def limits(c, row, budget):
         )
     ):
         raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
-    active(c, source, source["record"]["configuration"])
+    if row["record"].get("owned_business"):
+        reader = getattr(budget, "owned_business", None)
+        if reader is None:
+            raise AuthorityError("OWNED_BUSINESS_ADMISSION_REQUIRED")
+        reader.planning_basis(c, row, source)
+    else:
+        active(c, source, source["record"]["configuration"])
     from .provider_budget_allowance import experience_limits
 
     return experience_limits(c, row, budget)

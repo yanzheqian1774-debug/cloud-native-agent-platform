@@ -501,7 +501,7 @@ def guard(c, budget, invocation, quote):
     return True
 
 
-def bind_problem(c, context, result, invocation_id):
+def bind_problem(c, context, result, invocation_id, *, retained_authorization=None):
     """Link a new Problem to its actual successful draft, never to old 323."""
     if not invocation_id or not available(c):
         return False
@@ -524,7 +524,12 @@ def bind_problem(c, context, result, invocation_id):
         or value["resultKind"] != "DRAFT_READY"
     ):
         raise AuthorityError("CONTEXT_ADMISSION_DRAFT_INVALID")
-    active(c, row, row["record"]["configuration"])
+    if retained_authorization is None:
+        active(c, row, row["record"]["configuration"])
+    else:
+        authorized, *_ = retained_authorization(c, context, invocation_id)
+        if authorized["context_id"] != row["context_id"]:
+            raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
     lock(c, row["context_id"])
     identity = result["revision"]["business_problem_id"]
     previous = c.execute(

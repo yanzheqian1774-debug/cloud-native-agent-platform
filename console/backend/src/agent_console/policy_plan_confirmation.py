@@ -52,7 +52,9 @@ class PolicyPlanConfirmation:
         a = self.automation
         request = ConfirmPolicyPlan.model_validate(call.payload)
         issuer = a.authenticate(call.context)
-        work = a.work(call.context, request.problem, a.grants.clock())
+        work = a.work(
+            call.context, request.problem, a.grants.clock(), connection=call.connection
+        )
         p = OwnerPrincipal(
             call.context.principal_id,
             call.context.scope.tenant_id,

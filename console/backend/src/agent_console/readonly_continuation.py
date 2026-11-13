@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from . import owned_business_resource_adapter as owned_resources
 from .authority_contracts import AuthorityError, ExactGrant
 from .cost_execution_revision import (
     PLANNING_ONLY,
@@ -92,7 +93,7 @@ class ReadonlyContinuation:
 
         if self.policy.enabled and for_service(self.automation.grants, context):
             return True
-        return self.policy.enabled and any(
+        legacy = self.policy.enabled and any(
             (w.namespace, w.securityDomain, w.subject, w.problem)
             == (
                 context.scope.tenant_id,
@@ -104,6 +105,13 @@ class ReadonlyContinuation:
             and w.expiresAt > self.automation.grants.clock()
             for w in self.policy.works
         )
+        if legacy or not self.policy.enabled:
+            return legacy
+        try:
+            work = self.automation.work(context, root, self.automation.grants.clock())
+            return isinstance(work, owned_resources.OwnedResourceWork)
+        except (AuthorityError, ValueError):
+            return False
 
     def __call__(self, call):
         try:
@@ -263,12 +271,26 @@ class ReadonlyContinuation:
                     expiresAt=resource_work.expiresAt,
                 )
             else:
-                approved_work = self.policy.work(
-                    call.context, plan.semantics.target.problem, digest, now
+                resource_work = self.automation.work(
+                    call.context,
+                    plan.semantics.target.problem,
+                    now,
+                    connection=c,
+                    source_digest=digest,
+                    history=call.operation == "READ_READONLY_CONTINUATION",
                 )
-                resource_work = self.automation.policy.work(
-                    call.context, plan.semantics.target.problem, now
-                )
+                if isinstance(resource_work, owned_resources.OwnedResourceWork):
+                    if not self.policy.enabled:
+                        raise AuthorityError("READONLY_WORK_DISABLED")
+                    approved_work = owned_resources.readonly_work(resource_work)
+                    owned_resources.require_plan(resource_work, plan)
+                    owned_resources.require_capability(
+                        self.automation, call, resource_work, resolved
+                    )
+                else:
+                    approved_work = self.policy.work(
+                        call.context, plan.semantics.target.problem, digest, now
+                    )
             work = resource_work.model_copy(
                 update={
                     "expiresAt": min(resource_work.expiresAt, approved_work.expiresAt)
@@ -281,7 +303,9 @@ class ReadonlyContinuation:
             ]
             if association:
                 payload_basis.append(association)
-            payload_digest = canonical_digest(payload_basis)
+            payload_digest = canonical_digest(
+                owned_resources.digest_basis(payload_basis, work)
+            )
             if prior:
                 if prior["digest"] != payload_digest:
                     raise WorkbenchOwnerError("READONLY_WORK_POLICY_CHANGED", 409)
@@ -321,6 +345,7 @@ class ReadonlyContinuation:
             if ready is None:
                 raise WorkbenchOwnerError("READONLY_RESOURCE_PREPARATION_REQUIRED", 409)
             ready = ready["record"]
+            owned_resources.require_ready(work, ready)
             if ready["planDigest"] != plan.digest:
                 raise WorkbenchOwnerError(
                     "READONLY_PREPARATION_PLAN_DIGEST_MISMATCH", 409
@@ -500,6 +525,7 @@ class ReadonlyContinuation:
                 approval_id=confirmation["approval"]["approval_decision_id"],
                 semantics=execution_plan.semantics,
             )
+            owned_resources.require_preparation(work, p)
             prepared = self.owner(
                 replace(
                     call,
@@ -548,6 +574,8 @@ class ReadonlyContinuation:
                 "humanResourceApprovalClicks": 0,
                 "executionStarted": True,
             }
+            if owned_resources.evidence(work):
+                record["ownedBusiness"] = owned_resources.evidence(work)
             if association:
                 record["capabilitySource"] = association
             c.execute(

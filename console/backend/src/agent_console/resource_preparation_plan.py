@@ -5,6 +5,7 @@ from dataclasses import replace
 
 from psycopg.types.json import Jsonb
 
+from . import owned_business_resource_adapter as owned_resources
 from .authority_contracts import AuthorityError, ExactGrant
 from .capability_execution_constraints import verify_plan, verify_resources
 from .capability_plan_confirmation import validate_source
@@ -55,8 +56,12 @@ def select_employee(automation, call, *, automatic_coverage=None):
         if baseline["digest"] != request.digest:
             raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_DIGEST_MISMATCH", 409)
         work = automation.work(
-            call.context, old.semantics.target.problem, automation.grants.clock()
+            call.context,
+            old.semantics.target.problem,
+            automation.grants.clock(),
+            connection=c,
         )
+        owned_resources.require_reference(work, "employee", request.employee)
         target = old.semantics.target
         target_reads = [
             ExactGrant(
@@ -90,6 +95,7 @@ def select_employee(automation, call, *, automatic_coverage=None):
             principal, old.semantics.target.problem.resource_id, c
         )
         capability = validate_source(automation, call, request, old, current)
+        owned_resources.require_capability(automation, call, work, capability)
         if capability:
             employees = [
                 b["reference"]
@@ -106,7 +112,9 @@ def select_employee(automation, call, *, automatic_coverage=None):
                 "capabilityContractDigest",
             ):
                 payload.pop(field)
-        payload_digest = canonical_digest([payload, automation.policy.digest])
+        payload_digest = canonical_digest(
+            owned_resources.digest_basis([payload, automation.policy.digest], work)
+        )
         replay = c.execute(
             "SELECT record,payload_digest FROM execution_authority.resource_policy_plan_commands WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
             (
@@ -334,6 +342,8 @@ def select_employee(automation, call, *, automatic_coverage=None):
             "newRuns": 0,
             "executionStarted": False,
         }
+        if owned_resources.evidence(work):
+            result["ownedBusiness"] = owned_resources.evidence(work)
         if capability:
             result["capabilitySource"] = {
                 "conversationId": request.capabilityConversationId,
@@ -374,9 +384,15 @@ def read_selection(automation, call):
         if baseline["digest"] != plan.digest:
             raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_DIGEST_MISMATCH", 409)
         require_supported_lineage(app, cur, scope, plan)
-        automation.work(
-            call.context, plan.semantics.target.problem, automation.grants.clock()
+        work = automation.work(
+            call.context,
+            plan.semantics.target.problem,
+            automation.grants.clock(),
+            connection=cur.connection,
+            history=True,
         )
+        owned_resources.require_plan(work, plan)
+        owned_resources.require_capability(automation, call, work)
         current = app.current_input(
             principal, plan.semantics.target.problem.resource_id, cur.connection
         )
@@ -394,6 +410,10 @@ def read_selection(automation, call):
         if row is None:
             raise WorkbenchOwnerError("RESOURCE_SELECTION_NOT_FOUND", 404)
         result = row["record"]
+        if owned_resources.evidence(work) and result.get(
+            "ownedBusiness"
+        ) != owned_resources.evidence(work):
+            raise AuthorityError("OWNED_BUSINESS_PREPARATION_CHANGED")
         successor = ProposalRevision.model_validate(result["proposal"])
         expected = ExactReference(
             resource_id=identity, revision_id=str(request.version), digest=plan.digest

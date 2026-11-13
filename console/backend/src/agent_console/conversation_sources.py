@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 
 from .authority_contracts import AuthorityError
+from .owned_business_resource_adapter import OwnedResourceWork
 from .plan_suggestion_domain import ExactReference, PlanningError
 from .planning_candidates import identities, read_published, require_read
 from .resource_automation_policy import source_digest
@@ -29,13 +30,26 @@ def sources(automation, call, root=None):
     # A named task still checks its existing work policy. Browsing sources only
     # needs current exact read grants; it must not require an execution window.
     task_work = (
-        automation.work(call.context, root, automation.grants.clock())
+        automation.work(
+            call.context, root, automation.grants.clock(), connection=call.connection
+        )
         if root is not None
         else None
     )
     result = []
     seen = set()
-    for item in identities(call.connection, scope, "KNOWLEDGE"):
+    rows = (
+        [
+            {
+                "identity": task_work.businessScope.source.resource_id,
+                "revision": task_work.businessScope.source.revision_id,
+                "digest": task_work.businessScope.source.digest,
+            }
+        ]
+        if isinstance(task_work, OwnedResourceWork)
+        else identities(call.connection, scope, "KNOWLEDGE")
+    )
+    for item in rows:
         try:
             ref = ExactReference(
                 resource_id=item["identity"],

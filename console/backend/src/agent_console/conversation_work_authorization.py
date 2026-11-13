@@ -36,6 +36,9 @@ class ConversationWorkAuthorization:
         self.grants = planning.delegation.grants
 
     def _draft(self, c, context, invocation_id):
+        owned = getattr(self.understanding, "owned_business", None)
+        if owned is not None and owned.supports(c, context, invocation_id):
+            return owned.admit(c, context, invocation_id)
         account, now, expires = self.experience._require(self.understanding, c, context)
         invocation = c.execute(
             "SELECT record FROM draft_assistance.invocation_versions"

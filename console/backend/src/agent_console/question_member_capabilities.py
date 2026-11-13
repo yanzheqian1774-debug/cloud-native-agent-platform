@@ -19,6 +19,22 @@ def observe(
     fixed_bindings=None,
     ontology_binding=None,
 ):
+    from .owned_business_resource_adapter import OwnedResourceWork
+
+    if isinstance(work, OwnedResourceWork) and fixed_bindings is None:
+        bound = work.businessScope
+        fixed_bindings = [
+            {"kind": kind, "reference": ref.model_dump(mode="json")}
+            for kind, refs in (
+                ("EMPLOYEE", bound.employees),
+                ("AGENT", bound.agents),
+                ("SKILL", bound.skills),
+                ("RUNTIME_PROFILE", bound.runtimes),
+                ("KNOWLEDGE", (bound.source,)),
+            )
+            for ref in refs
+        ]
+        ontology_binding = bound.documentRules
     semantic_refs = [
         b["reference"] for b in (fixed_bindings or ()) if b["kind"] == "ONTOLOGY"
     ]
@@ -80,7 +96,10 @@ def observe(
                     )
                     for m in definition["members"]
                 }
-                if not declared <= actual or any(
+                if isinstance(work, OwnedResourceWork):
+                    if not actual <= declared:
+                        continue
+                elif not declared <= actual or any(
                     m[0] in {"SKILL", "MCP", "KNOWLEDGE"} and m not in declared
                     for m in actual
                 ):
@@ -129,6 +148,8 @@ def observe(
             operations.update(declared)
         except (AuthorityError, PlanningError, ValueError, KeyError):
             continue  # No hidden names, references, counts or readiness inference.
+    if isinstance(work, OwnedResourceWork):
+        operations.intersection_update(work.businessScope.operations)
     return {
         "state": "AUTHORIZED_MEMBER_DECLARATIONS_OBSERVED"
         if operations

@@ -47,7 +47,8 @@ def readable_source(monkeypatch):
         loaded.append(ref)
         return content, "Readable document"
 
-    def no_execution_policy(*args):
+    def no_execution_policy(*args, **kwargs):
+        assert kwargs["connection"] is call.connection
         raise AuthorityError("RESOURCE_WORK_SCOPE_UNAVAILABLE")
 
     app = NS(

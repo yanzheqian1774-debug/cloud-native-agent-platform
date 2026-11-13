@@ -32,45 +32,59 @@ from test_understanding_adoption_bff import adopted, answer
 
 def select(e):
     scope = e.context.scope
-    ref = {"resource_id": "knowledge:adoption", "revision_id": "r1", "digest": "a" * 64}
-    raw = json.dumps(SOURCE)
-    content = {
-        "documents": [
-            {
-                "contentDigest": sha256(raw.encode()).hexdigest(),
-                "chunks": [{"content": raw}],
-            }
-        ]
-    }
-    record = {
-        "namespace": scope.tenant_id,
-        "securityDomain": scope.security_domain,
-        "knowledgeId": ref["resource_id"],
-        "aggregateVersion": 1,
-        "name": "Exact handover",
-        "publishedRevisionId": "r1",
-        "archived": False,
-        "revisions": [
-            {
-                "revisionId": "r1",
-                "digest": ref["digest"],
-                "state": "PUBLISHED",
-                "content": content,
-            }
-        ],
-    }
-    with e.repo.connection_scope() as c:
-        c.execute(
-            "INSERT INTO knowledge_operation.knowledge(namespace,security_domain,"
-            "knowledge_id,aggregate_version,record) VALUES(%s,%s,%s,1,%s)",
-            (scope.tenant_id, scope.security_domain, ref["resource_id"], Jsonb(record)),
-        )
+    published = getattr(e, "published_source", None)
+    if published is None:
+        ref = {
+            "resource_id": "knowledge:adoption",
+            "revision_id": "r1",
+            "digest": "a" * 64,
+        }
+        raw = json.dumps(SOURCE)
+        content = {
+            "documents": [
+                {
+                    "contentDigest": sha256(raw.encode()).hexdigest(),
+                    "chunks": [{"content": raw}],
+                }
+            ]
+        }
+        record = {
+            "namespace": scope.tenant_id,
+            "securityDomain": scope.security_domain,
+            "knowledgeId": ref["resource_id"],
+            "aggregateVersion": 1,
+            "name": "Exact handover",
+            "publishedRevisionId": "r1",
+            "archived": False,
+            "revisions": [
+                {
+                    "revisionId": "r1",
+                    "digest": ref["digest"],
+                    "state": "PUBLISHED",
+                    "content": content,
+                }
+            ],
+        }
+        with e.repo.connection_scope() as c:
+            c.execute(
+                "INSERT INTO knowledge_operation.knowledge(namespace,security_domain,"
+                "knowledge_id,aggregate_version,record) VALUES(%s,%s,%s,1,%s)",
+                (
+                    scope.tenant_id,
+                    scope.security_domain,
+                    ref["resource_id"],
+                    Jsonb(record),
+                ),
+            )
+    else:
+        # Prepared by real lifecycle owners before any source message/result.
+        ref, content = published["reference"], published["content"]
     members = (
         ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
         ExactGrant(
             "KNOWLEDGE",
             "READ_RESOURCE",
-            reference("knowledge", ref["resource_id"], "r1"),
+            reference("knowledge", ref["resource_id"], ref["revision_id"]),
         ),
     )
     grants = e.admission.delegation.grants

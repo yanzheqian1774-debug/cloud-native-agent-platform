@@ -540,6 +540,8 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
         execution.compatibility()
         execution.native_dispatch_compatibility(Path(dispatch_migration))
 
+        continuation_work = None
+
         def authorization_check(connection, command):
             return authorization_bundle_check(connection, command, ())
 
@@ -557,6 +559,15 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 AuthenticationSource(command.authentication_source),
                 generation.policy_version,
             )
+            from agent_console.owned_business_resource_adapter import authorize_dispatch
+
+            if not authorize_dispatch(
+                continuation_work.owned_business if continuation_work else None,
+                connection,
+                command,
+                context,
+            ):
+                return False
             from agent_console.prepared_execution_lineage import dispatch_grants
 
             grants = tuple(
@@ -692,12 +703,26 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 ContinuationWork,
             )
 
+            owned_business = None
+            business_policy_path = os.environ.get("OWNED_BUSINESS_ADMISSION_POLICY")
+            if business_policy_path:
+                from agent_console.owned_business_work_reader import (
+                    OwnedBusinessWorkReader,
+                )
+
+                candidate = OwnedBusinessWorkReader(
+                    business_policy_path, reader, generation.generation, recovery_epoch
+                )
+                if candidate.policy.enabled:
+                    owned_business = candidate
             work = ContinuationWork.load(
                 execution,
                 continuation_path,
                 owner_authority_factory(reader, generation, authorization_check),
                 sales_v2_candidate=prepared_mode == "sales-gross-profit-v2-candidate",
+                **({"owned_business": owned_business} if owned_business else {}),
             )
+            continuation_work = work
             dispatch_repository = ContinuationDispatchRepository(execution, work)
             ready_driver.eligible_dispatches = work.dispatches
             after_tick = work.evaluate_terminal

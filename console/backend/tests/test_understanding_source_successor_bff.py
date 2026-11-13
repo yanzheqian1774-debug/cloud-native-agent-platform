@@ -39,7 +39,7 @@ from test_understanding_adoption_source import select
 @pytest.mark.parametrize("adopted", ["NEEDS_DATA"], indirect=True)
 @pytest.mark.parametrize("revoke_at", [None, "before_model", "before_adoption"])
 def test_selected_old_c2_question_continues_with_exact_successor(
-    adopted, tmp_path, revoke_at
+    adopted, tmp_path, revoke_at, *, on_ready=None
 ):
     e = adopted
     selected = select(e)
@@ -280,3 +280,5 @@ def test_selected_old_c2_question_continues_with_exact_successor(
                 ).fetchone()["n"]
                 == 2
             )
+        if on_ready is not None:
+            on_ready(e, current, old_route, successor)

@@ -15,6 +15,7 @@ from pathlib import Path
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import owned_business_resource_adapter as owned_resources
 from .authority_contracts import AuthorityError, ExactGrant
 from .capability_plan_confirmation import CapabilityPlanSource
 from .digital_employee_definition import CompositionMember, EmployeeRevision, MemberKind
@@ -122,6 +123,7 @@ class ResourceAutomation:
         self.services, self.employees = services, employees
         self.runtime_probe = runtime_probe or policy.probe_runtime
         self.sales_v2_candidate = sales_v2_candidate
+        self.owned_business = None
 
     def authenticate(self, context):
         from .development_administrator import for_service
@@ -130,7 +132,9 @@ class ResourceAutomation:
             return context
         return self.policy.authenticate(self.grants, context)
 
-    def work(self, context, root, now):
+    def work(
+        self, context, root, now, *, connection=None, source_digest=None, history=False
+    ):
         from .development_administrator import for_service
         from .resource_automation_policy import AdministratorWorkScope
 
@@ -142,11 +146,41 @@ class ResourceAutomation:
                 problem=root,
                 expiresAt=now + timedelta(hours=1),
             )
-        return self.policy.work(context, root, now)
+        try:
+            return self.policy.work(context, root, now)
+        except AuthorityError as exc:
+            if (
+                str(exc) != "RESOURCE_POLICY_WORK_SCOPE_DENIED"
+                or self.owned_business is None
+            ):
+                raise
+        if not self.policy.enabled:
+            raise AuthorityError("RESOURCE_POLICY_DISABLED")
+        with self.grants.repository.connection_scope(connection) as current:
+            return owned_resources.derive_work(
+                self.owned_business,
+                current,
+                context,
+                root,
+                source_digest=source_digest,
+                history=history,
+            )
 
     def decide(
         self, call, members, key, work, issuer, *, purpose="RESOURCE_PREPARATION"
     ):
+        if isinstance(work, owned_resources.OwnedResourceWork):
+            if work.historyRead:
+                raise AuthorityError("OWNED_BUSINESS_HISTORY_NOT_EXECUTABLE")
+            current = owned_resources.derive_work(
+                self.owned_business,
+                call.connection,
+                call.context,
+                work.problem,
+                source_digest=work.businessScope.sourceContentDigest,
+            )
+            if owned_resources.evidence(current) != owned_resources.evidence(work):
+                raise AuthorityError("OWNED_BUSINESS_ADMISSION_CHANGED")
         members = tuple(
             sorted(set(members), key=lambda g: (g.owner, g.action, g.exact_resource))
         )
@@ -285,8 +319,13 @@ class ResourceAutomation:
             )
             require_supported_lineage(app, cur, scope, plan)
             work = self.work(
-                call.context, plan.semantics.target.problem, self.grants.clock()
+                call.context,
+                plan.semantics.target.problem,
+                self.grants.clock(),
+                connection=cur.connection,
             )
+            owned_resources.require_plan(work, plan)
+            owned_resources.require_capability(self, call, work)
             # Existing publication and data-scope checks precede any new privilege.
             for ref in (request.old_source, request.new_source):
                 self.prepare_one(
@@ -381,10 +420,18 @@ class ResourceAutomation:
             plan = ConfirmedPlanRevision.model_validate(confirmed["plan"])
             require_supported_lineage(app, cur, scope, plan)
             work = self.work(
-                call.context, plan.semantics.target.problem, self.grants.clock()
+                call.context,
+                plan.semantics.target.problem,
+                self.grants.clock(),
+                connection=cur.connection,
+                history=call.operation == "READ_RESOURCE_AUTOMATION",
             )
+            owned_resources.require_plan(work, plan)
+            owned_resources.require_capability(self, call, work)
             digest = canonical_digest(
-                [identity, version, confirmed["digest"], self.policy.digest]
+                owned_resources.digest_basis(
+                    [identity, version, confirmed["digest"], self.policy.digest], work
+                )
             )
             c.execute(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
@@ -405,6 +452,10 @@ class ResourceAutomation:
                 (scope.namespace, scope.security_domain, principal.principal_id, key),
             ).fetchone()
             if prior:
+                if owned_resources.evidence(work) and prior["record"].get(
+                    "ownedBusiness"
+                ) != owned_resources.evidence(work):
+                    raise AuthorityError("OWNED_BUSINESS_PREPARATION_CHANGED")
                 if prior["payload_digest"] != digest:
                     raise WorkbenchOwnerError("RESOURCE_PREPARATION_KEY_CONFLICT", 409)
                 self.recheck(call, prior["record"])
@@ -620,6 +671,8 @@ class ResourceAutomation:
                 if state == "READY"
                 else "RESOLVE_REPORTED_GAPS",
             }
+            if owned_resources.evidence(work):
+                record["ownedBusiness"] = owned_resources.evidence(work)
             c.execute(
                 "INSERT INTO execution_authority.resource_automation(namespace,security_domain,subject_id,request_key,plan_id,plan_version,payload_digest,record) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
                 (
@@ -636,6 +689,7 @@ class ResourceAutomation:
             return record
 
     def derive(self, call, plan, key, work, issuer):
+        owned_resources.require_plan(work, plan)
         selections = {
             r.selected
             for r in plan.semantics.requirements
@@ -671,6 +725,23 @@ class ResourceAutomation:
                 )
                 if value["digest"] != r.selected.digest:
                     raise WorkbenchOwnerError("RESOURCE_EMPLOYEE_DIGEST_MISMATCH", 409)
+                if isinstance(work, owned_resources.OwnedResourceWork):
+                    if not value["published"]:
+                        raise AuthorityError(
+                            "OWNED_BUSINESS_PUBLISHED_EMPLOYEE_REQUIRED"
+                        )
+                    for member in value["revision"]["members"]:
+                        owned_resources.require_reference(
+                            work,
+                            {"RUNTIME_PROFILE": "runtime"}.get(
+                                member["kind"], member["kind"].lower()
+                            ),
+                            ExactReference(
+                                resource_id=member["resource_id"],
+                                revision_id=member["revision_id"],
+                                digest=member["digest"].removeprefix("sha256:"),
+                            ),
+                        )
                 for member in value["revision"]["members"]:
                     if member["kind"] == "KNOWLEDGE":
                         data = call.connection.execute(
@@ -721,6 +792,7 @@ class ResourceAutomation:
                     kind,
                     r.selected,
                 )
+        owned_resources.require_employee(work, employee, list(refs.values()))
         return sorted(
             refs.values(), key=lambda v: (v[0], v[1].resource_id, v[1].revision_id)
         ), employee
@@ -737,6 +809,7 @@ class ResourceAutomation:
         source_ref=None,
         source_revision=None,
     ):
+        owned_resources.require_reference(work, kind, ref)
         c = call.connection
         table, col = TABLES[kind]
         row = c.execute(
@@ -767,6 +840,12 @@ class ResourceAutomation:
             }
         ):
             raise AuthorityError("RESOURCE_EXACT_VERSION_UNAVAILABLE")
+        if isinstance(work, owned_resources.OwnedResourceWork) and kind == "skill":
+            operations = {
+                operation["name"] for operation in rev["content"].get("operations", [])
+            }
+            if not operations or not operations.issubset(work.businessScope.operations):
+                raise AuthorityError("OWNED_BUSINESS_TEST_OPERATION_NOT_AUTHORIZED")
         check = validate(
             kind,
             rev["content"],
@@ -778,6 +857,8 @@ class ResourceAutomation:
             rev["state"] == "PUBLISHED"
             and record.get("publishedRevisionId") == ref.revision_id
         )
+        if isinstance(work, owned_resources.OwnedResourceWork) and not existing:
+            raise AuthorityError("OWNED_BUSINESS_PUBLISHED_RESOURCE_REQUIRED")
         reads = [
             ExactGrant(
                 OWNERS[kind],
@@ -880,6 +961,7 @@ class ResourceAutomation:
         }
 
     def assemble(self, call, plan, refs, employee, key, work, issuer):
+        owned_resources.require_employee(work, employee, refs)
         c = call.connection
         scope = ScopeIdentity(
             call.context.scope.tenant_id, call.context.scope.security_domain
@@ -1130,7 +1212,13 @@ def operations(automation):
         CoverageRequest,
         ProblemResourceCoverage,
     )
-    from .question_activity_input import QuestionActivityInput, QuestionActivityRequest
+    from .question_activity_input import (
+        QuestionActivityInput,
+        QuestionActivityRequest,
+    )
+    from .question_activity_input import (
+        entry_grants as question_entry_grants,
+    )
     from .resource_preparation_plan import read_selection
 
     coverage = ProblemResourceCoverage(automation)
@@ -1172,9 +1260,7 @@ def operations(automation):
             PREFIX + "/question-activity-input",
             QuestionActivityRequest,
             None,
-            lambda *args: (
-                ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
-            ),
+            question_entry_grants,
             QuestionActivityInput(automation),
         ),
         WorkbenchOperation(

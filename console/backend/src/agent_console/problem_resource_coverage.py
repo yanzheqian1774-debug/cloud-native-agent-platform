@@ -9,6 +9,7 @@ from dataclasses import replace
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import owned_business_resource_adapter as owned_resources
 from .authority_contracts import AuthorityError
 from .digital_employee_definition import EmployeeDefinitionError
 from .execution_domain import ScopeIdentity
@@ -169,12 +170,29 @@ def coverage(automation, call, plan):
     )
     automation.authenticate(call.context)
     work = automation.work(
-        call.context, plan.semantics.target.problem, automation.grants.clock()
+        call.context,
+        plan.semantics.target.problem,
+        automation.grants.clock(),
+        connection=c,
     )
+    owned_resources.require_plan(work, plan, check_references=False)
+    owned_resources.require_capability(automation, call, work)
     automation.bound_app(call).validate_target(p, plan.semantics.target, c)
     runtime = automation.runtime_probe(scope.namespace)
     candidates = []
-    for row in identities(c, scope, "EMPLOYEE", limit=201):
+    rows = (
+        [
+            {
+                "identity": ref.resource_id,
+                "revision": ref.revision_id,
+                "digest": ref.digest,
+            }
+            for ref in work.businessScope.employees
+        ]
+        if isinstance(work, owned_resources.OwnedResourceWork)
+        else identities(c, scope, "EMPLOYEE", limit=201)
+    )
+    for row in rows:
         ref = ExactReference(
             resource_id=row["identity"],
             revision_id=row["revision"],
@@ -203,6 +221,7 @@ def coverage(automation, call, plan):
                     revision_id=m["revision_id"],
                     digest=m["digest"].removeprefix("sha256:"),
                 )
+                owned_resources.require_reference(work, kind.lower(), exact)
                 require_read(call.authority, p, kind, exact)
                 content, member_name = read_published(c, scope, kind, exact)
                 contents[KINDS[m["kind"]]] = content
@@ -348,7 +367,15 @@ class ProblemResourceCoverage:
             if call.operation == "READ_PROBLEM_RESOURCE_COVERAGE":
                 return coverage(a, call, plan)
             a.authenticate(call.context)
-            a.work(call.context, plan.semantics.target.problem, a.grants.clock())
+            work = a.work(
+                call.context,
+                plan.semantics.target.problem,
+                a.grants.clock(),
+                connection=cur.connection,
+                history=call.operation == "READ_PROBLEM_RESOURCE_SELECTION",
+            )
+            owned_resources.require_plan(work, plan, check_references=False)
+            owned_resources.require_capability(a, call, work)
             key = args.get("key", args.get("idempotencyKey"))
             old = call.connection.execute(
                 "SELECT record FROM execution_authority.resource_policy_plan_commands WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
@@ -361,6 +388,10 @@ class ProblemResourceCoverage:
             ).fetchone()
             if old:
                 result = old["record"]
+                if owned_resources.evidence(work) and result.get(
+                    "ownedBusiness"
+                ) != owned_resources.evidence(work):
+                    raise AuthorityError("OWNED_BUSINESS_PREPARATION_CHANGED")
                 proof = result.get("automaticCoverage")
                 if not proof or proof["planDigest"] != plan.digest:
                     raise WorkbenchOwnerError("AUTOMATIC_SELECTION_KEY_CONFLICT", 409)

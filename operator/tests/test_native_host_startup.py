@@ -260,3 +260,38 @@ def test_observe_only_receipt_is_exact_idempotent_and_not_terminal(setup):
     receipts[0].write_text("changed")
     with pytest.raises(ValueError):
         observed.observe_only_receipt(claim)
+
+
+def test_owned_business_policy_is_required_and_immutable_when_enabled(
+    setup, monkeypatch
+):
+    path, cfg, assembly = setup
+    policy = path.parent / "owned-business.json"
+    digest = save(policy, {"enabled": True, "fixture": "not deployed"})
+    monkeypatch.setenv("OWNED_BUSINESS_ADMISSION_POLICY", str(policy))
+    with pytest.raises(ValueError):
+        startup.StartupObservation(path, assembly)
+    cfg["policyFiles"]["OWNED_BUSINESS_ADMISSION_POLICY"] = digest
+    save(path, cfg)
+    observed = startup.StartupObservation(path, assembly)
+    assert observed.files[str(policy)] == digest
+    assert observed.current()["observation"]["launchDigest"]
+    policy.write_text("changed policy")
+    with pytest.raises(ValueError):
+        observed.current()
+
+
+def test_owned_business_policy_wrong_digest_or_missing_file_rejected(
+    setup, monkeypatch
+):
+    path, cfg, assembly = setup
+    policy = path.parent / "owned-business.json"
+    save(policy, {"fixture": True})
+    monkeypatch.setenv("OWNED_BUSINESS_ADMISSION_POLICY", str(policy))
+    cfg["policyFiles"]["OWNED_BUSINESS_ADMISSION_POLICY"] = "0" * 64
+    save(path, cfg)
+    with pytest.raises(ValueError):
+        startup.StartupObservation(path, assembly)
+    policy.unlink()
+    with pytest.raises((ValueError, OSError)):
+        startup.StartupObservation(path, assembly)

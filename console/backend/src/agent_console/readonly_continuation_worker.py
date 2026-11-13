@@ -3,6 +3,7 @@
 
 from datetime import UTC, datetime
 
+from . import owned_business_resource_adapter as owned_resources
 from .authority_contracts import AuthorityError
 from .execution_preparation import ExecutionPreparationError
 from .ontology_execution import parse_preparation
@@ -13,7 +14,13 @@ from .workbench_business_problem import OwnerPrincipal
 
 class ContinuationWork:
     def __init__(
-        self, repository, policy, authority_factory, *, sales_v2_candidate=False
+        self,
+        repository,
+        policy,
+        authority_factory,
+        *,
+        sales_v2_candidate=False,
+        owned_business=None,
     ):
         self.repository, self.policy, self.authority_factory = (
             repository,
@@ -22,14 +29,24 @@ class ContinuationWork:
         )
 
         self.sales_v2_candidate = sales_v2_candidate
+        self.owned_business = owned_business
 
     @classmethod
-    def load(cls, repository, path, authority_factory, *, sales_v2_candidate=False):
+    def load(
+        cls,
+        repository,
+        path,
+        authority_factory,
+        *,
+        sales_v2_candidate=False,
+        owned_business=None,
+    ):
         return cls(
             repository,
             ReadonlyContinuationPolicy.load(path),
             authority_factory,
             sales_v2_candidate=sales_v2_candidate,
+            owned_business=owned_business,
         )
 
     def receipts(self):
@@ -84,6 +101,10 @@ class ContinuationWork:
                         continue
                 eligible.append((row["namespace"], row["security_domain"], r))
                 continue
+            if r.get("ownedBusiness") is not None:
+                if self._owned_receipt(row, now):
+                    eligible.append((row["namespace"], row["security_domain"], r))
+                continue
             matches = [
                 w
                 for w in self.policy.works
@@ -108,6 +129,48 @@ class ContinuationWork:
             if len(matches) == 1:
                 eligible.append((row["namespace"], row["security_domain"], r))
         return eligible
+
+    def _owned_receipt(self, row, now):
+        if self.owned_business is None:
+            return False
+        receipt = row["result"]
+        if datetime.fromisoformat(receipt["authorizationExpiresAt"]) <= now:
+            return False
+        with self.repository.pool.connection() as c:
+            command = c.execute(
+                "SELECT payload FROM execution_authority.native_dispatch_commands "
+                "WHERE namespace=%s AND security_domain=%s AND "
+                "payload->>'authorization_resource'=%s ORDER BY queued_at LIMIT 1",
+                (
+                    row["namespace"],
+                    row["security_domain"],
+                    "governed-execution:prepared:" + receipt["preparationDigest"],
+                ),
+            ).fetchone()
+            if command is None:
+                return False
+            try:
+                saved_command = self.repository._dispatch_command(command["payload"])
+                context, authority = self.authority_factory(c, saved_command)
+                if context.principal_id != receipt["subject"]:
+                    return False
+                if not owned_resources.authorize_dispatch(
+                    self.owned_business, c, saved_command, context
+                ):
+                    return False
+                principal = OwnerPrincipal(
+                    context.principal_id, row["namespace"], row["security_domain"]
+                )
+                # Current grants remain the existing execution owner's responsibility.
+                authority.require(
+                    principal,
+                    "EXECUTION",
+                    "START",
+                    "governed-execution:prepared:" + receipt["preparationDigest"],
+                )
+                return True
+            except (AuthorityError, ValueError, ExecutionPreparationError):
+                return False
 
     def dispatches(self):
         with self.repository.pool.connection() as c:

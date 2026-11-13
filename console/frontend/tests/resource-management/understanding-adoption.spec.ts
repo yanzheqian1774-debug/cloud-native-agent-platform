@@ -153,3 +153,33 @@ test('late source observation cannot replace a newer question owner',async({page
  await page.route('**/draft-assistance/invocations/initial',async route=>{await pending;await route.fulfill({json:{result:{...s.journal.state.draft,invocationId:'initial',contextId:'initial-context',aggregateVersion:5,inputSource:source,sourceInputObservation:{state:'METADATA_ONLY',invocationId:'initial',aggregateVersion:5,source,basis:'RECORDED_ADAPTER_CONTRACT'}}}})});
  await page.goto('/work?conversation=adoption');await send(page,'验收负责人是项目经理');await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');release();await expect(page.getByRole('heading',{name:'有一点需要确认',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'系统待接续资料处理',exact:true})).toHaveCount(0);expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);
 });
+
+for(const reason of ['UNDERSTANDING_ADOPTION_BUSINESS_SCOPE_DENIED','NETWORK_UNCONFIRMED'])test(`CREATE pause preserves fixed input and exact ${reason} meaning`,async({page})=>{
+ const s=await fixture(page);Object.assign(s.journal.state,{phase:'CREATE',pending:'create-problem',error:'Error: '+reason,source});Object.assign(s.journal.state.draft,{resultKind:'DRAFT_READY',draft:{title:'检查交接说明',description:'核对原文并返回缺口'}});
+ await page.goto('/work?conversation=adoption');await expect(input(page)).toBeEditable();await input(page).fill('请保留这项补充要求');await expect(page.getByRole('button',{name:'发送',exact:true})).toBeDisabled();await expect(page.getByRole('link',{name:'发起另一个问题',exact:true})).toHaveCount(0);await page.reload();await expect(input(page)).toHaveValue('请保留这项补充要求');
+ if(reason==='UNDERSTANDING_ADOPTION_BUSINESS_SCOPE_DENIED'){
+  await expect(page.getByRole('heading',{name:'草案已保存，后续处理暂未获准',exact:true})).toBeVisible();await expect(page.locator('.journey-progress')).toContainText('草案已保存，后续处理暂未获准');await expect(page.locator('.conversation-journey [role="alert"] details p')).not.toBeVisible();await expect(page.getByText('不会自动重发可能已执行的请求。恢复后仍在本会话继续。',{exact:true})).toHaveCount(0);
+ }else await expect(page.getByRole('heading',{name:'草案已保存，后续处理暂未获准',exact:true})).toHaveCount(0);
+ expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);expect(s.writes).toHaveLength(0);
+});
+
+for(const outcome of ['NOT_CREATED','CREATED','UNKNOWN','DENIED','MISMATCH','LOST_CREATE','MALFORMED_CREATE'] as const)test(`same saved CREATE recovery ${outcome} uses owner readback`,async({page})=>{
+ const s=await fixture(page);Object.assign(s.journal.state,{phase:'CREATE',pending:'create-problem',error:'Error: UNDERSTANDING_ADOPTION_BUSINESS_SCOPE_DENIED',source});Object.assign(s.journal.state.draft,{resultKind:'DRAFT_READY',draft:{title:'检查交接说明',description:'原草案'}});
+ const revision={business_problem_id:'original-created',revision_id:'r1',digest:'a'.repeat(64),title:'检查交接说明',description:'原草案'};let reads=0,created=false;const creates:Record<string,unknown>[]=[];
+ await page.route('**/conversations/adoption/create-status?**',async route=>{reads++;const url=new URL(route.request().url());expect(url.searchParams.get('requestKey')).toBe('work:problem');expect(url.searchParams.get('draftInvocationId')).toBe('initial');
+  if(outcome==='DENIED')return route.fulfill({status:403,json:{reasonCode:'CREATE_STATUS_ACCESS_DENIED'}});
+  return route.fulfill({json:{result:{state:created||outcome==='CREATED'?'CREATED':outcome==='UNKNOWN'?'UNKNOWN':'NOT_CREATED',draftInvocationId:outcome==='MISMATCH'?'other':'initial',requestKey:'work:problem',journeyKey:'work',journalVersion:s.journal.version,aggregateVersion:5,revision:created||outcome==='CREATED'?revision:undefined}}});
+ });
+ await page.route('**/problems',async route=>{if(route.request().method()==='GET')return route.fulfill({json:{result:{problems:[]}}});creates.push(route.request().postDataJSON());created=true;if(outcome==='LOST_CREATE')return route.abort();return route.fulfill({status:201,json:{result:{revision:outcome==='MALFORMED_CREATE'?null:revision}}})});
+ await page.goto('/work?conversation=adoption');const button=page.getByRole('button',{name:'核对并继续当前工作',exact:true});await expect(button).toBeVisible();expect(reads).toBe(0);expect(creates).toHaveLength(0);await input(page).fill('保留补充');await button.click();
+ if(['LOST_CREATE','MALFORMED_CREATE'].includes(outcome)){await expect(page.getByText('暂未确认本次接续状态。草案和输入均已保留；再次继续前会先读取原记录，不会重新理解问题。',{exact:true})).toBeVisible();await page.reload();await expect(input(page)).toHaveValue('保留补充');expect(creates).toHaveLength(1);await button.click();}
+ if(['NOT_CREATED','CREATED','LOST_CREATE','MALFORMED_CREATE'].includes(outcome)){await expect.poll(()=>s.journal.state.phase).toBe('CRITERION');expect((s.journal.state as unknown as {problem:typeof revision}).problem).toEqual(revision);expect(creates).toHaveLength(outcome==='CREATED'?0:1);if(creates.length){expect(creates[0].idempotencyKey).toBe('work:problem');expect(creates[0].draftInvocationId).toBe('initial')}}
+ else {await expect(button).toBeEnabled();expect(s.journal.state.phase).toBe('CREATE');expect(creates).toHaveLength(0);await expect(input(page)).toHaveValue('保留补充')}
+ expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);expect(s.journal.state.draft.invocationId).toBe('initial');
+});
+
+for(const exact of [true,false])test(`CREATE source-read statement requires exact observed source ${exact}`,async({page})=>{
+ const s=await fixture(page);Object.assign(s.journal.state,{phase:'CREATE',pending:'create-problem',error:'Error: UNDERSTANDING_ADOPTION_BUSINESS_SCOPE_DENIED',source});Object.assign(s.journal.state.draft,{resultKind:'DRAFT_READY',draft:{title:'检查交接说明',description:'原草案'}});s.sourceObservation={state:'BODY_CONTEXT',invocationId:'initial',aggregateVersion:5,basis:'RECORDED_ADAPTER_CONTRACT',source:exact?source:{...source,sourceContentDigest:'c'.repeat(64)}};
+ await page.goto('/work?conversation=adoption');await expect(page.getByRole('heading',{name:'草案已保存，后续处理暂未获准',exact:true})).toBeVisible();
+ if(exact)await expect(page.getByText(/资料正文已读取，草案已保存/).first()).toBeVisible();else await expect(page.getByText(/资料正文已读取，草案已保存/)).toHaveCount(0);expect(s.calls).toHaveLength(0);expect(s.writes).toHaveLength(0);
+});

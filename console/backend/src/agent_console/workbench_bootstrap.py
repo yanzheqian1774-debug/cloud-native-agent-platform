@@ -420,7 +420,7 @@ def build_workbench_composition(
             )
         delegation_routes = ()
         task_binding = None
-        delegation = planning_admission = None
+        delegation = planning_admission = owned_business = None
         if (
             draft_assistance is not None
             and planning_invocations is not None
@@ -583,6 +583,26 @@ def build_workbench_composition(
                         authorizer,
                         os.environ.get("F3_UNDERSTANDING_SOURCE_ADOPTION_POLICY", ""),
                     )
+                owned_business_path = os.environ.get("OWNED_BUSINESS_ADMISSION_POLICY")
+                if owned_business_path:
+                    from .owned_business_admission import (
+                        OwnedBusinessAdmission,
+                    )
+                    from .owned_business_admission import (
+                        bind_created_object as bind_owned_business,
+                    )
+                    from .owned_business_postgres import migrate as migrate_business
+
+                    owned_business = OwnedBusinessAdmission(
+                        admission, owned_business_path
+                    )
+                    if owned_business.policy.enabled:
+                        migrate_business(admission.repository)
+                        admission.owned_business = owned_business
+                        planning_invocations.budget.owner.owned_business = (
+                            owned_business.work_reader
+                        )
+                        task_binding = bind_owned_business(owned_business, task_binding)
                 from .conversation_history_access import install_history_access
 
                 delegation_routes += (
@@ -655,6 +675,15 @@ def build_workbench_composition(
                 prepared_resource_services,
                 employee_definitions,
                 sales_v2_candidate=sales_v2_candidate,
+            )
+            resource_automation.owned_business = (
+                getattr(
+                    getattr(draft_assistance.authorization, "context_admission", None),
+                    "owned_business",
+                    None,
+                )
+                if draft_assistance is not None
+                else None
             )
             with foundation.repository.connection_scope() as c:
                 migrate_automation(c)
@@ -1163,6 +1192,12 @@ def build_workbench_composition(
                     else (),
                 )
                 application.state.understanding_adoption = adoption_owner
+        if owned_business is not None and owned_business.policy.enabled:
+            from .owned_business_creation_read import OwnedBusinessCreationRead
+
+            application.state.owned_business_creation_read = OwnedBusinessCreationRead(
+                owned_business, authorizer, business_problems.problems
+            )
         if continuation_path:
             continuation.capability_contract_reader = getattr(
                 application.state, "capability_execution_contract_reader", None

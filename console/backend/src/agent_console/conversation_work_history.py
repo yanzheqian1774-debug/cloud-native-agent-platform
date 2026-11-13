@@ -52,7 +52,26 @@ def targets(service, records, c, context, conversation):
     row = request_row(c, binding["context_id"]) if binding else None
     record = (row or {}).get("record") or {}
     adopted = False
-    if row and record.get("configuration") != service.configuration:
+    owned = getattr(service, "owned_business", None)
+    owned_record = None
+    owned_binding = None
+    if owned is not None and binding:
+        from .owned_business_postgres import saved
+
+        owned_record = saved(c, context, binding["invocation_id"])
+    if owned_record is not None:
+        from .plan_suggestion_domain import ExactReference
+
+        owned_binding = owned.work(
+            c,
+            context,
+            ExactReference(
+                resource_id=identity, revision_id=revision, digest=commitment
+            ),
+            history=True,
+        )
+        adopted = True
+    elif row and record.get("configuration") != service.configuration:
         from .draft_assistance import DraftAssistanceError
         from .understanding_adoption_history import source
 
@@ -126,6 +145,24 @@ def targets(service, records, c, context, conversation):
     }:
         raise AuthorityError("CONVERSATION_HISTORY_WORK_SOURCE_MISMATCH")
     grants = {ExactGrant("BUSINESS_PROBLEM", "READ", problem_resource(identity))}
+    if owned_binding is not None:
+        from .workbench_prepared_resources import reference
+
+        source_ref = owned_binding.scope.source
+        grants.update(
+            (
+                ExactGrant("PLAN", "READ", "plan:prepared:" + identity),
+                ExactGrant(
+                    "KNOWLEDGE",
+                    "READ_RESOURCE",
+                    reference(
+                        "knowledge", source_ref.resource_id, source_ref.revision_id
+                    ),
+                ),
+            )
+        )
+        # The history-access owner still requires a prior exact READ grant and
+        # refuses revoked/denied rights. These targets do not issue first READs.
     execution = state.get("execution")
     if not execution:
         return grants
