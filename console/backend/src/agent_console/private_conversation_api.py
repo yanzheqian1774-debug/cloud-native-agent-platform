@@ -34,6 +34,15 @@ class MessageCommand(BaseModel):
     focusLinkId: str | None = Field(default=None, min_length=1, max_length=128)
 
 
+class CorrectConversationSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    idempotencyKey: str = Field(min_length=1, max_length=128)
+    expectedVersion: int = Field(ge=1)
+    draftInvocationId: str = Field(min_length=1, max_length=200)
+    requestKey: str = Field(min_length=1, max_length=200)
+    source: dict[str, Any]
+
+
 class WorkTarget(BaseModel):
     model_config = ConfigDict(extra="forbid")
     problemId: str = Field(min_length=1, max_length=128)
@@ -483,6 +492,20 @@ def install_private_conversations(
             return reader.read(ctx, identity, draftInvocationId, requestKey)
 
         return safe(request, observe)
+
+    @app.post(PREFIX + "/conversations/{identity}/source-correction")
+    def source_correction(
+        request: Request, identity: str, body: CorrectConversationSource
+    ):
+        def apply(ctx):
+            from .conversation_source_correction import correct
+
+            reader = getattr(app.state, "owned_business_creation_read", None)
+            if reader is None:
+                raise ConversationError("CONVERSATION_CREATE_STATUS_UNAVAILABLE", 503)
+            return correct(reader, service, ctx, identity, body.model_dump())
+
+        return safe(request, apply, True)
 
     @app.get(PREFIX + "/conversations/{identity}/criterion-status")
     def criterion_status(

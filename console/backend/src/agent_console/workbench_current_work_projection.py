@@ -8,8 +8,8 @@ from .business_problem_authorization import (
     criterion_revision_resource,
 )
 from .execution_preparation import RunProgress
+from .native_progress_projection import projection_read_grants
 from .ontology_execution import parse_preparation
-from .prepared_execution_resources import resource_read_grants
 from .prepared_result_review import PreparedResultReview
 from .prepared_skill_invocation import planned_outputs
 from .resource_use_domain import canonical_digest
@@ -72,10 +72,8 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
             or state.version != row["progress_version"]
         ):
             raise WorkbenchOwnerError("CURRENT_WORK_IDENTITY_MISMATCH", 503)
-        question = (
-            tuple(g for t in p.participants for g in resource_read_grants(p, t))
-            if verified_administrator
-            else ()
+        question = tuple(
+            g for t in p.participants for g in projection_read_grants(p, t)
         )
         evaluation = (
             evaluation_grants(p, state)
@@ -91,9 +89,9 @@ def project_runs(call, rows, *, verified_administrator, include_outcomes=True):
     for row, p, state, (question_grants, outcome_grants) in zip(
         rows, preparations, progress, requirements, strict=True
     ):
-        # Native progress currently requires the development role and all bound
-        # resource reads. Unknown access is null, not a false zero.
-        question_readable = verified_administrator and all(
+        # Match Native progress's current exact READ contract for every identity.
+        # Missing reads remain unknown, never a false zero or execution grant.
+        question_readable = bool(question_grants) and all(
             allowed[g] for g in question_grants
         )
         pending, answered, question_digest = None, None, None

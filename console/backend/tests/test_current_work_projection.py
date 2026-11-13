@@ -74,12 +74,12 @@ def setup(monkeypatch, *, state="RUNNING", cancelled=False):
     return call, row
 
 
-def test_ordinary_user_does_not_inherit_native_or_foreign_conversation_access(
+def test_ordinary_user_with_exact_reads_does_not_inherit_foreign_conversation(
     monkeypatch,
 ):
     call, row = setup(monkeypatch)
     item = project_runs(call, [row], verified_administrator=False)[0]
-    assert item.pendingQuestionCount is None and item.questionsDigest is None
+    assert item.pendingQuestionCount == 1 and item.questionsDigest is not None
     assert item.originConversationId == "own-alice" and not item.originVerified
     assert item.businessResolution is None
 
@@ -194,7 +194,12 @@ def test_count_projection_does_not_read_or_disclose_outcome_evidence(monkeypatch
 def test_unreadable_questions_do_not_imply_confirmed_running(
     monkeypatch, state, expected
 ):
+    from agent_console import workbench_current_work_projection as module
+
     call, row = setup(monkeypatch, state=state)
+    monkeypatch.setattr(
+        module, "readable_grants", lambda call, grants: tuple(False for _ in grants)
+    )
     result = project_runs(call, [row], verified_administrator=False)[0]
     assert result.displayState == expected
     assert result.pendingQuestionCount is None
@@ -219,10 +224,6 @@ def test_answered_history_count_is_unknown_without_native_grants(monkeypatch):
     call, row = setup(monkeypatch, state="SUCCEEDED")
     question = row["questions"][0]
     question.update(answered=True, answerDigest=question["questionDigest"])
-    assert (
-        project_runs(call, [row], verified_administrator=False)[0].answeredQuestionCount
-        is None
-    )
     monkeypatch.setattr(
         module, "readable_grants", lambda call, grants: tuple(False for _ in grants)
     )
@@ -230,3 +231,22 @@ def test_answered_history_count_is_unknown_without_native_grants(monkeypatch):
         project_runs(call, [row], verified_administrator=True)[0].answeredQuestionCount
         is None
     )
+
+
+@pytest.mark.parametrize("denied_index", [0, 1])
+def test_missing_each_required_read_keeps_all_question_fields_unknown(
+    monkeypatch, denied_index
+):
+    from agent_console import workbench_current_work_projection as module
+
+    call, row = setup(monkeypatch)
+
+    def check(call, grants):
+        unique = list(dict.fromkeys(grants))
+        return tuple(g != unique[denied_index] for g in grants)
+
+    monkeypatch.setattr(module, "readable_grants", check)
+    item = project_runs(call, [row], verified_administrator=False)[0]
+    assert item.pendingQuestionCount is None
+    assert item.answeredQuestionCount is None
+    assert item.questionsDigest is None

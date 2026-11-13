@@ -135,6 +135,20 @@ class OwnedBusinessAdmission:
         require(len(states) == len(members) and all(states), "READ_DENIED")
 
     def _source(self, c, context, invocation_id, *, history=False):
+        evidence = self._source_evidence(c, context, invocation_id)
+        value = evidence[4]
+        selected = self.policy.selected(value.input_source)
+        content, _ = read_published(
+            c,
+            ScopeIdentity(context.scope.tenant_id, context.scope.security_domain),
+            "KNOWLEDGE",
+            selected.source,
+        )
+        self.policy.validate_source(value.input_source, content)
+        return (*evidence[:5], selected, evidence[5])
+
+    def _source_evidence(self, c, context, invocation_id):
+        """Current readable original result; does not grant future business use."""
         account, now, expires = self._policy(c, context)
         value = PostgresDraftAssistanceRepository._latest(
             c, DraftScope.from_context(context), invocation_id
@@ -260,13 +274,12 @@ class OwnedBusinessAdmission:
             and origin["record"].get("question_only") is not True,
             "OWNED_ORIGIN_REQUIRED",
         )
-        selected = self.policy.selected(value.input_source)
+        require(value.input_source is not None, "SOURCE_REQUIRED")
+        source_ref = ExactReference.model_validate(value.input_source["source"])
         grant = ExactGrant(
             "KNOWLEDGE",
             "READ_RESOURCE",
-            reference(
-                "knowledge", selected.source.resource_id, selected.source.revision_id
-            ),
+            reference("knowledge", source_ref.resource_id, source_ref.revision_id),
         )
         allowed = self.grants.authorization.has_current_grants(
             context,
@@ -282,10 +295,15 @@ class OwnedBusinessAdmission:
             c,
             ScopeIdentity(context.scope.tenant_id, context.scope.security_domain),
             "KNOWLEDGE",
-            selected.source,
+            source_ref,
         )
-        self.policy.validate_source(value.input_source, content)
-        return row, account, now, expires, value, selected, ancestry
+        from .resource_automation_policy import source_digest
+
+        require(
+            source_digest(content) == value.input_source.get("sourceContentDigest"),
+            "SOURCE_CHANGED",
+        )
+        return row, account, now, expires, value, ancestry
 
     def admit(self, c, context, invocation_id):
         source, account, now, expires, value, selected, ancestry = self._source(

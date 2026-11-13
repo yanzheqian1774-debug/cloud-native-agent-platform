@@ -143,3 +143,50 @@ def test_understanding_reads_same_document_payload_and_current_exact_permission(
     with pytest.raises(AuthorityError):
         conversation_source_input.read_selected(f.automation, f.call, selected)
     assert len(f.loaded) == 1
+
+
+def test_owned_catalogue_separates_current_source_scope_from_read_and_execution(
+    readable_source,
+):
+    f = readable_source
+    f.allowed.add("human:ordinary")
+    f.call.operation = "READ_OWNED_CONVERSATION_SOURCES"
+    checked = []
+
+    def policy(c, ctx):
+        assert c is f.call.connection and ctx is f.call.context
+
+    def selected(metadata, content):
+        checked.append(metadata)
+        assert content is f.content
+
+    f.automation.owned_business = NS(
+        _policy=policy, policy=NS(validate_source=selected)
+    )
+    item = module.sources(f.automation, f.call)[0]
+    assert item["name"] == "Readable document"
+    assert item["businessEligibility"] == {
+        "state": "SOURCE_SCOPE_MATCHED",
+        "executionReady": False,
+    }
+    assert checked[0]["source"] == item["source"]
+
+    def denied(*args):
+        raise AuthorityError("OWNED_BUSINESS_SOURCE_NOT_AUTHORIZED")
+
+    f.automation.owned_business.policy.validate_source = denied
+    assert (
+        module.sources(f.automation, f.call)[0]["businessEligibility"]["state"]
+        == "READ_ONLY"
+    )
+
+    def expired(*args):
+        raise AuthorityError("OWNED_BUSINESS_EXPIRED")
+
+    f.automation.owned_business._policy = expired
+    assert (
+        module.sources(f.automation, f.call)[0]["businessEligibility"]["state"]
+        == "UNVERIFIED"
+    )
+    f.allowed.clear()
+    assert module.sources(f.automation, f.call) == []

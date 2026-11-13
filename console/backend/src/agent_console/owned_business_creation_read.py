@@ -27,7 +27,7 @@ class OwnedBusinessCreationRead:
             ) from exc
 
     def _read(self, c, ctx, conversation, invocation_id, key):
-        source, _, now, _, value, _, _ = self.owner._source(c, ctx, invocation_id)
+        source, _, now, _, value, _ = self.owner._source_evidence(c, ctx, invocation_id)
         if source["record"].get("conversation_id") != conversation:
             raise ConversationError("CONVERSATION_CREATE_STATUS_TARGET_CHANGED", 409)
         scope = (ctx.scope.tenant_id, ctx.scope.security_domain)

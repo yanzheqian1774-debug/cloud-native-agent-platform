@@ -70,23 +70,42 @@ def sources(automation, call, root=None):
                 "synthetic-delivery-source.v1",
             }:
                 continue
-            if check["sourceContentDigest"] in seen:
+            identity = (ref.resource_id, ref.revision_id, ref.digest)
+            if identity in seen:
                 continue
-            seen.add(check["sourceContentDigest"])
+            seen.add(identity)
             from .conversation_capability import describe
             from .question_member_capabilities import observe
 
             offer = describe(
                 raw, observe(automation, call, ref, check["sourceSchema"], work)
             )
+            eligibility = None
+            if getattr(call, "operation", None) == "READ_OWNED_CONVERSATION_SOURCES":
+                eligibility = source_eligibility(
+                    automation,
+                    call,
+                    {
+                        "source": ref.model_dump(mode="json"),
+                        "sourceSchema": check["sourceSchema"],
+                        "sourceContentDigest": check["sourceContentDigest"],
+                    },
+                    content,
+                )
             result.append(
                 {
                     **offer,
                     "source": ref.model_dump(mode="json"),
                     "name": name,
+                    **({"businessEligibility": eligibility} if eligibility else {}),
                     "sourceSchema": check["sourceSchema"],
                     "sourceContentDigest": check["sourceContentDigest"],
                     "periods": raw.get("periods", []),
+                    "documentTitles": [
+                        item["title"]
+                        for item in raw.get("documents", [])
+                        if isinstance(item, dict) and isinstance(item.get("title"), str)
+                    ],
                     "synthetic": True,
                 }
             )
@@ -101,3 +120,21 @@ class ConversationSources:
 
     def __call__(self, call):
         return {"items": sources(self.automation, call), "executionStarted": False}
+
+
+def source_eligibility(automation, call, metadata, content):
+    """Current source scope only, never admission or execution permission."""
+    owner = getattr(automation, "owned_business", None)
+    if owner is None:
+        return {"state": "UNVERIFIED", "executionReady": False}
+    try:
+        owner._policy(call.connection, call.context)
+        owner.policy.validate_source(metadata, content)
+    except AuthorityError as exc:
+        state = (
+            "READ_ONLY"
+            if exc.reason_code == "OWNED_BUSINESS_SOURCE_NOT_AUTHORIZED"
+            else "UNVERIFIED"
+        )
+        return {"state": state, "executionReady": False}
+    return {"state": "SOURCE_SCOPE_MATCHED", "executionReady": False}
