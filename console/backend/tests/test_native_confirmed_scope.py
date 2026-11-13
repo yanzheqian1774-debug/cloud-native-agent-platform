@@ -402,3 +402,36 @@ def test_unbound_legacy_multi_message_history_does_not_invent_a_context(service)
             read_confirmed_scope(c, p, actor.principal_id, ["生产环境", "测试环境"])
             is None
         )
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("请用刚才资料，调用检查工具，按生产环境规范核查。", "生产环境"),
+        ("读取已有资料, 调用检查工具, 按测试环境规范检查。", "测试环境"),
+        ("帮我先检查订单服务，按照生产环境规范核查，只检查，不执行上线。", "生产环境"),
+        ("请用刚才资料，按生产环境规范检查，不按生产环境规范。", None),
+        ("请用刚才资料，是否按生产环境规范检查？", None),
+        ("请用刚才资料，可能按生产环境规范检查。", None),
+        ("请用刚才资料，按生产环境规范或测试环境规范检查。", None),
+        ("请用刚才资料，按生产环境规范检查，按测试环境规范再检查。", None),
+        ("文档写着，按生产环境规范检查。", None),
+        ("请用资料，按生产环境规范检查是文档原话。", None),
+        ("请检查文档中的这句话，按生产环境规范检查。", None),
+        ("请检查以下原文，按生产环境规范检查。", None),
+        ("请使用引用内容，按生产环境规范检查。", None),
+        ("请查看示例，按生产环境规范检查。", None),
+        ("请检查材料，如果有问题，按生产环境规范检查。", None),
+        ("“请用刚才资料，按生产环境规范检查”是文档原话。", None),
+        ("请使用资料，“按生产环境规范检查”是原话。", None),
+        ("请使用资料，`按生产环境规范检查`。", None),
+        ("请使用资料，> 按生产环境规范检查。", None),
+    ],
+)
+def test_chained_direct_scope_commands_preserve_literal_authority(text, expected):
+    result = classify_scope(
+        [{"message_id": "original-command", "content": text}], ["生产环境", "测试环境"]
+    )
+    assert result == (
+        {"scope": expected, "messageIds": ["original-command"]} if expected else None
+    )

@@ -6,6 +6,28 @@ import re
 from agent_runtime.native_loop import digest
 
 
+def directive_clauses(clause):
+    """Comma continuations of explicit commands, never reported document prose."""
+    yield clause
+    parts = re.split(r"[，,]", clause)
+    if len(parts) < 2 or not re.match(
+        r"^\s*(?:(?:请|帮我|麻烦|本次|这次|仅)\s*)*(?:先\s*)?"
+        r"(?:用|使用|读取|调用|检查|核查|分析|核对|查看|看看)",
+        parts[0],
+    ):
+        return
+    for index, part in enumerate(parts[1:], 1):
+        preceding = "，".join(parts[:index])
+        if re.search(
+            r"[“”「」『』\"`：:]|原文|引用|写着|写道|示例|例如|这句话|如下|以下|内容是|假设|如果",
+            preceding,
+        ):
+            return
+        if re.search(r"(?:是|为).{0,12}(?:原话|原文|示例|引用)", part):
+            return
+        yield part
+
+
 def classify_scope(messages, scopes):
     """Recognize direct instructions only, not document prose or guessed intent."""
     available = tuple(dict.fromkeys(scopes))
@@ -39,12 +61,15 @@ def classify_scope(messages, scopes):
                 continue
             for scope in present:
                 prefix = r"^\s*(?:(?:请|帮我|麻烦|本次|这次|仅)\s*)*"
-                affirmative = re.search(
-                    prefix
-                    + r"(?:按|按照|使用|采用|依据)\s*[“「\"]?"
-                    + re.escape(scope)
-                    + r"(?=交接规范|规范|范围|\s|[，,。；;]|$)",
-                    clause,
+                affirmative = any(
+                    re.search(
+                        prefix
+                        + r"(?:按|按照|使用|采用|依据)\s*[“「\"]?"
+                        + re.escape(scope)
+                        + r"(?=交接规范|规范|范围|\s|[，,。；;]|$)",
+                        instruction,
+                    )
+                    for instruction in directive_clauses(clause)
                 ) or re.search(
                     r"^\s*(?:please\s+)?(?:use|apply)\s+"
                     + re.escape(scope)
