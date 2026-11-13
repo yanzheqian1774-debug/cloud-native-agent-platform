@@ -192,6 +192,7 @@ class ExactFileOpenAICredentialResolver:
                 ("v2", "problem-draft-assistance-output.v2"),
                 ("v2-zh-CN", "problem-draft-assistance-output.v2"),
                 ("v3", "conversation-understanding-output.v3"),
+                ("v3-execution", "conversation-understanding-output.v3-execution"),
             }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
@@ -254,6 +255,7 @@ class OpenAIResponsesDraftTransport:
                 ("v2", "problem-draft-assistance-output.v2"),
                 ("v2-zh-CN", "problem-draft-assistance-output.v2"),
                 ("v3", "conversation-understanding-output.v3"),
+                ("v3-execution", "conversation-understanding-output.v3-execution"),
             }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
@@ -261,10 +263,10 @@ class OpenAIResponsesDraftTransport:
             raise DraftAssistanceError("OPENAI_RESPONSES_PROFILE_MISMATCH")
         try:
             policy = policy_for(profile.adapter_revision, profile.output_schema_version)
-            if policy.revision in {"v2", "v2-zh-CN", "v3"}:
+            if policy.revision in {"v2", "v2-zh-CN", "v3", "v3-execution"}:
                 (
                     conversation_context_references
-                    if policy.revision == "v3"
+                    if policy.revision in {"v3", "v3-execution"}
                     else context_references
                 )(content)
             else:
@@ -301,7 +303,7 @@ class OpenAIResponsesDraftTransport:
 
         attachment = current_attachment()
         if attachment is not None:
-            if policy.revision != "v3":
+            if policy.revision not in {"v3", "v3-execution"}:
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
             document["input"].append(
                 {
@@ -647,11 +649,11 @@ class OpenAIResponsesDraftTransport:
             )
         try:
             refs = frozenset()
-            if policy.revision in {"v2", "v2-zh-CN", "v3"}:
+            if policy.revision in {"v2", "v2-zh-CN", "v3", "v3-execution"}:
                 sent = json.loads(request.payload)
                 refs = (
                     conversation_context_references
-                    if policy.revision == "v3"
+                    if policy.revision in {"v3", "v3-execution"}
                     else context_references
                 )(sent["input"][0]["content"][0]["text"])
             understanding = validate_result(result, policy, refs)
@@ -668,7 +670,10 @@ class OpenAIResponsesDraftTransport:
         question = result["clarificationQuestion"]
         title = result["title"]
         description = result["description"]
-        if kind in {"DIRECT_ANSWER", "NEEDS_DATA"} and policy.revision == "v3":
+        if kind in {"DIRECT_ANSWER", "NEEDS_DATA"} and policy.revision in {
+            "v3",
+            "v3-execution",
+        }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),
                 ObservationState.SUCCEEDED,

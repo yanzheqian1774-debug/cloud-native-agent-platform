@@ -178,7 +178,7 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
             return {
                 "result": {
                     "conversationUnderstanding": service.profile.adapter_revision
-                    == "v3"
+                    in {"v3", "v3-execution"}
                 }
             }
 
@@ -257,7 +257,10 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                             status_code=409,
                             content={"reasonCode": "CONVERSATION_CONTEXT_CONFLICT"},
                         )
-                    if not actions or service.profile.adapter_revision != "v3":
+                    if not actions or service.profile.adapter_revision not in {
+                        "v3",
+                        "v3-execution",
+                    }:
                         raise DraftAssistanceError(
                             "CONVERSATION_UNDERSTANDING_UNAVAILABLE"
                         )

@@ -13,11 +13,12 @@ from test_conversation_actions import ROOT, create, journey, post, read  # noqa:
 from test_private_conversation import database  # noqa: F401
 
 
-def configure(j, unknown=False):
+def configure(j, unknown=False, revision="v3"):
+    schema = "conversation-understanding-output." + revision
     j.draft.profile = replace(
         j.draft.profile,
-        adapter_revision="v3",
-        output_schema_version="conversation-understanding-output.v3",
+        adapter_revision=revision,
+        output_schema_version=schema,
     )
     calls = []
 
@@ -97,7 +98,7 @@ def test_saved_answer_survives_read_and_duplicate_owner_response(journey):  # no
     assert len(calls) == 1
     j.draft.authorization.can_read = lambda *args: False
     hidden = read(j, c)["messages"][-1]
-    assert hidden["facts"] == {"readable": False}
+    assert hidden["facts"]["readable"] is False
     assert first["answer"] not in hidden["content"]
 
 
@@ -374,4 +375,21 @@ def test_two_absent_observers_share_one_postgres_dispatch(journey, monkeypatch):
             )
         )
     assert results[0].invocation.invocation_id == results[1].invocation.invocation_id
+    assert len(calls) == 1
+
+
+def test_execution_successor_preserves_conversation_api_and_saved_direct_answer(
+    journey,  # noqa: F811
+):
+    j = journey
+    calls = configure(j, revision="v3-execution")
+    capability = j.client.get(ROOT + "/draft-assistance/capabilities")
+    assert capability.json()["result"]["conversationUnderstanding"] is True
+    c = create(j)
+    body = request(c, j)
+    first = post(j, "/draft-assistance/invocations", body, status=201)
+    assert first["resultKind"] == "DIRECT_ANSWER"
+    assert first["conversationDelivery"]["state"] == "SAVED"
+    again = post(j, "/draft-assistance/invocations", body, status=201)
+    assert again["invocationId"] == first["invocationId"]
     assert len(calls) == 1

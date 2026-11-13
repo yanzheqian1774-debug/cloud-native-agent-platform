@@ -215,7 +215,7 @@ def _profile(
     )
     if isinstance(document.get("adapter"), dict) and document["adapter"].get(
         "revision"
-    ) in {"v2", "v2-zh-CN", "v3"}:
+    ) in {"v2", "v2-zh-CN", "v3", "v3-execution"}:
         expected = expected | {"policyDigest"}
     if (
         set(document) != expected
@@ -275,6 +275,11 @@ def _profile(
     credential = document["credential"]
     tls = document["tls"]
     budget = document["budget"]
+    pricing_successor = planning or (
+        value.adapter_revision == "v3-execution"
+        and value.output_schema_version
+        == "conversation-understanding-output.v3-execution"
+    )
     if (
         (
             document["executionClass"] != "REAL_PROVIDER"
@@ -291,7 +296,7 @@ def _profile(
         or not isinstance(budget, dict)
         or set(budget)
         - {"allowanceId"}
-        - ({"profilePricingRootDigest"} if planning else set())
+        - ({"profilePricingRootDigest"} if pricing_successor else set())
         != {
             "ledgerId",
             "currency",
@@ -357,7 +362,7 @@ def _profile(
         else:
             policy = policy_for(value.adapter_revision, value.output_schema_version)
             if (
-                policy.revision in {"v2", "v2-zh-CN", "v3"}
+                policy.revision in {"v2", "v2-zh-CN", "v3", "v3-execution"}
                 and document["policyDigest"] != policy.digest
             ):
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
@@ -384,7 +389,7 @@ def _profile(
         else:
             raise DraftAssistanceError("DRAFT_PROFILE_INVALID")
         if "profilePricingRootDigest" in budget and (
-            not planning
+            not pricing_successor
             or not isinstance(budget["profilePricingRootDigest"], str)
             or len(budget["profilePricingRootDigest"]) != 64
             or any(
@@ -475,6 +480,9 @@ def build_draft_assistance_composition(
                 profile=profile,
                 ledger_id=str(budget_configuration["ledgerId"]),
                 allowance_id=budget_configuration.get("allowanceId"),
+                profile_pricing_root_digest=budget_configuration.get(
+                    "profilePricingRootDigest"
+                ),
                 call_cap=int(budget_configuration["callCap"]),
                 total_cost_cap_microusd=int(
                     budget_configuration["totalCostCapMicrousd"]
