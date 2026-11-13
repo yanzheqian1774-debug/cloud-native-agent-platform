@@ -1,11 +1,15 @@
 import {useEffect,useEffectEvent,useRef,useState} from 'react';
 import {planningRequest,type Invocation} from '../planning/planningRequests';
+import {conversationRequest} from '../api/privateConversation';
+import type {ExactRef} from '../planning/api';
 import type {ModelProgress} from '../api/modelStream';
 
+export type PlanningStartStatus={state:'NOT_STARTED'|'RECORDED';draftInvocationId:string;draftAggregateVersion:number;observedAggregateVersion:number;requestKey:string;journeyKey:string;journalVersion:number;problem:ExactRef;source:unknown};
 type Recovery={state:string;recovery_id?:string;new_request_key?:string;original_outcome:string};
 /** All mount/refresh paths are reads. A new call needs a separate signed request. */
-export function ConversationPlanningRecovery({conversation,requestKey,principal,onResult,onProgress,onStatus}:{conversation:string;requestKey:string;principal:string;onResult:(value:Invocation,requestKey:string)=>Promise<void>;onProgress:(value:ModelProgress)=>void;onStatus:(state:string)=>void}){
+export function ConversationPlanningRecovery({conversation,requestKey,principal,onResult,onProgress,onStatus,preparation}:{preparation?:{invocationId:string;isCurrent:(status:PlanningStartStatus)=>boolean;onContinue:(status:PlanningStartStatus)=>Promise<void>};conversation:string;requestKey:string;principal:string;onResult:(value:Invocation,requestKey:string)=>Promise<void>;onProgress:(value:ModelProgress)=>void;onStatus:(state:string)=>void}){
  const [status,setStatus]=useState<Recovery|null>(null),[old,setOld]=useState<Invocation|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[progress,setProgress]=useState<ModelProgress|null>(null);
+ const [start,setStart]=useState<PlanningStartStatus|null>(null);
  const flight=useRef(false),live=useRef(true),observationGeneration=useRef(0);
  function invalidateObservation(){observationGeneration.current++}
  const publish=(value:Recovery)=>{setStatus(value);onStatus(value.state)};
@@ -13,6 +17,12 @@ export function ConversationPlanningRecovery({conversation,requestKey,principal,
  async function read(){
   const generation=++observationGeneration.current;
   try{
+  if(preparation){
+   const observed=await conversationRequest<PlanningStartStatus>('/'+encodeURIComponent(conversation)+'/planning-start-status?'+new URLSearchParams({draftInvocationId:preparation.invocationId,requestKey}));
+   if(!preparation.isCurrent(observed))throw Error('PLANNING_START_TARGET_CHANGED');
+   if(live.current&&generation===observationGeneration.current){setStart(observed);setError('');onStatus('PREPARATION_'+observed.state);}
+   return;
+  }
   const original=await planningRequest<Invocation>('planning-v2/requests/'+encodeURIComponent(requestKey)+'/read-only',undefined,{},expected());
   if(!live.current||generation!==observationGeneration.current)return;
   if(!original?.result?.technical_status||!original.invocation?.target?.invocation_id)return;
@@ -20,18 +30,18 @@ export function ConversationPlanningRecovery({conversation,requestKey,principal,
   if(original.result.technical_status!=='OUTCOME_UNKNOWN')return;
   const value=await planningRequest<Recovery>('planning-v2/recoveries/for-invocation/'+encodeURIComponent(original.invocation.target.invocation_id)+'?conversation_id='+encodeURIComponent(conversation),undefined,{},expected());
   if(live.current&&generation===observationGeneration.current)publish(value);
-  }catch(error){if(live.current&&generation===observationGeneration.current)throw error}
+  }catch(error){if(live.current&&generation===observationGeneration.current){if(preparation){setStart(null);onStatus('READ_UNAVAILABLE')}throw error}}
  }
  const readEffect=useEffectEvent(read);
  useEffect(()=>{live.current=true;Promise.resolve().then(readEffect).catch(e=>{if(live.current)setError(String(e))});return()=>{live.current=false;invalidateObservation()}},[conversation,requestKey,principal]);
  const refreshEffect=useEffectEvent(async()=>{if(flight.current)return;try{await read()}catch(e){if(live.current){setError(String(e));onStatus('READ_UNAVAILABLE')}}});
  useEffect(()=>{if(!['OBSERVED','AUTHORIZATION_PENDING'].includes(status?.state??''))return;let active=true;let timer:ReturnType<typeof setTimeout>;const tick=async()=>{await refreshEffect();if(active)timer=setTimeout(tick,5000)};timer=setTimeout(tick,5000);return()=>{active=false;clearTimeout(timer)}},[status?.state]);
  async function act(kind:'read'|'prepare'|'continue'){
-  if(flight.current||!old)return;flight.current=true;setBusy(true);setError('');
+  if(flight.current||(kind!=='read'&&!old))return;flight.current=true;setBusy(true);setError('');
   try{
    if(kind==='read')await read();
    if(kind==='prepare'){
-    const value=await planningRequest<Recovery>('planning-v2/recoveries',{conversation_id:conversation,invocation_id:old.invocation.target.invocation_id,idempotency_key:'recover:'+old.invocation.target.invocation_id},{},expected());
+    const value=await planningRequest<Recovery>('planning-v2/recoveries',{conversation_id:conversation,invocation_id:old!.invocation.target.invocation_id,idempotency_key:'recover:'+old!.invocation.target.invocation_id},{},expected());
     if(live.current)publish(value);
    }
    if(kind==='continue'&&status?.recovery_id){
@@ -46,6 +56,16 @@ export function ConversationPlanningRecovery({conversation,requestKey,principal,
    }
   }catch(e){if(live.current){setError(String(e));onStatus('READ_UNAVAILABLE')}}finally{flight.current=false;if(live.current)setBusy(false)}
  }
+ async function continuePreparation(){
+  if(flight.current||!preparation)return;flight.current=true;setBusy(true);setError('');
+  try{
+   const observed=await conversationRequest<PlanningStartStatus>('/'+encodeURIComponent(conversation)+'/planning-start-status?'+new URLSearchParams({draftInvocationId:preparation.invocationId,requestKey}));
+   if(!live.current)return;if(!preparation.isCurrent(observed))throw Error('PLANNING_START_TARGET_CHANGED');setStart(observed);
+   if(observed.state==='NOT_STARTED')await preparation.onContinue(observed);
+  }catch{if(live.current){setStart(null);onStatus('READ_UNAVAILABLE');setError('暂时无法确认准备状态，原问题和输入已保留，不会自动重复提交。')}}
+  finally{flight.current=false;if(live.current)setBusy(false)}
+ }
+ if(preparation)return <section aria-label="继续方案准备" aria-busy={busy}><h3>方案准备暂时暂停</h3><p>{start?.state==='NOT_STARTED'?'已核对：本次规划请求尚未建立。服务恢复后可沿用当前工作继续。':start?.state==='RECORDED'?'已有规划准备或调用记录，需先核对该记录；不会重新提交。':error?'暂未核实原工作记录，暂不重新提交。':'正在核对原工作记录，暂不重新提交。'}</p>{start?.state==='NOT_STARTED'&&<button disabled={busy} onClick={()=>void continuePreparation()}>核对并继续当前工作</button>}<button className="secondary" disabled={busy} onClick={()=>void act('read')}>读取处理进展</button>{error&&<p role="status">暂时无法确认准备状态，原问题和输入已保留，不会自动重复提交。</p>}</section>;
  if(!old||old.result.technical_status!=='OUTCOME_UNKNOWN')return error?<p role="status">暂时无法核对原请求，请稍后刷新。</p>:null;
  return <section aria-label="继续原问题" aria-busy={busy}><h3>{busy?'正在处理恢复请求':['OBSERVED','AUTHORIZATION_PENDING'].includes(status?.state??'')?'恢复申请已提交':status?.state==='AUTHORIZED'?'已可继续原问题':'原问题已保留'}</h3>{busy&&<p role="status">正在处理，请稍候。已有进展会持续呈现。</p>}{busy&&progress?.preview&&<p style={{whiteSpace:'pre-wrap'}}>{progress.preview}</p>}<details><summary>上次处理详情</summary><p>上次方案准备的结果尚未确认。原记录和费用占用会保留，不会自动重发。</p></details>{status?.state==='UNSUPPORTED'&&<p>本次属于已有方案的后继调整，暂不支持此恢复方式，已保留原记录供管理员核查。</p>}{status?.state==='NOT_REQUESTED'&&<button disabled={busy} onClick={()=>void act('prepare')}>申请继续原问题</button>}{['OBSERVED','AUTHORIZATION_PENDING'].includes(status?.state??'')&&<p role="status">恢复申请已提交，等待核对；当前无需操作。</p>}{status?.state==='AUTHORIZED'&&<button disabled={busy} onClick={()=>void act('continue')}>继续原问题</button>}{status?.state==='DISPATCHED'&&<button disabled={busy} onClick={()=>void act('continue')}>读取本次处理结果</button>}<button className="secondary" disabled={busy} onClick={()=>void act('read')}>读取处理进展</button>{error&&<p role="alert">{error}</p>}</section>;
 }

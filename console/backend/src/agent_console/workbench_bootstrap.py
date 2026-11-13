@@ -1195,12 +1195,20 @@ def build_workbench_composition(
         if owned_business is not None and owned_business.policy.enabled:
             from .owned_business_creation_read import OwnedBusinessCreationRead
             from .owned_business_criterion_read import OwnedBusinessCriterionRead
+            from .owned_business_planning_start_read import (
+                OwnedBusinessPlanningStartRead,
+            )
 
             application.state.owned_business_creation_read = OwnedBusinessCreationRead(
                 owned_business, authorizer, business_problems.problems
             )
             application.state.owned_business_criterion_read = (
                 OwnedBusinessCriterionRead(
+                    owned_business, authorizer, business_problems.problems
+                )
+            )
+            application.state.owned_business_planning_start_read = (
+                OwnedBusinessPlanningStartRead(
                     owned_business, authorizer, business_problems.problems
                 )
             )
