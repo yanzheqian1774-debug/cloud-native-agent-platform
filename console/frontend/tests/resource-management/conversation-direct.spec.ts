@@ -422,3 +422,26 @@ for(const reason of ['CONVERSATION_INPUT_ACCESS_DENIED','CONVERSATION_INPUT_SERV
  await page.reload();await expect(page.getByRole('alert')).toContainText('原提问已保留');
  expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);expect(JSON.stringify(state.journal)).toBe(original);
 });
+
+for(const variant of ['saved','new-goal','denied','wrong-message','wrong-actor','not-source','not-succeeded','wrong-kind','independent','conflicting-route','admin-viewer','admin-wrong-actor'] as const)test('persisted relation replaces stale disposition only with exact readable facts '+variant,async({page},info)=>{
+ const state=await directFixture(page);state.journal.state={...state.journal.state,phase:'RUNNING',key:'retained-work'};
+ state.messages.push({message_id:'native-reply',content:'按生产规范检查',author_id:'human:ordinary',disposition:variant==='new-goal'?'NEW_GOAL_REVIEW':'CLARIFY_WORK'});
+ const facts:Record<string,unknown>={assistantResponse:true,readable:true,state:'SUCCEEDED',invokedBy:'human:ordinary',userMessageId:'native-reply',requestKey:'retained-route',source:{kind:'DRAFT',invocationId:'route-original',contextId:'context-route',turnId:'turn-route',turnVersion:1},response:{resultKind:'CURRENT_QUESTION_ANSWER',conversationRoute:{relation:'CURRENT_QUESTION'}}};
+ if(variant==='denied')facts.readable=false;
+ if(variant==='wrong-message')facts.userMessageId='different-user-message';
+ if(variant==='wrong-actor'||variant==='admin-wrong-actor')facts.invokedBy='human:other';
+ if(variant==='not-succeeded')facts.state='FAILED';
+ if(variant==='independent')facts.response={resultKind:'DIRECT_ANSWER',conversationRoute:{relation:'INDEPENDENT'}};
+ if(variant==='wrong-kind')facts.response={resultKind:'DIRECT_ANSWER',conversationRoute:{relation:'CURRENT_QUESTION'}};
+ state.messages.push({message_id:'retained-route-response',content:'已理解这条补充，将核对当前问题后接续。',author_id:'human:ordinary',disposition:'GOAL_RECORDED',kind:variant==='not-source'?'OTHER':'SOURCE',facts});
+ if(variant==='conflicting-route')state.messages.push({message_id:'other-route-response',content:'单独回复',kind:'SOURCE',facts:{...facts,response:{resultKind:'DIRECT_ANSWER',conversationRoute:{relation:'INDEPENDENT'}}}});
+ if(variant==='admin-viewer'||variant==='admin-wrong-actor'){await page.route('**/api/workbench/v1/session',route=>route.fulfill({json:{principal:{principalId:'human:development-admin',tenantId:'tenant',securityDomain:'domain'},csrfToken:'csrf',session:{}}}));await page.route('**/development-administrator',route=>route.fulfill({json:{result:{enabled:true}}}));}
+ const resolved=variant==='saved'||variant==='new-goal'||variant==='admin-viewer';
+ await page.setViewportSize({width:1440,height:900});await page.goto('/work?conversation=direct');
+ const message=page.locator('#conversation-message-native-reply');await expect(message).toBeVisible();
+ await expect(message.getByText('这条补充已识别为当前问题的回答，接续状态见本会话当前工作。',{exact:true})).toHaveCount(resolved?1:0);
+ await expect(message.getByText('这条要求指向哪项工作？请选择下方关联工作后补充，原消息会保留。',{exact:true})).toHaveCount(resolved?0:1);
+ if(variant==='new-goal')await expect(message.getByRole('link',{name:'核对新的业务目标'})).toHaveCount(0);
+ if(variant==='saved')await page.screenshot({path:info.outputPath('persisted-route-hint-1440.png'),fullPage:true});
+ await page.reload();await expect(message).toBeVisible();await expect(message.getByText('这条补充已识别为当前问题的回答，接续状态见本会话当前工作。',{exact:true})).toHaveCount(resolved?1:0);expect(state.calls).toHaveLength(0);expect(state.writes).toHaveLength(0);
+});

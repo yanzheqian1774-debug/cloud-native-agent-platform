@@ -1,3 +1,4 @@
+import {managementActions} from './managementActionFixture';
 import {expect,type Page} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 const plan = JSON.parse(readFileSync(new URL('../e2e/fixtures/delivery-plan.json', import.meta.url), 'utf8'));
@@ -75,6 +76,7 @@ export async function fixture(page: Page, seed = false) {
             return route.fulfill({ json: { result: { subject: principal.principalId, scope, items: published() ? [item()] : [], nextCursor: null, executionAuthority: 'NONE' } } });
         if (path.includes('/resource-directory/skill/'))
             return route.fulfill({ json: { result: { ...item(), subject: principal.principalId, scope, revision: { ...published(), content: published()!.content }, usage: [{ digest: runDigest, title: '已保存的同版本核对结果', planVersion: 4, state: 'SUCCEEDED', problemId: problem }] } } });
+        if(path.endsWith('/employees/capabilities'))return route.fulfill({json:envelope(managementActions(principal,null))});
         if (path.endsWith('/employees'))
             return route.fulfill({ json: envelope({items:[employee()]}) });
         if (path.includes('/employees/'))

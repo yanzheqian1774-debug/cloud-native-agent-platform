@@ -1,10 +1,11 @@
+import {authoringActions} from '../helpers/managementActionFixture';
 import {expect,test,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {fixture as maintenance,skillId,employeeId,principal,reportText,source} from '../helpers/resourceMaintenanceFixture';
 import type {EmployeeDefinition,EmployeeCreateCommand} from '../../src/api/digitalEmployees';
 const old='employee-revision:consumer',agent={kind:'AGENT' as const,resourceId:'agent:consumer',revisionId:'agent-revision:1',digest:'e'.repeat(64)};
-const envelope=(result:unknown)=>({schemaVersion:'workbench-operation.v1',result,continuationIds:[]});
+const envelope=(result:unknown)=>({schemaVersion:'workbench-operation.v1',result:authoringActions(result,principal),continuationIds:[]});
 const canonical=(value:unknown):unknown=>typeof value==='string'?value.normalize('NFC'):Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:1).map(([k,v])=>[k,canonical(v)])):value;
 function ownerDigest(c:EmployeeCreateCommand){
  const record:Record<string,unknown>={schemaVersion:'digital-employee-composition.v1',namespace:principal.tenantId,securityDomain:principal.securityDomain,definitionId:c.employeeDefinitionId,revisionId:c.employeeDefinitionRevisionId,role:c.role,responsibilities:c.responsibilities,members:[...c.members].sort((a,b)=>a.kind<b.kind?-1:a.kind>b.kind?1:a.resourceId<b.resourceId?-1:1).map(m=>({kind:m.kind,resource_id:m.resourceId,revision_id:m.revisionId,digest:m.digest})),predecessorRevisionId:c.predecessorEmployeeRevisionId??null};

@@ -166,6 +166,17 @@ def relations(automation):
 
 def client(r, context=None):
     subject = context or r.a.subject
+    # Explicit read-only projection fixture; never grants mutation by default.
+    r.acl.current_action_grants = lambda grants: tuple(
+        (grant.owner, grant.action, grant.exact_resource) in r.acl.allowed
+        for grant in grants
+    )
+    r.acl.generation = 1
+    observed_at = datetime.now(UTC)
+    r.acl.adapter = SimpleNamespace(
+        clock=lambda: observed_at,
+        controller=SimpleNamespace(readiness=SimpleNamespace(recovery_epoch=1)),
+    )
     sessions = SessionStub(subject.principal_id)
     sessions.context = subject
 

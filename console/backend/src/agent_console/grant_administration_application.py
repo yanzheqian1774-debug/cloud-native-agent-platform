@@ -237,6 +237,27 @@ class GenerationAuthorizationReader(CurrentAuthorizationReader):
             configure_transaction=configure_transaction,
         )
 
+    def require_current_context(
+        self, context, grants, *, now, generation, recovery_epoch, connection
+    ):
+        """Reuse the existing linearized session and credential validator.
+
+        A valid subject with no grant is distinct from an expired identity.
+        This is only an identity check, never a grant or command decision.
+        """
+        credential_id, _ = self.read_linearized_authorization_states(
+            context,
+            grants,
+            now=now,
+            generation=generation,
+            recovery_epoch=recovery_epoch,
+            connection=connection,
+            configure_transaction=False,
+        )
+        credential, _ = self._current_credential(context, credential_id, now=now)
+        if credential is None:
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+
     def has_current_grants(
         self,
         context: TrustedRequestContext,

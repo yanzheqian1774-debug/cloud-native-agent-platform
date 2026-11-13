@@ -59,6 +59,21 @@ class AuthorizedOwnerAuthority:
             (item.owner, item.action, item.exact_resource): item for item in initial
         }
 
+    def current_action_grants(self, grants: Sequence[ExactGrant]) -> tuple[bool, ...]:
+        """Read availability only; never mint or cache command decisions."""
+        for grant in grants:
+            validate_registered_grant(grant, allow_meta=False)
+        return self.adapter.authorization.has_current_grants(
+            self.context,
+            grants,
+            now=self.adapter.clock(),
+            generation=self.generation,
+            recovery_epoch=self.adapter.controller.readiness.recovery_epoch,
+            connection=self.connection,
+            configure_transaction=False,
+            require_available=True,
+        )
+
     @measured("owner.require")
     def require(self, principal, owner: str, action: str, resource: str):
         if (
@@ -162,9 +177,19 @@ class WorkbenchOwnerAuthorization:
         query: Mapping[str, Any],
         handler: TransactionalOwnerHandler[T],
     ) -> T:
-        if not grants:
+        observations = {
+            "READ_TEAM_CAPABILITIES": ExactGrant("TEAM", "CREATE", "team:collection"),
+            "READ_EMPLOYEE_CAPABILITIES": ExactGrant(
+                "EMPLOYEE", "CREATE", "employee:collection"
+            ),
+        }
+        observation = observations.get(operation)
+        if observation is not None and (grants or path or query or payload):
             raise AuthorityError("AUTHORIZATION_NOT_FOUND")
-        for grant in grants:
+        if not grants and observation is None:
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+        probes = (observation,) if observation is not None else grants
+        for grant in probes:
             validate_registered_grant(grant, allow_meta=False)
         with (
             measured_context(
@@ -179,14 +204,24 @@ class WorkbenchOwnerAuthorization:
             connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
             allowed = measured("entry.grants")(self.authorization.has_current_grants)(
                 context,
-                grants,
+                probes,
                 now=self.clock(),
                 generation=generation.generation,
                 recovery_epoch=self.controller.readiness.recovery_epoch,
                 connection=connection,
                 configure_transaction=False,
+                **({"require_available": True} if observation is not None else {}),
             )
-            if not all(allowed):
+            if observation is not None:
+                self.authorization.require_current_context(
+                    context,
+                    probes,
+                    now=self.clock(),
+                    generation=generation.generation,
+                    recovery_epoch=self.controller.readiness.recovery_epoch,
+                    connection=connection,
+                )
+            if observation is None and not all(allowed):
                 raise AuthorityError("AUTHORIZATION_NOT_FOUND")
             decisions = tuple(
                 self._decision(context, grant, generation.generation)

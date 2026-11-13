@@ -77,13 +77,18 @@ def test_composition_registers_business_and_read_only_workflow_operations(
     assert composition.foundation is foundation
     assert captured["grant_administration"] is foundation.grants
     operations = captured["operations"]
-    assert len(operations) == 30
-    assert [(item.name, item.method, item.path) for item in operations[-17:]] == [
+    assert len(operations) == 31
+    assert [(item.name, item.method, item.path) for item in operations[-18:]] == [
         ("LIST_AGENTS", "GET", "/api/workbench/v1/agents"),
         (
             "READ_AGENT_REVISION",
             "GET",
             "/api/workbench/v1/agents/{definition_id}/revisions/{revision_id}",
+        ),
+        (
+            "READ_EMPLOYEE_CAPABILITIES",
+            "GET",
+            "/api/workbench/v1/employees/capabilities",
         ),
         ("LIST_EMPLOYEES", "GET", "/api/workbench/v1/employees"),
         ("CREATE_EMPLOYEE_REVISION", "POST", "/api/workbench/v1/employees"),
@@ -211,7 +216,7 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
 
     operations = captured["operations"]
     assert captured["grant_administration"] is foundation.grants
-    assert len(operations) == (30 if model_enabled else 28)
+    assert len(operations) == (31 if model_enabled else 29)
     assert (
         any(item.name == "LIST_MODEL_DIRECTORY" for item in operations) is model_enabled
     )
@@ -221,6 +226,11 @@ def test_composition_keeps_existing_business_routes_without_optional_workflow(
     )
     assert any(item.name == "LIST_AGENTS" for item in operations)
     assert any(item.name == "READ_AGENT_REVISION" for item in operations)
+    assert [
+        (item.method, item.path)
+        for item in operations
+        if item.name == "READ_EMPLOYEE_CAPABILITIES"
+    ] == [("GET", "/api/workbench/v1/employees/capabilities")]
     assert any(item.name == "LIST_EMPLOYEES" for item in operations)
     assert any(item.name == "READ_EMPLOYEE_REVISION" for item in operations)
     assert any(item.name == "CREATE_EMPLOYEE_REVISION" for item in operations)

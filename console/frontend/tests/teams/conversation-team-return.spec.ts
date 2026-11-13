@@ -11,6 +11,9 @@ for(const mode of ['matched','wrong-origin','wrong-work','denied','wrong-digest'
   const result=(value:unknown)=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:value,continuationIds:[]}});
   if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:mode==='session-change'&&projectionReads?{...principal,principalId:'human:changed'}:principal,csrfToken:'csrf',session:{}}});
   if(path.endsWith('/development-administrator')||path.endsWith('/conversations/capabilities'))return result({enabled:true});
+  if(path.endsWith('/problems'))return result({problems:[]});
+  if(path.endsWith('/draft-assistance/capabilities'))return result({conversationUnderstanding:true,conversationRelationRouting:false});
+  if(path.endsWith('/conversations/origin/head'))return result({conversation:{conversation_id:'origin',title:'检查材料',version:1}});
   if(path.endsWith('/conversations/origin'))return result({conversation:{conversation_id:'origin',title:'检查材料',version:1},messages:[],links:[]});
   if(path.endsWith('/origin/journey'))return result({version:2,state:{key:'saved',question:'检查材料',phase:'RUNNING',execution:preparation,problem:{business_problem_id:'problem:review'},messages:[{id:'user:q',text:'检查材料'}],log:['已有执行记录']}});
   if(path.includes('/teams/')){

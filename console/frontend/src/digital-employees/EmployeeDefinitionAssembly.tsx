@@ -1,3 +1,4 @@
+import {useManagementActions} from '../management/useManagementActions';
 import { useEffect, useRef, useState } from "react";
 import {
   createEmployeeDefinition,
@@ -58,6 +59,7 @@ export function EmployeeDefinitionAssembly({
   onLoadMoreAgents: () => void;
   onReadback: (definition: EmployeeDefinition, result: EmployeeCommandResult) => void;
 }) {
+  const permissions=useManagementActions({kind:'employees',collection:true});
   const [definitionId, setDefinitionId] = useState(()=>"employee-definition:"+crypto.randomUUID());
   const [revisionId, setRevisionId] = useState(()=>"employee-revision:"+crypto.randomUUID());
   const [role, setRole] = useState("");
@@ -103,6 +105,7 @@ export function EmployeeDefinitionAssembly({
     setBusy(true);
     setError(null);
     try {
+      if(!permissions.allows('CREATE',await permissions.refresh()))throw new DigitalEmployeeRequestError('CURRENT_CREATE_PERMISSION_UNAVAILABLE',403);
       const session = await getWorkbenchSession(controller.signal);
       if (turn !== generation.current) return;
       if(resourceMembers.length && resourcePrincipal!==workbenchPrincipalKey(session)){setResourceMembers([]);setResourceNames({});setBindings([]);throw new DigitalEmployeeRequestError("WORKBENCH_SESSION_CONTEXT_CHANGED",409)}
@@ -154,6 +157,7 @@ export function EmployeeDefinitionAssembly({
     setBusy(true);
     setError(null);
     try {
+      if(!permissions.allows('CREATE',await permissions.refresh()))throw new DigitalEmployeeRequestError('CURRENT_CREATE_PERMISSION_UNAVAILABLE',403);
       const value = await createEmployeeDefinition(frozen.command, frozen.principalKey, controller.signal);
       if (turn !== generation.current) return;
       setResult(value);
@@ -204,15 +208,16 @@ export function EmployeeDefinitionAssembly({
       <span className="employee-capability-state available"><i />正式权限申请与恢复已接通</span>
     </header>
 
+    {!permissions.allows('CREATE')&&<p role="status">{permissions.ready?'当前账号暂不能创建数字人，已填写内容仍保留。':'创建资格尚未核实，已填写内容仍保留。'}<button onClick={()=>void permissions.refresh()}>重新核对操作资格</button></p>}
     <div className="assembly-workspace"><div className="employee-assembly-grid">
       <div className="employee-form-card">
         <h3>01 · 角色与职责</h3>
-        <label>职责角色<input disabled={Boolean(frozen)||busy} value={role} maxLength={200} onChange={event => setRole(event.target.value)} placeholder="例如：供应商质量负责人" /></label>
-        <label>职责清单（每行一项，1–32 项）<textarea disabled={Boolean(frozen)||busy} value={responsibilities} onChange={event => setResponsibilities(event.target.value)} placeholder="审查供应商质量异常&#10;协调整改与复核" /></label>
+        <label>职责角色<input disabled={Boolean(frozen)||busy||!permissions.allows('CREATE')} value={role} maxLength={200} onChange={event => setRole(event.target.value)} placeholder="例如：供应商质量负责人" /></label>
+        <label>职责清单（每行一项，1–32 项）<textarea disabled={Boolean(frozen)||busy||!permissions.allows('CREATE')} value={responsibilities} onChange={event => setResponsibilities(event.target.value)} placeholder="审查供应商质量异常&#10;协调整改与复核" /></label>
         <details><summary>高级设置 · 自动生成的技术身份</summary>
           <p className="employee-identity-requirement">系统已生成本次草稿的唯一标识；维护者可按需要调整。首次创建不需要前驱修订，聚合版本固定从 0 开始。</p>
-          <label>Employee Definition ID<input disabled={Boolean(frozen)||busy} value={definitionId} onChange={event => setDefinitionId(event.target.value)} placeholder="employee:quality-lead" /></label>
-          <label>Revision ID<input disabled={Boolean(frozen)||busy} value={revisionId} onChange={event => setRevisionId(event.target.value)} placeholder="employee-revision:quality-lead:1" /></label>
+          <label>Employee Definition ID<input disabled={Boolean(frozen)||busy||!permissions.allows('CREATE')} value={definitionId} onChange={event => setDefinitionId(event.target.value)} placeholder="employee:quality-lead" /></label>
+          <label>Revision ID<input disabled={Boolean(frozen)||busy||!permissions.allows('CREATE')} value={revisionId} onChange={event => setRevisionId(event.target.value)} placeholder="employee-revision:quality-lead:1" /></label>
         </details>
       </div>
 
@@ -227,8 +232,8 @@ export function EmployeeDefinitionAssembly({
         </label>; })}</div>
         {hasMoreAgents && <button type="button" className="employee-secondary-button" onClick={onLoadMoreAgents}>加载更多 Agent</button>}
       </div>
-      <EmployeeResourcePicker disabled={Boolean(frozen)||busy} onChange={(members,principal,names)=>{setResourceMembers(members);setResourcePrincipal(principal);setResourceNames(names??{})}}/>
-      <EmployeeResponsibilityEditor names={resourceNames} duties={responsibilityList} members={resourceMembers} value={bindings} onChange={setBindings} disabled={Boolean(frozen)||busy}/>
+      <EmployeeResourcePicker disabled={Boolean(frozen)||busy||!permissions.allows('CREATE')} onChange={(members,principal,names)=>{setResourceMembers(members);setResourcePrincipal(principal);setResourceNames(names??{})}}/>
+      <EmployeeResponsibilityEditor names={resourceNames} duties={responsibilityList} members={resourceMembers} value={bindings} onChange={setBindings} disabled={Boolean(frozen)||busy||!permissions.allows('CREATE')}/>
     </div>
 
     <aside className="assembly-preview" aria-label="装配预览">
@@ -240,7 +245,7 @@ export function EmployeeDefinitionAssembly({
         <li key={label}><b className={ready ? "ready" : ""}>{ready ? "已填写" : "待补齐"}</b> {label}</li>
       )}</ul>
     </aside></div>
-    {!frozen && <div className="employee-form-actions"><span>{valid ? "输入已满足前端校验；正式 owner 仍会再次校验。" : "请填写职责并选择可用能力；技术身份已自动生成。"}</span><button type="button" className="px-primary-button" disabled={!valid || busy} onClick={() => void prepare()}>检查并进入确认</button></div>}
+    {!frozen && <div className="employee-form-actions"><span>{valid ? "输入已满足前端校验；正式 owner 仍会再次校验。" : "请填写职责并选择可用能力；技术身份已自动生成。"}</span><button type="button" className="px-primary-button" disabled={!valid || busy} hidden={!permissions.allows('CREATE')} style={!permissions.allows('CREATE')?{display:'none'}:undefined} onClick={() => void prepare()}>检查并进入确认</button></div>}
 
     {frozen && <section className="employee-command-confirmation" aria-label="创建命令确认">
       <span className="employee-confirmation-state">等待用户明确确认</span>
@@ -248,7 +253,7 @@ export function EmployeeDefinitionAssembly({
       <p>{frozen.command.responsibilities.join("；")}</p>
       <p>职责资源关联：{frozen.command.responsibilityBindings?.length??0} 项</p><ul>{frozen.command.responsibilityBindings?.map((b,i)=><li key={i}>{b.responsibility} → {frozen.memberNames[employeeMemberKey(b.member)]??"所选资源"}</li>)}</ul><p>组合成员：{frozen.command.members.length} 项</p><SelectionSummary members={frozen.command.members} names={frozen.memberNames}/>
       <details><summary>查看冻结命令身份</summary><code>{frozen.command.commandId}</code><code>{frozen.command.employeeDefinitionId}</code><code>{frozen.command.employeeDefinitionRevisionId}</code></details>
-      <div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>返回修改</button><button type="button" className="px-primary-button" disabled={busy} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认创建"}</button></div>
+      <div className="employee-form-actions"><button type="button" className="employee-secondary-button" disabled={busy || unknown} onClick={() => setFrozen(null)}>返回修改</button><button type="button" className="px-primary-button" disabled={busy} hidden={!permissions.allows('CREATE')} style={!permissions.allows('CREATE')?{display:'none'}:undefined} onClick={() => void submit()}>{busy ? "正在提交……" : unknown ? "重放原命令" : "确认创建"}</button></div>
     </section>}
 
     {error && <div role="alert" className={`employee-command-state ${unknown ? "unknown" : "failed"}`}><strong>{unknown ? "结果未知" : "命令未确认成功"}</strong><span>{error}</span></div>}

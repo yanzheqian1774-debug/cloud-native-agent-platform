@@ -545,8 +545,9 @@ export function getEmployeeRelations(definition:EmployeeDefinitionSummary,mode:E
   return request<EmployeeRelationPage>(`${parent}/${mode}?${pageQuery(cursor,25)}`,signal);
 }
 
-export type EmployeeAuthoringTarget = {status:'AVAILABLE';definition:EmployeeDefinition}|{status:'NOT_AVAILABLE'|'NONE'|'WITHDRAWN'};
+export type EmployeeAuthoringTarget = {status:'AVAILABLE';definition:EmployeeDefinition;maintenanceActions?:ManagementActions}|{status:'NOT_AVAILABLE'|'NONE'|'WITHDRAWN'};
 export type EmployeeAuthoring = {
+ maintenanceActions?:ManagementActions;
  basis:'OWNER_FACT_ORDER';
  parent:Pick<EmployeeDefinitionSummary,'employeeDefinitionId'|'employeeDefinitionRevisionId'|'employeeDefinitionDigest'>;
  aggregateVersion:number;
@@ -567,7 +568,7 @@ export type TeamMember = {employeeDefinitionId:string;employeeRevisionId:string;
 export type TeamSummary = {teamId:string;revisionId:string;title:string;ownerId:string;memberCount:number;digest:string;aggregateVersion:number};
 export type TeamWorkReference = {workflowRunId:string;preparationDigest:string;problemId:string;problemRevisionId:string;problemDigest:string};
 export type TeamRecord = {schemaVersion:'team-definition.v1'|'team-definition.v2';work_links?:{workflow_run_id:string;preparation_digest:string;business_problem_id:string;problem_revision_id:string;problem_digest:string}[];scope:{namespace:string;security_domain:string};team_id:string;revision_id:string;title:string;goal:string;owner_id:string;members:{employee_definition_id:string;employee_revision_id:string;employee_digest:string;responsibility:string;handoff:string}[];predecessor_revision_id:string|null};
-export type TeamDetail = {revision:TeamRecord;digest:string;aggregateVersion:number;headRevisionId:string};
+export type TeamDetail = {revision:TeamRecord;digest:string;aggregateVersion:number;headRevisionId:string;maintenanceActions?:ManagementActions};
 export type SaveTeamCommand = {workLinks?:TeamWorkReference[];teamId:string;revisionId:string;title:string;goal:string;ownerId:string;members:TeamMember[];predecessorRevisionId:string|null;expectedVersion:number;commandId:string};
 export type SaveTeamResult = {teamId:string;revisionId:string;digest:string;aggregateVersion:number;replayed:boolean;decisionId:string};
 export const listTeams=(cursor?:string,signal?:AbortSignal)=>request<WorkbenchPage<TeamSummary>>(`${root}/teams?${pageQuery(cursor)}`,signal);
@@ -579,3 +580,6 @@ export const readTeamWork=(id:string,revision:string,signal?:AbortSignal)=>reque
 
 export type TeamOwnerCandidate={principalId:string;label:string;source:'CURRENT_SESSION'|'LOCAL_TEST_ACCOUNT'};
 export const listTeamOwnerCandidates=(signal?:AbortSignal)=>request<{items:TeamOwnerCandidate[];authorityGranted:false}>(`${root}/teams/owner-candidates`,signal);
+
+export type ManagementActions={status?:'AVAILABLE'|'UNAVAILABLE';subjectId:string;tenantId:string;securityDomain:string;generation:number;recoveryEpoch:number;readAt:string;target:Record<string,string|number>|null;actions:Record<string,{authorized:boolean;lifecycleEligible:boolean}>;authorityGranted:false;executionStarted:false};
+export const getManagementCollectionActions=(kind:'teams'|'employees',signal?:AbortSignal)=>request<ManagementActions>(`${root}/${kind}/capabilities`,signal);

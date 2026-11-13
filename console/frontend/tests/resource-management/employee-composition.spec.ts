@@ -1,8 +1,10 @@
+import {managementActions} from '../helpers/managementActionFixture';
 import {expect,test} from '@playwright/test';
 test('compose all exact resource groups without offering drafts',async({page},info)=>{
  const principal={principalId:'human:composition',tenantId:'composition',securityDomain:'isolated'},digest='a'.repeat(64);let submitted:Record<string,unknown>|undefined;
  await page.route('**/api/workbench/v1/**',async r=>{const u=new URL(r.request().url()),p=u.pathname;
  if(p.endsWith('/session'))return r.fulfill({json:{schemaVersion:'workbench-session.v1',principal,csrfToken:'fixture'}});
+ if(p.endsWith('/employees/capabilities'))return r.fulfill({json:{schemaVersion:'workbench-operation.v1',result:managementActions(principal,null),continuationIds:[]}});
  if(p.endsWith('/agents'))return r.fulfill({status:404,json:{reasonCode:'NOT_AVAILABLE'}});
  if(p.endsWith('/resource-directory')){const kind=u.searchParams.get('kind');return r.fulfill({json:{result:{subject:principal.principalId,scope:{tenantId:principal.tenantId,securityDomain:principal.securityDomain},nextCursor:null,items:[{kind,identity:kind+':one',revisionId:kind+':rev',digest,name:kind+'已发布资源',enabled:true,isCurrentPublished:true},{kind,identity:kind+':draft',revisionId:'draft',digest,name:'不可选草稿',enabled:true,isCurrentPublished:false}]}}})}
  if(p.endsWith('/employees')&&r.request().method()==='POST'){submitted=r.request().postDataJSON();return r.fulfill({status:503,json:{reasonCode:'RESULT_UNKNOWN'}})}if(p.endsWith('/employees'))return r.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:[]}}});return r.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}})});

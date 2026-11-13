@@ -40,6 +40,7 @@ from agent_console.workbench_bff_schemas import (
     WorkbenchPlacement,
     WorkbenchPlacementQuery,
 )
+from agent_console.workbench_management_actions import collection_projection
 from agent_console.workbench_owner_authorization import (
     AuthorizedOwnerCall,
     WorkbenchOwnerError,
@@ -585,6 +586,15 @@ def employee_operations(
         repository, prepared_resource_reads=prepared_resource_reads
     )
     return (
+        WorkbenchOperation(
+            "READ_EMPLOYEE_CAPABILITIES",
+            "GET",
+            f"{PREFIX}/employees/capabilities",
+            None,
+            None,
+            lambda *_: (),
+            lambda call: collection_projection(call, "EMPLOYEE"),
+        ),
         WorkbenchOperation(
             "LIST_EMPLOYEES",
             "GET",

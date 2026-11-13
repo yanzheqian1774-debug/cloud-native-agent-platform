@@ -688,6 +688,7 @@ def test_employee_registry_exposes_bounded_commands_and_exact_read() -> None:
     )
 
     assert [(item.name, item.method, item.path) for item in operations] == [
+        ("READ_EMPLOYEE_CAPABILITIES", "GET", f"{PREFIX}/employees/capabilities"),
         ("LIST_EMPLOYEES", "GET", f"{PREFIX}/employees"),
         ("CREATE_EMPLOYEE_REVISION", "POST", f"{PREFIX}/employees"),
         (
@@ -714,7 +715,10 @@ def test_employee_registry_exposes_bounded_commands_and_exact_read() -> None:
             "{revision_id}/publication",
         ),
     ]
-    listing, create, operation, validate, approve, publish = operations
+    capabilities, listing, create, operation, validate, approve, publish = operations
+    assert capabilities.request_model is None
+    assert capabilities.query_model is None
+    assert tuple(capabilities.grant_builder(SessionStub().context, {}, {}, {})) == ()
     assert tuple(
         listing.grant_builder(SessionStub().context, {}, {}, {"pageSize": 50})
     ) == (ExactGrant("EMPLOYEE", "LIST", "employee:collection"),)

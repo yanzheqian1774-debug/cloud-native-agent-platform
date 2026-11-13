@@ -4,6 +4,8 @@ from dataclasses import replace
 
 from psycopg import Error as PostgresError
 
+from agent_console.workbench_management_actions import employee_projection
+
 from .authority_contracts import AuthorityError
 from .digital_employee_application import DigitalEmployeeError
 from .digital_employee_definition import EmployeeDefinitionError
@@ -115,12 +117,39 @@ class EmployeeRelations:
 
             head, publication = exact(heads["head"]), exact(heads["publication"])
 
+            observed = {}
+
+            def actions(value):
+                identity = value["employeeDefinitionRevisionId"]
+                if identity not in observed:
+                    successor = connection.execute(
+                        "SELECT 1 FROM digital_employee_definition.revisions "
+                        "WHERE namespace=%s AND security_domain=%s "
+                        "AND definition_id=%s "
+                        "AND predecessor_revision_id=%s LIMIT 1",
+                        (
+                            scope.namespace,
+                            scope.security_domain,
+                            value["employeeDefinitionId"],
+                            identity,
+                        ),
+                    ).fetchone()
+                    observed[identity] = employee_projection(
+                        call, value, successor_available=successor is None
+                    )
+                return observed[identity]
+
             def available(value):
-                return {"status": "AVAILABLE", "definition": value}
+                return {
+                    "status": "AVAILABLE",
+                    "definition": value,
+                    "maintenanceActions": actions(value),
+                }
 
             unavailable = {"status": "NOT_AVAILABLE"}
             return {
                 "basis": "OWNER_FACT_ORDER",
+                "maintenanceActions": actions(parent),
                 "parent": binding,
                 "aggregateVersion": heads["aggregateVersion"],
                 "head": available(head) if head else unavailable,

@@ -97,6 +97,27 @@ class TeamOwner:
     def __init__(self, repository, employees, cursors):
         self.repository, self.employees, self.cursors = repository, employees, cursors
 
+    @staticmethod
+    def _actions(call, value, head):
+        from .workbench_management_actions import projection
+
+        return projection(
+            call,
+            {
+                "REVISE": (
+                    ExactGrant("TEAM", "REVISE", f"team:{value.team_id}:aggregate"),
+                    value.revision_id == head["head_revision_id"],
+                ),
+                "SELECT_OWNER": (ExactGrant("TEAM", "CREATE", "team:collection"), True),
+            },
+            target={
+                "teamId": value.team_id,
+                "revisionId": value.revision_id,
+                "digest": value.content_digest,
+                "aggregateVersion": head["aggregate_version"],
+            },
+        )
+
     def __call__(self, call):
         scope = ScopeIdentity(
             call.context.scope.tenant_id, call.context.scope.security_domain
@@ -105,6 +126,10 @@ class TeamOwner:
             call.context.principal_id, scope.namespace, scope.security_domain
         )
         try:
+            if call.operation == "READ_TEAM_CAPABILITIES":
+                from .workbench_management_actions import collection_projection
+
+                return collection_projection(call, "TEAM")
             if call.operation == "SAVE_TEAM_REVISION":
                 data = SaveTeamInput.model_validate(call.payload)
                 revision = TeamRevision(
@@ -218,6 +243,7 @@ class TeamOwner:
                     "digest": value.content_digest,
                     "aggregateVersion": head["aggregate_version"],
                     "headRevisionId": head["head_revision_id"],
+                    "maintenanceActions": self._actions(call, value, head),
                 }
             if call.operation == "LIST_TEAM_OWNER_CANDIDATES":
                 return {"items": candidates(call), "authorityGranted": False}
@@ -298,6 +324,15 @@ class TeamOwner:
 def team_operations(repository, employees, cursors):
     handler = TeamOwner(repository, employees, cursors)
     return (
+        WorkbenchOperation(
+            "READ_TEAM_CAPABILITIES",
+            "GET",
+            PREFIX + "/teams/capabilities",
+            None,
+            None,
+            lambda *_: (),
+            handler,
+        ),
         WorkbenchOperation(
             "LIST_TEAM_OWNER_CANDIDATES",
             "GET",
