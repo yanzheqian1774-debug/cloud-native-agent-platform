@@ -375,9 +375,9 @@ for(const approvalChanged of [false,true])test('unknown planning needs independe
  await page.route('**/planning-v2/recoveries',route=>{prepares++;expect(route.request().postDataJSON().conversation_id).toBe('new');return route.fulfill({json:{result:{state:'AUTHORIZATION_PENDING',original_outcome:'OUTCOME_UNKNOWN',recovery_id:'recovery-1'}}})});
  await page.route('**/planning-v2/recoveries/recovery-1/continue',route=>{if(approvalChanged&&++attempts===1){approved=false;return route.fulfill({json:{result:{invocation:{target:{invocation_id:'fresh'},request:{idempotency_key:'fresh'}},result:{technical_status:'AUTHORIZATION_PENDING',kind:null}}}})}calls++;return route.fulfill({json:{result:{invocation:{target:{invocation_id:'fresh'},request:{idempotency_key:'fresh'}},result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['需要检查哪个上线环境？']}}}})});
  await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'申请继续原问题'})).toBeVisible();expect(calls).toBe(0);expect(prepares).toBe(0);
- await page.reload();await page.getByRole('button',{name:'申请继续原问题'}).click();await expect(page.getByText('已提交处理请求，正在等待管理员核对。不会自动重复执行。')).toBeVisible();expect(prepares).toBe(1);expect(calls).toBe(0);
+ await page.reload();await page.getByRole('button',{name:'申请继续原问题'}).click();await expect(page.getByRole('region',{name:'继续原问题'}).getByText('恢复申请已提交，等待核对；当前无需操作。')).toBeVisible();expect(prepares).toBe(1);expect(calls).toBe(0);
  approved=true;await page.reload();await expect(page.getByRole('button',{name:'继续原问题',exact:true})).toBeVisible();expect(calls).toBe(0);
- await page.getByRole('button',{name:'继续原问题',exact:true}).click();if(approvalChanged){await expect(page.getByText('已提交处理请求，正在等待管理员核对。不会自动重复执行。')).toBeVisible();expect(calls).toBe(0);expect(s.journal.state?.planning).toBeUndefined();approved=true;await page.getByRole('button',{name:'读取处理进展'}).click();await page.getByRole('button',{name:'继续原问题',exact:true}).click();}await expect(page.getByText('需要检查哪个上线环境？',{exact:true}).first()).toBeVisible();expect(calls).toBe(1);expect(s.journal.state?.phase).toBe('PLANNING_CLARIFY');expect((s.journal.state?.problem as {business_problem_id:string}).business_problem_id).toBe('original-problem');
+ await page.getByRole('button',{name:'继续原问题',exact:true}).click();if(approvalChanged){await expect(page.getByRole('region',{name:'继续原问题'}).getByText('恢复申请已提交，等待核对；当前无需操作。')).toBeVisible();expect(calls).toBe(0);expect(s.journal.state?.planning).toBeUndefined();approved=true;await page.getByRole('button',{name:'读取处理进展'}).click();await page.getByRole('button',{name:'继续原问题',exact:true}).click();}await expect(page.getByText('需要检查哪个上线环境？',{exact:true}).first()).toBeVisible();expect(calls).toBe(1);expect(s.journal.state?.phase).toBe('PLANNING_CLARIFY');expect((s.journal.state?.problem as {business_problem_id:string}).business_problem_id).toBe('original-problem');
  await page.reload();await expect(page.getByText('需要检查哪个上线环境？',{exact:true}).first()).toBeVisible();expect(calls).toBe(1);expect(prepares).toBe(1);
 });
 
@@ -388,4 +388,25 @@ for(const mode of ['clarification','cycle','fresh-recovery'])test('planning reco
  await page.route('**/planning-v2/requests/**/read-only',route=>{const key=decodeURIComponent(new URL(route.request().url()).pathname.split('/requests/')[1].split('/read-only')[0]);reads.push(key);return route.fulfill({json:{result:{invocation:{target:{invocation_id:'current-unknown'},request:{idempotency_key:key}},result:{technical_status:key===currentKey?'OUTCOME_UNKNOWN':'SUCCEEDED',kind:null}}}})});
  await page.route('**/planning-v2/recoveries/for-invocation/current-unknown?**',route=>route.fulfill({json:{result:{state:'NOT_REQUESTED',original_outcome:'OUTCOME_UNKNOWN'}}}));
  await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'申请继续原问题'})).toBeVisible();await page.reload();await expect(page.getByRole('button',{name:'申请继续原问题'})).toBeVisible();expect(reads.length).toBeGreaterThanOrEqual(2);expect(new Set(reads)).toEqual(new Set([currentKey]));expect(s.modelCalls).toBe(0);
+});
+
+test('recovery waiting is primary in conversation and rail; observation refresh is GET only',async({page},testInfo)=>{
+ const s=await fixture(page);let state='AUTHORIZATION_PENDING',reads=0,writes=0;
+ s.journal={version:7,state:{key:'k',phase:'PLAN',pending:'planning',error:'Error: 流式连接中断，结果尚待核实；不会自动重发原请求。',question:prompt,messages:[{id:'user:q',text:prompt}],log:['原问题已保存']}};
+ const original=JSON.stringify(s.journal);
+ page.on('request',r=>{if(r.method()!=='GET'&&r.url().includes('/api/'))writes++});
+ await page.route('**/planning-v2/requests/**/read-only',r=>r.fulfill({json:{result:{invocation:{target:{invocation_id:'old'},request:{idempotency_key:'k:planning'}},result:{technical_status:'OUTCOME_UNKNOWN',kind:null}}}}));
+ await page.route('**/planning-v2/recoveries/for-invocation/old?**',r=>{reads++;return r.fulfill({json:{result:{state,original_outcome:'OUTCOME_UNKNOWN',recovery_id:'recovery',new_request_key:'fresh'}}})});
+ await page.goto('/work?conversation=new');
+ await expect(page.getByRole('heading',{name:'恢复申请已提交，等待核对',exact:true})).toBeVisible();
+ await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('当前无需操作');
+ await expect(page.getByRole('region',{name:'继续原问题'})).toContainText('等待核对；当前无需操作');
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ await expect(page.getByText(s.journal.state!.error as string,{exact:true})).toBeHidden();
+ await page.screenshot({path:testInfo.outputPath('recovery-waiting.png'),fullPage:true});
+ state='AUTHORIZED';await expect(page.getByRole('button',{name:'继续原问题',exact:true})).toBeVisible({timeout:10000});
+ await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('尚未自动执行');
+ expect(reads).toBeGreaterThan(1);expect(writes).toBe(0);expect(s.modelCalls).toBe(0);expect(JSON.stringify(s.journal)).toBe(original);
+ await page.screenshot({path:testInfo.outputPath('recovery-authorized.png'),fullPage:true});
+ await page.getByText('上次处理详情与错误记录',{exact:true}).click();await expect(page.getByText(s.journal.state!.error as string,{exact:true})).toBeVisible();
 });

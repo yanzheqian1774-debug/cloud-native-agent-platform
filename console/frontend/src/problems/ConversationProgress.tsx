@@ -1,6 +1,6 @@
 import type {ExecutionView} from '../api/preparedExecution';
 
-type Props={separatePreparation?:boolean;phase:string;pending?:string;busy:boolean;error?:string;execution:ExecutionView|null;hasExecution:boolean};
+type Props={recoveryState?:string;separatePreparation?:boolean;phase:string;pending?:string;busy:boolean;error?:string;execution:ExecutionView|null;hasExecution:boolean};
 const phases:Record<string,number>={UNDERSTAND:0,CLARIFY:0,CREATE:0,CRITERION:1,ACTIVATE:1,PLAN:1,PLANNING_CLARIFY:1,CONFIRM:1,SELECT_RESOURCES:2,RESOURCES:2,EXECUTE:2,RUNNING:3,DONE:4};
 const messages:Record<string,string>={
  'source-discovery':'正在核对本次可用的资料，返回后请确认分析范围。',
@@ -15,7 +15,8 @@ const messages:Record<string,string>={
  execute:'正在提交执行请求，等待任务记录返回。',
  'coverage-repair':'当前能力与方案存在缺口，正在核对可调整的范围。',
 };
-export function ConversationProgress({phase,pending,busy,error,execution,hasExecution,separatePreparation=false}:Props){
+export function ConversationProgress({recoveryState,phase,pending,busy,error,execution,hasExecution,separatePreparation=false}:Props){
+ if(['OBSERVED','AUTHORIZATION_PENDING','AUTHORIZED','DISPATCHED','CONTINUING'].includes(recoveryState??''))return <section className="journey-progress" aria-label="全流程进展"><p role="status" aria-live="polite"><strong>{recoveryState==='CONTINUING'?'正在处理恢复请求':recoveryState==='AUTHORIZED'?'已可继续原问题':recoveryState==='DISPATCHED'?'本次处理已提交':'恢复申请已提交，等待核对；当前无需操作。'}</strong></p><p>{recoveryState==='CONTINUING'?'已有进展会持续呈现，结果返回后在原会话继续。':recoveryState==='AUTHORIZED'?'请在原会话选择继续，尚未自动执行。':recoveryState==='DISPATCHED'?'可读取本次处理结果，不会重复提交。':'会持续读取核对进展，不会自动执行任务。'}</p></section>;
  const state=execution?.progress?.state;
  const terminalFailure=['FAILED','RECOVERY_REQUIRED','CANCELLED','CANCELED','UNKNOWN'].includes(state??'');
  const stopped=phase==='UNDERSTANDING_FAILED'||Boolean(error)||['FAILED','RECOVERY_REQUIRED','CANCELLED','CANCELED','UNKNOWN'].includes(state??'');
