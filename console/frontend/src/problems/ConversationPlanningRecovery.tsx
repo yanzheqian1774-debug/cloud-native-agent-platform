@@ -6,20 +6,24 @@ type Recovery={state:string;recovery_id?:string;new_request_key?:string;original
 /** All mount/refresh paths are reads. A new call needs a separate signed request. */
 export function ConversationPlanningRecovery({conversation,requestKey,principal,onResult,onProgress,onStatus}:{conversation:string;requestKey:string;principal:string;onResult:(value:Invocation,requestKey:string)=>Promise<void>;onProgress:(value:ModelProgress)=>void;onStatus:(state:string)=>void}){
  const [status,setStatus]=useState<Recovery|null>(null),[old,setOld]=useState<Invocation|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[progress,setProgress]=useState<ModelProgress|null>(null);
- const flight=useRef(false),live=useRef(true);
+ const flight=useRef(false),live=useRef(true),observationGeneration=useRef(0);
+ function invalidateObservation(){observationGeneration.current++}
  const publish=(value:Recovery)=>{setStatus(value);onStatus(value.state)};
  const expected=()=>({principal,isCurrent:()=>live.current});
  async function read(){
+  const generation=++observationGeneration.current;
+  try{
   const original=await planningRequest<Invocation>('planning-v2/requests/'+encodeURIComponent(requestKey)+'/read-only',undefined,{},expected());
-  if(!live.current)return;
+  if(!live.current||generation!==observationGeneration.current)return;
   if(!original?.result?.technical_status||!original.invocation?.target?.invocation_id)return;
   setOld(original);
   if(original.result.technical_status!=='OUTCOME_UNKNOWN')return;
   const value=await planningRequest<Recovery>('planning-v2/recoveries/for-invocation/'+encodeURIComponent(original.invocation.target.invocation_id)+'?conversation_id='+encodeURIComponent(conversation),undefined,{},expected());
-  if(live.current)publish(value);
+  if(live.current&&generation===observationGeneration.current)publish(value);
+  }catch(error){if(live.current&&generation===observationGeneration.current)throw error}
  }
  const readEffect=useEffectEvent(read);
- useEffect(()=>{live.current=true;Promise.resolve().then(readEffect).catch(e=>{if(live.current)setError(String(e))});return()=>{live.current=false}},[conversation,requestKey,principal]);
+ useEffect(()=>{live.current=true;Promise.resolve().then(readEffect).catch(e=>{if(live.current)setError(String(e))});return()=>{live.current=false;invalidateObservation()}},[conversation,requestKey,principal]);
  const refreshEffect=useEffectEvent(async()=>{if(flight.current)return;try{await read()}catch(e){if(live.current){setError(String(e));onStatus('READ_UNAVAILABLE')}}});
  useEffect(()=>{if(!['OBSERVED','AUTHORIZATION_PENDING'].includes(status?.state??''))return;let active=true;let timer:ReturnType<typeof setTimeout>;const tick=async()=>{await refreshEffect();if(active)timer=setTimeout(tick,5000)};timer=setTimeout(tick,5000);return()=>{active=false;clearTimeout(timer)}},[status?.state]);
  async function act(kind:'read'|'prepare'|'continue'){
@@ -31,6 +35,7 @@ export function ConversationPlanningRecovery({conversation,requestKey,principal,
     if(live.current)publish(value);
    }
    if(kind==='continue'&&status?.recovery_id){
+    invalidateObservation();
     onStatus('CONTINUING');
     const value=status.state==='DISPATCHED'
      ?await planningRequest<Invocation>('planning-v2/requests/'+encodeURIComponent(status.new_request_key!)+'/read-only',undefined,{},expected())

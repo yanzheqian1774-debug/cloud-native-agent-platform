@@ -410,3 +410,24 @@ test('recovery waiting is primary in conversation and rail; observation refresh 
  await page.screenshot({path:testInfo.outputPath('recovery-authorized.png'),fullPage:true});
  await page.getByText('上次处理详情与错误记录',{exact:true}).click();await expect(page.getByText(s.journal.state!.error as string,{exact:true})).toBeVisible();
 });
+
+for(const delayedFailure of [false,true])test('late recovery observation cannot replace explicit continuation progress '+delayedFailure,async({page})=>{
+ const s=await fixture(page);let reads=0,posts=0;let releaseRead!:()=>void,releaseContinue!:()=>void;
+ const heldRead=new Promise<void>(r=>{releaseRead=r}),heldContinue=new Promise<void>(r=>{releaseContinue=r});
+ s.journal={version:7,state:{key:'k',phase:'PLAN',pending:'planning',error:'Error: 原结果待核实',question:prompt,messages:[{id:'user:q',text:prompt}],log:[]}};
+ await page.route('**/planning-v2/requests/**/read-only',r=>r.fulfill({json:{result:{invocation:{target:{invocation_id:'old'},request:{idempotency_key:'k:planning'}},result:{technical_status:'OUTCOME_UNKNOWN',kind:null}}}}));
+ await page.route('**/planning-v2/recoveries/for-invocation/old?**',async r=>{const n=++reads;if(n===2){await heldRead;if(delayedFailure)return r.abort();}return r.fulfill({json:{result:{state:n<=2?'AUTHORIZATION_PENDING':'AUTHORIZED',original_outcome:'OUTCOME_UNKNOWN',recovery_id:'recovery',new_request_key:'fresh'}}})});
+ await page.route('**/planning-v2/recoveries/recovery/continue',async r=>{posts++;await heldContinue;return r.fulfill({json:{result:{invocation:{target:{invocation_id:'fresh'},request:{idempotency_key:'fresh'}},result:{technical_status:'SUCCEEDED',kind:'NEEDS_CLARIFICATION',questions:['需要哪个环境？']}}}})});
+ try{
+  await page.goto('/work?conversation=new');await expect.poll(()=>reads,{timeout:10000}).toBe(2);
+  await page.getByRole('button',{name:'读取处理进展'}).click();await expect(page.getByRole('button',{name:'继续原问题',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'继续原问题',exact:true}).click();await expect.poll(()=>posts).toBe(1);
+  await expect(page.getByRole('heading',{name:'正在继续原问题',exact:true})).toBeVisible();
+  const delivered=page.waitForEvent(delayedFailure?'requestfailed':'requestfinished',r=>r.url().includes('/recoveries/for-invocation/old'));
+  releaseRead();await delivered;
+  await expect(page.getByRole('region',{name:'全流程进展'})).toContainText('正在处理恢复请求');
+  await expect(page.getByRole('heading',{name:'正在继续原问题',exact:true})).toBeVisible();
+  expect(posts).toBe(1);expect(s.modelCalls).toBe(0);
+  releaseContinue();await expect(page.getByText('需要哪个环境？',{exact:true}).first()).toBeVisible();expect(posts).toBe(1);
+ }finally{releaseRead();releaseContinue()}
+});
