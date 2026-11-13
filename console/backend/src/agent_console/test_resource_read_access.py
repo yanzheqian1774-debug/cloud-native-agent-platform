@@ -34,6 +34,11 @@ def snapshot_matches(connection, context, target):
         if row and row["digest"].removeprefix("sha256:") == target.digest:
             return True
     definitions = {
+        "BUSINESS_ONTOLOGY": (
+            "business_ontology.revisions",
+            "ontology_id",
+            "business-ontology:",
+        ),
         "TEAM": ("team_definition.revisions", "team_id", "team:"),
         "EMPLOYEE": (
             "digital_employee_definition.revisions",
