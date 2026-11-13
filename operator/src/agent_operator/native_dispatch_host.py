@@ -29,6 +29,25 @@ def main():
     stop = Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda _sig, _frame: stop.set())
+    if os.environ.get("NATIVE_HOST_SERVICE_CONTROL_FD"):
+        if assembly.worker.startup_observation is None:
+            assembly.close()
+            raise ValueError("HOST_SERVICE_STARTUP_OBSERVATION_REQUIRED")
+        from .native_host_service_child import ready_and_watch
+
+        try:
+            work = assembly.worker.repository.work
+            observed = assembly.worker.startup_observation.current()["observation"]
+            work.exact_host_scope = (
+                observed["namespace"],
+                observed["securityDomain"],
+                observed["principalId"],
+                tuple(observed["authorizationResources"]),
+            )
+            ready_and_watch(assembly.worker.startup_observation, stop)
+        except Exception:
+            assembly.close()
+            raise
     logging.basicConfig(level=logging.INFO)
     try:
         run_native_worker(assembly, stop, logging.getLogger(__name__), interval)

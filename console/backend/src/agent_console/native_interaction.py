@@ -143,7 +143,11 @@ def progress(call, app, p):
                     <= datetime.now(UTC),
                 }
             )
+    from .native_host_process_projection import process_projection
+
+    host = process_projection(call, p)
     return {
+        **({"hostDispatch": host} if host is not None else {}),
         "runId": p.run_id,
         "steps": steps,
         "questions": questions,

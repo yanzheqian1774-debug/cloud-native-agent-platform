@@ -30,6 +30,7 @@ class ContinuationWork:
 
         self.sales_v2_candidate = sales_v2_candidate
         self.owned_business = owned_business
+        self.exact_host_scope = None
 
     @classmethod
     def load(
@@ -52,16 +53,36 @@ class ContinuationWork:
     def receipts(self):
         if not self.policy.enabled:
             return []
+        query = (
+            "SELECT namespace,security_domain,result FROM "
+            "execution_authority.prepared_resource_commands "
+            "WHERE result->>'schemaVersion'='readonly-continuation.v1'"
+        )
+        parameters = ()
+        if self.exact_host_scope is not None:
+            ns, domain, principal, resources = self.exact_host_scope
+            query += (
+                " AND namespace=%s AND security_domain=%s AND actor_id=%s "
+                "AND ('governed-execution:prepared:' || "
+                "(result->>'preparationDigest'))=ANY(%s)"
+            )
+            parameters = (ns, domain, principal, list(resources))
         with self.repository.pool.connection() as c:
-            rows = c.execute(
-                "SELECT namespace,security_domain,result FROM "
-                "execution_authority.prepared_resource_commands "
-                "WHERE result->>'schemaVersion'='readonly-continuation.v1'"
-            ).fetchall()
+            rows = c.execute(query, parameters).fetchall()
         now = datetime.now(UTC)
         eligible = []
         for row in rows:
             r = row["result"]
+            if self.exact_host_scope is not None:
+                ns, domain, principal, resources = self.exact_host_scope
+                if (row["namespace"], row["security_domain"], r.get("subject")) != (
+                    ns,
+                    domain,
+                    principal,
+                ) or (
+                    "governed-execution:prepared:" + r.get("preparationDigest", "")
+                ) not in resources:
+                    continue
             if r.get("executionAuthorizationDigest") != self.policy.digest:
                 continue
             if r.get("developmentJourney") is True:

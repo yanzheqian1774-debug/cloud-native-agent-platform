@@ -1,0 +1,8 @@
+/* Shared F3 directory title; actions retain their existing authorization. */
+.px-page header.f3-directory-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin:0 0 28px}
+.px-page header.f3-directory-heading>div>p:first-child{font-size:10px;line-height:1.5;font-weight:400;letter-spacing:1px;color:#4865d5;margin:0 0 10px}
+.px-page header.f3-directory-heading h1{font-size:24px;line-height:1.4;font-weight:700;color:#273851;margin:0 0 8px}
+.px-page header.f3-directory-heading>div>p:last-child:not(:first-child),.px-page header.f3-directory-heading>div>span{font-size:13px;line-height:1.7;color:#7486a3;margin:0}
+.px-page a.f3-directory-secondary{display:inline-flex;align-items:center;justify-content:center;flex:none;background:#fff;border:1px solid #dfe5f0;border-radius:7px;color:#273851;font-size:13px;line-height:1.4;min-height:36px;padding:8px 12px;box-sizing:border-box;text-decoration:none}
+.px-page a.f3-directory-secondary:hover{background:#f7f9ff;border-color:#b9c8ed}
+@media(max-width:700px){.px-page header.f3-directory-heading{gap:16px;flex-wrap:wrap}.px-page header.f3-directory-heading h1{font-size:22px}}

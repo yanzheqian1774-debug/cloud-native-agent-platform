@@ -29,3 +29,5 @@
 .employee-management.f3-employee-collection .employee-collection-toolbar h2{white-space:nowrap;flex:none}
 .employee-management.f3-employee-collection .employee-collection-toolbar>div:first-child>button{margin-left:auto;background:#fff;color:#7486a3;border:1px solid #e0e6ef;border-radius:7px;padding:6px 10px;font-size:12px;min-height:34px;white-space:nowrap}
 @media(max-width:700px){.employee-management.f3-employee-collection .employee-collection-toolbar>div:first-child>p{flex-basis:100%}}
+/* Reserve the existing version information area so primary actions align. */
+.employee-version-card .employee-version-options{box-sizing:border-box;min-height:100px}

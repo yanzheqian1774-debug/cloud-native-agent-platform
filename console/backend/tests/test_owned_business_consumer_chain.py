@@ -275,6 +275,9 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
         )
         assert worker.dispatches() == expected
         assert ContinuationWork(native, policy, authority).dispatches() == ()
+        observer = getattr(e, "consumer_execution_observer", None)
+        if observer is not None:
+            observer(worker, native, value["receipt"], ready)
         with e.repo.connection_scope() as c:
             assert (
                 c.execute(
@@ -292,6 +295,9 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
                 ),
             )
         assert worker.dispatches() == ()
+        after_revoke = getattr(e, "consumer_after_revoke", None)
+        if after_revoke is not None:
+            after_revoke()
         assert len(e.calls) == e.business_model_call_count
     finally:
         native.pool.close()
