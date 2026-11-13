@@ -19,6 +19,7 @@ class CurrentWorkQuery(BaseModel):
     scopeFilter: Literal["visible", "initiated"] | None = None
     query: str = Field(default="", max_length=200)
     state: Literal["all", "waiting", "completed", "answered"] = "all"
+    sourceFilter: Literal["all", "conversation"] = "all"
     pageSize: int = Field(default=25, ge=1, le=100)
     cursor: str | None = Field(default=None, min_length=1, max_length=2048)
 
@@ -50,6 +51,7 @@ class CurrentWorkQuery(BaseModel):
                 self.scopeFilter,
                 self.query,
                 self.state,
+                *([self.sourceFilter] if self.sourceFilter != "all" else []),
             ]
         )
 

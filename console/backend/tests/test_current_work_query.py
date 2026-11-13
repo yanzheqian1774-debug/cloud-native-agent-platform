@@ -15,6 +15,7 @@ from test_workbench_pagination import context
         {"pageSize": 101},
         {"query": "x" * 201},
         {"state": "invented"},
+        {"sourceFilter": "fixed"},
         {"scopeFilter": "all-users"},
         {"cursor": ""},
         {"cursor": "x" * 2049},
@@ -71,6 +72,7 @@ def test_cursor_requires_same_principal_filters_generation_and_page_size():
         {"scopeFilter": "initiated"},
         {"query": "销售"},
         {"state": "completed"},
+        {"sourceFilter": "conversation"},
         {"pageSize": 50},
         {"cursor": token[:-1] + ("0" if token[-1] != "0" else "1")},
     ]:

@@ -68,6 +68,10 @@ def directory_page(
         for item in items
         if (query.scopeFilter == "visible" or item.initiatorId == context.principal_id)
         and query.query.casefold() in (item.title + " " + item.workflowRunId).casefold()
+        and (
+            query.sourceFilter == "all"
+            or (item.originVerified and item.originConversationId is not None)
+        )
     ]
     question_status_complete = all(
         item.executionState != "RUNNING" or item.pendingQuestionCount is not None
@@ -113,6 +117,7 @@ def directory_page(
     return {
         "schemaVersion": "current-work-directory.v1",
         "scopeFilter": query.scopeFilter,
+        "sourceFilter": query.sourceFilter,
         "subject": context.principal_id,
         "tenantId": context.scope.tenant_id,
         "securityDomain": context.scope.security_domain,

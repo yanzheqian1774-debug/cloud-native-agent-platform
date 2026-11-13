@@ -9,9 +9,10 @@ async function fixture(page:Page){
   if(p.endsWith('/current-work')){
    state.requests.push(url.search);
    if(state.error)return route.fulfill({status:503,json:{reasonCode:'CURRENT_WORK_AUTHORITY_UNAVAILABLE'}});
+   const source=url.searchParams.get('sourceFilter')??'all';
    const scope=url.searchParams.get('scopeFilter')??'visible',query=url.searchParams.get('query')??'',filter=url.searchParams.get('state')??'all',offset=Number(url.searchParams.get('cursor')??0);
-   const all=Array.from({length:34},(_,i)=>({workflowRunId:'run:'+i,preparationDigest:(i+1).toString(16).padStart(64,'0'),title:'交接检查 '+(i+1),createdAt:'2026-11-10T01:00:00Z',initiatorId:i<21?'human:alice':'human:bob',executionState:i===0&&state.mode!=='completed'?'RUNNING':'SUCCEEDED',displayState:i===0?state.mode:'completed',progressVersion:3,problemId:'p'+i,problemRevisionId:'r'+i,problemDigest:'a'.repeat(64),pendingQuestionCount:i===0&&(state.mode==='unknown'||state.historyRestricted)?null:i===0&&state.mode==='waiting'?1:0,artifactCount:3,businessResolution:'UNDETERMINED',originConversationId:i<26?'c'+i:null,originVerified:i<26,planVersion:4,participantCount:1,completedTaskCount:3,taskCount:3,updatedAt:'2026-11-10T02:00:00Z'})).filter(i=>(scope==='visible'||i.initiatorId===state.principal)&&i.title.includes(query)&&filter!=='waiting');
-   return route.fulfill({json:{result:{schemaVersion:'current-work-directory.v1',scopeFilter:scope,subject:state.principal,tenantId:'fixture',securityDomain:'isolated',complete:true,questionStatusComplete:state.questionStatusComplete,readAt:'2026-11-10T03:00:00Z',total:all.length,counts:all.reduce<Record<string,number>>((counts,item)=>{counts[item.displayState]=(counts[item.displayState]??0)+1;return counts},{completed:0,waiting:0,running:0,failed:0,cancelled:0,unknown:0}),items:all.slice(offset,offset+25),nextCursor:offset+25<all.length?String(offset+25):null}}});
+   const all=Array.from({length:34},(_,i)=>({workflowRunId:'run:'+i,preparationDigest:(i+1).toString(16).padStart(64,'0'),title:'交接检查 '+(i+1),createdAt:'2026-11-10T01:00:00Z',initiatorId:i<21?'human:alice':'human:bob',executionState:i===0&&['pending','failed','recovery'].includes(state.mode)?({pending:'PENDING',failed:'FAILED',recovery:'RECOVERY_REQUIRED'}[state.mode]):i===0&&state.mode!=='completed'?'RUNNING':'SUCCEEDED',displayState:i===0?({pending:'running',recovery:'unknown'}[state.mode]??state.mode):'completed',progressVersion:3,problemId:'p'+i,problemRevisionId:'r'+i,problemDigest:'a'.repeat(64),pendingQuestionCount:i===0&&(state.mode==='unknown'||state.mode==='pending'||state.mode==='recovery'||state.historyRestricted)?null:i===0&&state.mode==='waiting'?1:0,artifactCount:3,businessResolution:'UNDETERMINED',originConversationId:i<26?'c'+i:null,originVerified:i<26,planVersion:4,participantCount:1,completedTaskCount:3,taskCount:3,updatedAt:'2026-11-10T02:00:00Z'})).filter(i=>(scope==='visible'||i.initiatorId===state.principal)&&i.title.includes(query)&&filter!=='waiting'&&(filter!=='completed'||i.executionState==='SUCCEEDED')&&(source!=='conversation'||i.originVerified));
+   return route.fulfill({json:{result:{schemaVersion:'current-work-directory.v1',scopeFilter:scope,sourceFilter:source,subject:state.principal,tenantId:'fixture',securityDomain:'isolated',complete:true,questionStatusComplete:state.questionStatusComplete,readAt:'2026-11-10T03:00:00Z',total:all.length,counts:all.reduce<Record<string,number>>((counts,item)=>{counts[item.displayState]=(counts[item.displayState]??0)+1;return counts},{completed:0,waiting:0,running:0,failed:0,cancelled:0,unknown:0}),items:all.slice(offset,offset+25),nextCursor:offset+25<all.length?String(offset+25):null}}});
   }
   if(p.includes('/prepared-executions/'))return route.fulfill({status:403,json:{reasonCode:'DETAIL_READ_DENIED'}});
   return route.fulfill({json:{result:{items:[],enabled:false}}});
@@ -81,4 +82,44 @@ test('row preserves unknown clarification instead of claiming live progress',asy
 
 test('completed task distinguishes unavailable history from active pending questions',async({page})=>{
  const s=await fixture(page);s.historyRestricted=true;await page.goto('/tasks');await expect(page.getByText('任务已结束；历史追问记录暂不可读取',{exact:true})).toBeVisible();const metric=page.getByRole('region',{name:'任务记录概览'}).locator('article').filter({hasText:'待补充任务'});await expect(metric).toContainText('0');await expect(metric).toContainText('正在执行任务中的有效追问');expect(s.writes).toEqual([]);
+});
+
+
+test('source tabs preserve server filtering and fixed work is explicitly unconnected',async({page})=>{
+ const state=await fixture(page);await page.goto('/tasks');
+ await page.getByRole('button',{name:'会话发起',exact:true}).click();
+ await expect(page.getByText('当前可见 · 共 26 条 · 第 1 页')).toBeVisible();
+ expect(state.requests.at(-1)).toContain('sourceFilter=conversation');
+ await page.getByRole('button',{name:'下一页',exact:true}).click();
+ await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(1);
+ await page.reload();await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(1);
+ const requests=state.requests.length;
+ await page.getByRole('button',{name:'固定工作',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'固定工作尚未接入'})).toBeVisible();
+ await expect(page.getByText('当前筛选下没有可读取的执行记录。',{exact:true})).toHaveCount(0);
+ expect(state.requests.length).toBe(requests);
+ await page.getByRole('button',{name:'已完成',exact:true}).click();
+ await expect(page.getByText('此处展示执行完成记录，业务是否确认解决请在任务详情核对。')).toBeVisible();
+ await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);
+ expect(state.requests.at(-1)).toContain('state=completed');expect(state.writes).toEqual([]);
+});
+
+test('pending and failed rows never claim finished or waiting for user',async({page})=>{
+ const s=await fixture(page);s.mode='pending';await page.goto('/tasks');
+ const row=page.getByRole('row').filter({has:page.getByText('交接检查 1',{exact:true})});
+ await expect(row).toContainText('准备执行');await expect(row).toContainText('尚未启动');
+ await expect(row).not.toContainText('任务已结束');await expect(row).not.toContainText('待你补充');
+ s.mode='failed';await page.getByRole('button',{name:'重新读取',exact:true}).click();
+ await expect(row).toContainText('需要核查');await expect(row).not.toContainText('待你补充');
+ s.mode='recovery';await page.getByRole('button',{name:'重新读取',exact:true}).click();
+ await expect(row).toContainText('结果待核实');await expect(row).not.toContainText('待你补充');await expect(row).not.toContainText('任务已结束');
+ expect(s.writes).toEqual([]);
+});
+
+test('conversation source mismatch fails visibly instead of accepting unfiltered rows',async({page})=>{
+ await fixture(page);
+ // The dedicated response is deliberately structurally valid but has wrong source provenance.
+ await page.route('**/api/workbench/v1/current-work?*',route=>route.fulfill({json:{result:{schemaVersion:'current-work-directory.v1',scopeFilter:'visible',sourceFilter:'all',subject:'human:alice',tenantId:'fixture',securityDomain:'isolated',complete:true,total:0,counts:{completed:0},items:[],nextCursor:null}}}));
+ await page.goto('/tasks?group=conversation');await expect(page.getByRole('alert')).toBeVisible();
+ await expect(page.getByText('当前筛选下没有可读取的执行记录。',{exact:true})).toHaveCount(0);
 });

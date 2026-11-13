@@ -118,3 +118,52 @@ def test_answered_history_cursor_is_not_valid_for_active_pending_filter():
     assert [row["workflowRunId"] for row in second["items"]] == ["run:a"]
     with pytest.raises(WorkbenchOwnerError, match="REQUEST_INVALID"):
         page(records, state="waiting", pageSize=2, cursor=first["nextCursor"])
+
+
+def test_verified_conversation_source_filters_before_counts_and_pagination():
+    verified = [
+        item("run:" + name).model_copy(
+            update={
+                "originConversationId": "conversation:" + name,
+                "originVerified": True,
+            }
+        )
+        for name in ["a", "b", "c"]
+    ]
+    associated = item("run:z").model_copy(update={"originConversationId": "other"})
+    forged = item("run:y").model_copy(update={"originVerified": True})
+    records = [*verified, associated, forged, item("run:x")]
+    first = page(records, sourceFilter="conversation", pageSize=2)
+    assert first["sourceFilter"] == "conversation"
+    assert first["total"] == first["counts"]["completed"] == 3
+    assert [r["workflowRunId"] for r in first["items"]] == ["run:c", "run:b"]
+    second = page(
+        records, sourceFilter="conversation", pageSize=2, cursor=first["nextCursor"]
+    )
+    assert [r["workflowRunId"] for r in second["items"]] == ["run:a"]
+    assert second["total"] == 3
+    with pytest.raises(WorkbenchOwnerError, match="REQUEST_INVALID"):
+        page(records, pageSize=2, cursor=first["nextCursor"])
+    assert page(records, sourceFilter="conversation", query="run:a")["total"] == 1
+    assert page(records, sourceFilter="conversation", state="waiting")["total"] == 0
+
+
+def test_conversation_source_does_not_enlarge_initiated_scope():
+    own = item("run:own").model_copy(
+        update={"originConversationId": "conversation:own", "originVerified": True}
+    )
+    other = own.model_copy(
+        update={"workflowRunId": "run:other", "initiatorId": "human:bob"}
+    )
+    query = CurrentWorkQuery(scopeFilter="initiated", sourceFilter="conversation")
+    result = directory_page(
+        [own, other],
+        query,
+        CODEC,
+        context(),
+        generation=1,
+        recovery_epoch=1,
+        read_at=NOW,
+    )
+    assert result["total"] == 1
+    assert result["items"][0]["workflowRunId"] == "run:own"
