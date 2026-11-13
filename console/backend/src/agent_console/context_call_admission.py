@@ -370,7 +370,7 @@ class ContextCallAdmission:
                 raise AuthorityError("CONTEXT_ADMISSION_INVALID")
             hook = getattr(self, "before_approve", None)
             if hook is not None:
-                hook(c, row)
+                hook(c, row, payload)
             prior = latest(c, context_id)
             record = {
                 **payload,

@@ -82,6 +82,10 @@ class PlanningSuggestionService:
             raise PlanningError("PLANNING_COMMITMENT_KEY_REQUIRED")
 
     def begin_adaptive(self, principal, request):
+        if self.exact_admission is not None and getattr(
+            self.exact_admission, "is_recovery", lambda _: False
+        )(request.idempotency_key):
+            return self.begin(principal, request)
         from .planning_adaptive import run
 
         configured = getattr(

@@ -229,7 +229,11 @@ class PlanningCallAdmission(ContextCallAdmission):
                 return None
             return self._projection(c, request_row(c, row["context_id"]), row["record"])
 
-    def before_approve(self, c, row):
+    def before_approve(self, c, row, payload=None):
+        from .conversation_planning_recovery import before_approve
+
+        if before_approve(self, c, row, payload or {}):
+            return
         from .task_planning_successor import require_task
 
         if require_task(c, row, getattr(self, "actual_configuration", {})):
@@ -399,6 +403,12 @@ class BoundPlanningAdmission:
 
     def prepare(self, request, record):
         return self.service.prepare_record(self.context, request, record)
+
+    def is_recovery(self, key):
+        from .conversation_planning_recovery import find
+
+        with self.service.repository.connection_scope() as c:
+            return find(c, self.context, key=key) is not None
 
     def recover(self, key):
         prepared = self.service.recover(self.context, key)

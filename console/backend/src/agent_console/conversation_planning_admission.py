@@ -94,6 +94,23 @@ class ConversationPlanningAdmission:
         scope = (context.scope.tenant_id, context.scope.security_domain)
         key = (*scope, context.principal_id, request.idempotency_key)
         lock(c, "planning:" + digest(key))
+        from . import conversation_planning_recovery as recovery_owner
+
+        recovery = recovery_owner.find(c, context, key=request.idempotency_key)
+        if recovery:
+            recovery_owner.validate(service, c, context, recovery, source)
+            actual = {
+                k: v
+                for k, v in saved_request.items()
+                if k in recovery_owner.PlanningRequest.model_fields
+            }
+            if (
+                recovery_owner.PlanningRequest.model_validate(actual).model_dump(
+                    mode="json"
+                )
+                != recovery["record"]["request"]
+            ):
+                raise AuthorityError("PLANNING_RECOVERY_REQUEST_CHANGED")
         previous = c.execute(
             "SELECT * FROM authorization_admin.planning_call_preparations "
             "WHERE tenant_id=%s AND security_domain=%s "
@@ -104,8 +121,37 @@ class ConversationPlanningAdmission:
             if previous["input_commitment"] != record["target"]["input_commitment"]:
                 raise AuthorityError("IDEMPOTENCY_PAYLOAD_CONFLICT")
             row = request_row(c, previous["context_id"])
-            self.require(service, c, context, row)
+            if recovery:
+                recovery_owner.require_binding(service, c, context, row, source)
+                fixed = previous["record"]
+                if any(
+                    fixed.get(k) != record.get(k)
+                    for k in (
+                        "binding",
+                        "profile",
+                        "provider_configuration",
+                        "policy_digest",
+                    )
+                ) or fixed["target"].get("resource_snapshot") != record["target"].get(
+                    "resource_snapshot"
+                ):
+                    raise AuthorityError("PLANNING_RECOVERY_CONFIGURATION_CHANGED")
+            else:
+                self.require(service, c, context, row)
             return service._projection(c, row, previous["record"])
+        unresolved = recovery_owner.unresolved(c, source, record["target"]["problem"])
+        covered = recovery_owner.covered_predecessors(
+            c, context, record["target"].get("predecessor_invocation_id")
+        )
+        if recovery:
+            covered.add(recovery["predecessor_invocation_id"])
+        if any(r["invocation_id"] not in covered for r in unresolved):
+            raise AuthorityError("PLANNING_RECOVERY_REQUIRED")
+        if recovery and not any(
+            r["invocation_id"] == recovery["predecessor_invocation_id"]
+            for r in unresolved
+        ):
+            raise AuthorityError("PLANNING_RECOVERY_OBSERVATION_REQUIRED")
         from .conversation_planning_successor import successor
 
         identity, expires = successor(
@@ -129,6 +175,7 @@ class ConversationPlanningAdmission:
             cumulative_call_cap=self.configuration["calls"],
             total_cost_cap_microusd=self.configuration["cost_microusd"],
             maximum_new_calls=1,
+            **({"recovery_id": recovery["recovery_id"]} if recovery else {}),
             understanding_input_source=source["understanding_input_source"],
             **(
                 {
@@ -141,7 +188,8 @@ class ConversationPlanningAdmission:
         )
         c.execute(
             "INSERT INTO authorization_admin.context_call_requests "
-            "(context_id,tenant_id,security_domain,subject_id,account_id,account_revision,"
+            "(context_id,tenant_id,security_domain,subject_id,account_id,account_"
+            "revision,"
             "first_invocation_id,record,digest) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (
                 identity,
@@ -166,6 +214,26 @@ class ConversationPlanningAdmission:
             "VALUES(%s,%s,%s,%s,%s,%s,%s)",
             (*key, identity, record["target"]["input_commitment"], Jsonb(saved)),
         )
+        if recovery:
+            proof = {
+                "target": record["target"],
+                "request_digest": recovery["digest"],
+                "maximum_new_calls": 1,
+            }
+            c.execute(
+                "INSERT INTO "
+                "authorization_admin.conversation_planning_recovery_bindings(reco"
+                "very_id,context_id,invocation_id,record,digest) VALUES(%s,%s,%s,"
+                "%s,%s)",
+                (
+                    recovery["recovery_id"],
+                    identity,
+                    record["target"]["invocation_id"],
+                    Jsonb(proof),
+                    digest(proof),
+                ),
+            )
+            return service._projection(c, request_row(c, identity), saved)
         decision = {
             "type": "F3_CONVERSATION_PLANNING",
             "request": payload,
@@ -224,6 +292,9 @@ class ConversationPlanningAdmission:
         ):
             raise AuthorityError("CONTEXT_ADMISSION_SOURCE_MISMATCH")
         active(c, row, self.configuration)
+        from .conversation_planning_recovery import require_binding
+
+        require_binding(service, c, context, row, source)
         from .conversation_planning_successor import validated_predecessor
 
         target = row["record"]["target"]

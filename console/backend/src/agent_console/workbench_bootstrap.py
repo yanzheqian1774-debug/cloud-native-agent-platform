@@ -508,6 +508,11 @@ def build_workbench_composition(
                             admission, configurations["planning"]
                         )
                     )
+                    from .conversation_planning_recovery import (
+                        migrate as migrate_recovery,
+                    )
+
+                    migrate_recovery(planning_admission)
                     from .conversation_work_authorization import (
                         ConversationWorkAuthorization,
                     )

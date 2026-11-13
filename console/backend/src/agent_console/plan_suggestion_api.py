@@ -103,6 +103,10 @@ def install_planning_invocations(
             ) as exc:
                 return JSONResponse(status_code=404, content={"reasonCode": str(exc)})
 
+        from .conversation_planning_recovery_api import install as install_recovery
+
+        install_recovery(app, invoke, authenticate, require_csrf, reader)
+
         @app.post(f"{PREFIX}/planning-v2/invocations", status_code=201)
         async def begin(request: Request, body: PlanningRequest):
             from .conversation_actions import original_action
