@@ -694,6 +694,24 @@ def build_workbench_composition(
                 install_definitions(definition_manager, authorizer),
             )
 
+        ontology_management_path = os.environ.get("BUSINESS_ONTOLOGY_MANAGEMENT_POLICY")
+        if ontology_management_path:
+            if not ontology_enabled:
+                raise AuthorityError("ONTOLOGY_MANAGEMENT_DEPENDENCY_REQUIRED")
+            from .ontology_management import OntologyManagement
+            from .ontology_management_api import install_ontology_management
+            from .ontology_management_policy import MaintenancePolicy
+
+            ontology_management_policy = MaintenancePolicy.model_validate_json(
+                Path(ontology_management_path).read_text()
+            )
+            directory_installers += (
+                install_ontology_management(
+                    OntologyManagement(ontology_management_policy, foundation.grants),
+                    authorizer,
+                ),
+            )
+
         resource_manager = None
         selected_upgrade_routes = ()
         management_path = os.environ.get("RESOURCE_MANAGEMENT_POLICY")

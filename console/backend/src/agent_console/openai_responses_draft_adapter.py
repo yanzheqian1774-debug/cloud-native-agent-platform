@@ -193,6 +193,7 @@ class ExactFileOpenAICredentialResolver:
                 ("v2-zh-CN", "problem-draft-assistance-output.v2"),
                 ("v3", "conversation-understanding-output.v3"),
                 ("v3-execution", "conversation-understanding-output.v3-execution"),
+                ("v3-relation", "conversation-understanding-output.v3-relation"),
             }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
@@ -256,6 +257,7 @@ class OpenAIResponsesDraftTransport:
                 ("v2-zh-CN", "problem-draft-assistance-output.v2"),
                 ("v3", "conversation-understanding-output.v3"),
                 ("v3-execution", "conversation-understanding-output.v3-execution"),
+                ("v3-relation", "conversation-understanding-output.v3-relation"),
             }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds

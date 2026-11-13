@@ -99,6 +99,9 @@ class OntologyService:
             action,
             resource(identity, command.revision_id),
         )
+        from .ontology_maintenance_binding import verify_managed_command
+
+        verify_managed_command(self.call, identity, action, command)
         if action in {"CREATE", "REVISE"}:
             content = command.content
             if content is None:
