@@ -145,3 +145,34 @@ for(const stateName of ['ACCESS_RESTRICTED','TEMPORARILY_UNAVAILABLE'] as const)
  await expect.poll(()=>page.locator('.px-message-stream').evaluate(n=>n.scrollTop)).toBe(top);
  expect(state.writes).toEqual([]);
 });
+
+async function retainedReplies(page:Page){
+ const state=await fixture(page),access={ready:false,mode:'ok' as 'ok'|'failure'|'revoked',preparations:0};
+ await page.route('**/api/workbench/v1/conversations/capabilities',route=>route.fulfill({json:{result:{enabled:true,historyReadPreparation:true}}}));
+ await page.route('**/api/workbench/v1/conversations/historical/history-access',route=>{
+  expect(route.request().method()).toBe('POST');expect(route.request().postDataJSON()).toEqual({});expect(route.request().headers()['x-csrf-token']).toBe('csrf');access.preparations++;
+  if(access.mode==='failure')return route.fulfill({status:503,json:{reasonCode:'AUTHORITY_STORAGE_UNAVAILABLE'}});
+  access.ready=access.mode==='ok';return route.fulfill({json:{result:{available:true,items:[{state:access.ready?'APPROVED':'REVOKED'}]}}});
+ });
+ await page.route('**/api/workbench/v1/conversations/historical',route=>route.fulfill({json:{result:{conversation:{conversation_id:'historical',title:'原会话历史回复',version:2},messages:[{message_id:'user-original',content:'请核对交接资料',author_id:'human:ordinary',created_at:'2026-11-12T00:00:00Z',disposition:'GOAL_RECORDED'},{message_id:'assistant-original',content:access.ready?'原回复：需要确认适用环境。':'此记录当前不在可访问范围内。原内容仍保留。',author_id:'human:ordinary',created_at:'2026-11-12T00:01:00Z',kind:'SOURCE',disposition:'SOURCE',facts:access.ready?{assistantResponse:true,state:'SUCCEEDED',source:{kind:'DRAFT',invocationId:'original',contextId:'context',turnId:'turn',turnVersion:1},response:{resultKind:'DIRECT_ANSWER',answer:'原回复：需要确认适用环境。'}}:{assistantResponse:true,readable:false,readState:'ACCESS_RESTRICTED'}}],links:[]}}}));
+ return {state,access};
+}
+
+test('expired reply access prepares automatically without model calls and preserves input on refresh',async({page})=>{
+ const {state,access}=await retainedReplies(page);await page.goto('/work?conversation=historical');
+ const reply=page.locator('#conversation-message-assistant-original');await expect(reply).toContainText('原回复：需要确认适用环境。');await expect(reply).toContainText('工作助手');await expect(reply).toContainText('2026-11-12');
+ await page.locator('#private-input').fill('未发送的原输入');await page.reload();await expect(reply).toContainText('原回复：需要确认适用环境。');await expect(page.locator('#private-input')).toHaveValue('未发送的原输入');
+ await reply.getByText('查看来源与记录',{exact:true}).click();await expect(reply.locator('details').first()).toHaveAttribute('open','');
+ expect(access.preparations).toBeGreaterThanOrEqual(2);expect(state.writes).toEqual([]);
+});
+
+test('history loading failure offers read retry without blaming user permissions',async({page})=>{
+ const {state,access}=await retainedReplies(page);access.mode='failure';await page.goto('/work?conversation=historical');
+ await expect(page.getByText('历史回复暂时加载失败，可重新读取。已保存内容和未发送输入仍保留。',{exact:true})).toBeVisible();await page.locator('#private-input').fill('保留输入');access.mode='ok';await page.getByRole('button',{name:'重新读取历史回复',exact:true}).click();
+ await expect(page.locator('#conversation-message-assistant-original')).toContainText('原回复：需要确认适用环境。');await expect(page.locator('#private-input')).toHaveValue('保留输入');expect(state.writes).toEqual([]);
+});
+
+test('revoked reply access stays restricted without executing or changing the reply',async({page})=>{
+ const {state,access}=await retainedReplies(page);access.mode='revoked';await page.goto('/work?conversation=historical');
+ await expect(page.getByText('部分历史回复当前不在可访问范围内，其他消息仍可查看。',{exact:true})).toBeVisible();await expect(page.locator('#conversation-message-assistant-original')).toContainText('此记录当前不在可访问范围内。原内容仍保留。');await expect(page.locator('#conversation-message-assistant-original')).not.toContainText('原回复：');expect(state.writes).toEqual([]);
+});

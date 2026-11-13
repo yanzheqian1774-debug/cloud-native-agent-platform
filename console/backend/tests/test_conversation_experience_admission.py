@@ -321,3 +321,13 @@ def test_legacy_policy_digest_keeps_original_shape(env, tmp_path):  # noqa: F811
 
     _, _, _, document = configure(env, tmp_path)
     assert env.admission.experience.policy_digest == digest(document)
+
+
+def test_history_read_selection_preserves_execution_policy_digest(env, tmp_path):  # noqa: F811
+    _, _, path, document = configure(env, tmp_path)
+    old = env.admission.experience.policy_digest
+    document["historyReadEnabled"] = True
+    path.write_text(json.dumps(document))
+    selected = ConversationExperienceAdmission(path, env.admission.configuration)
+    assert selected.policy_digest == old
+    assert selected.history_policy_digest != old

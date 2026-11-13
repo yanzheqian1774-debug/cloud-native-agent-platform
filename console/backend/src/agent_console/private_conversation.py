@@ -45,7 +45,7 @@ def source_read_failure(exc):
 def unavailable_message(fact, exc):
     failure = source_read_failure(exc)
     state, content = {
-        404: ("ACCESS_RESTRICTED", "当前无法读取这条记录。请核对访问权限。"),
+        404: ("ACCESS_RESTRICTED", "此记录当前不在可访问范围内。原内容仍保留。"),
         409: ("SOURCE_MISMATCH", "原记录与来源暂未核对一致。内容暂不展示。"),
         503: (
             "TEMPORARILY_UNAVAILABLE",

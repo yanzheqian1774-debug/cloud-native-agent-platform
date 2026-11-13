@@ -36,6 +36,7 @@ class ExperiencePolicy(BaseModel):
     ] = Field(min_length=1, max_length=2)
     externalWrites: Literal[False]
     allowanceId: str | None = Field(default=None, min_length=1, max_length=200)
+    historyReadEnabled: bool | None = None
 
     @model_validator(mode="after")
     def allowance_version(self):
@@ -62,6 +63,11 @@ class ConversationExperienceAdmission:
             raise AuthorityError("CONTEXT_ADMISSION_EXPERIENCE_POLICY_INVALID")
         self.document = ExperiencePolicy.model_validate_json(self.path.read_text())
         self.policy_digest = digest(
+            self.document.model_dump(
+                mode="json", exclude_none=True, exclude={"historyReadEnabled"}
+            )
+        )
+        self.history_policy_digest = digest(
             self.document.model_dump(mode="json", exclude_none=True)
         )
         limits = self.document.configuration.model_dump()

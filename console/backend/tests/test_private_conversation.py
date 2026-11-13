@@ -480,7 +480,10 @@ def test_head_is_owned_metadata_only_and_does_not_replace_source_authorization(s
         "readable": False,
         "readState": "ACCESS_RESTRICTED",
     }
-    assert current["messages"][0]["content"] == "当前无法读取这条记录。请核对访问权限。"
+    assert (
+        current["messages"][0]["content"]
+        == "此记录当前不在可访问范围内。原内容仍保留。"
+    )
     body = {
         "idempotencyKey": "reply",
         "expectedVersion": head["conversation"]["version"],

@@ -437,8 +437,15 @@ def install_private_conversations(
 
     @app.get(PREFIX + "/conversations/capabilities")
     def capabilities(request: Request):
-        authenticate(request)
-        return {"result": {"enabled": bool(service), "schemaVersion": 1}}
+        _, context = authenticate(request)
+        history = getattr(app.state, "conversation_history_access_available", None)
+        return {
+            "result": {
+                "enabled": bool(service),
+                "schemaVersion": 1,
+                "historyReadPreparation": bool(history and history(context)),
+            }
+        }
 
     @app.get(PREFIX + "/conversations")
     def listing(request: Request):

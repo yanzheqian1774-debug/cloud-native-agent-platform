@@ -527,7 +527,12 @@ def build_workbench_composition(
                 task_binding = bind_d12(admission, task_binding)
                 draft_assistance.authorization.context_admission = admission
                 draft_assistance.budget.context_admission = admission
-                delegation_routes += (install_context_call_admission(admission),)
+                from .conversation_history_access import install_history_access
+
+                delegation_routes += (
+                    install_context_call_admission(admission),
+                    install_history_access(admission, authorizer),
+                )
 
         roots_path = os.environ.get("BOUNDED_TASK_AUTHORIZATION_ROOTS")
         if roots_path:
