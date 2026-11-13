@@ -326,7 +326,7 @@ test('collection separates authoritative publication and draft from listed histo
  extra.records.set(current.employeeDefinitionRevisionId,current);extra.records.set(draft.employeeDefinitionRevisionId,draft);
  await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card).toHaveCount(1);
  await expect(card.getByText('当前发布职责',{exact:true})).toBeVisible();await expect(card.getByText('已有修改草稿；发布内容保持不变',{exact:true})).toBeVisible();
- await card.getByRole('button',{name:'查看当前发布',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('当前发布版本');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(current.employeeDefinitionRevisionId);
+ await expect(card.getByRole('button',{name:'查看当前发布',exact:true})).toHaveCount(0);await card.getByRole('button',{name:'查看数字人',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('当前发布版本');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(current.employeeDefinitionRevisionId);
  await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await card.getByRole('button',{name:'查看修改草稿',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('修改草稿 · 待验证');await expect(page.getByRole('region',{name:'员工资源组成'})).toContainText('新草稿职责');
  await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await card.locator('summary').click();await card.getByRole('combobox').selectOption(old);await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('历史发布版本');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);expect(extra.posts).toHaveLength(0);
 });
@@ -434,4 +434,10 @@ test('member resource round trip restores scope bound query batch and list posit
  await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await expect(page.getByLabel('搜索当前结果',{exact:true})).toHaveValue('引用');await expect(page.getByRole('navigation',{name:'员工分页'})).toContainText('第 2 批');await expect(page.getByRole('button',{name:'重新核对版本',exact:true})).toBeEnabled();
  await expect.poll(()=>page.locator('.employee-collection-rows').evaluate(n=>n.scrollTop)).toBeGreaterThan(scroll-5);
  await page.getByRole('button',{name:'← 上一页',exact:true}).click();await expect(page.getByRole('navigation',{name:'员工分页'})).toContainText('第 1 批');expect(calls).toContain('page-two');state.otherIdentity=true;await page.goto('/employees');await expect(page.getByLabel('搜索当前结果',{exact:true})).toHaveValue('');await expect(page.getByRole('navigation',{name:'员工分页'})).toContainText('第 1 批');expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
+});
+
+test('member card keeps internal bindings in detail without inventing business resource counts',async({page})=>{
+ const {original,extra}=await fixture(page);original.members=[agent,{kind:'RUNTIME_PROFILE',resourceId:'runtime:bound',revisionId:'runtime-revision:exact',digest:'f'.repeat(64)}];
+ await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card).toContainText('此版本未登记技能、MCP或知识的直接绑定');await expect(card).not.toContainText('职责定义');await expect(card).not.toContainText('运行配置');await expect(card).not.toContainText('本体 0');await expect(card).not.toContainText('工具 0');
+ await card.getByRole('button',{name:'查看数字人',exact:true}).click();await expect(page.locator('.employee-internal-reference summary')).toHaveText('2 项内部依赖');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);await expect(page.getByRole('button',{name:'查看专业管理',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(0);
 });

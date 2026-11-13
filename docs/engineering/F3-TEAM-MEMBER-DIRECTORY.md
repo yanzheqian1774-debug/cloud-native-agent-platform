@@ -69,3 +69,22 @@ gates. Fixed-work scheduling is unavailable; work records do not establish team
 affiliation. Resource summaries count only verified direct bindings, not inferred
 ontology/tool resources. Shared shell/navigation cleanup remains parent-owned; only
 the disclosed /digital-employees team highlight alias changes here.
+
+## Card readability follow-up
+
+Reviewed the executed frozen team-members and worker-multi695 reference in
+f3-team-member-directory-prototype/complete.json and the 1440 member screenshot.
+Keep the existing card styling and single 查看数字人 destination. Current primary is
+publication ?? draft ?? listed, so the separate publication button is identical
+when publication exists; remove only that duplicate, retain draft/history choices.
+Show verified direct SKILL/MCP/KNOWLEDGE counts in the card. AGENT/WORKFLOW/runtime
+bindings remain available in existing detail/internal-dependency and professional
+views. The current member contract has no ONTOLOGY/TOOL category; do not infer their
+counts or label unknown as zero. No API, permissions, publication or model changes.
+
+Readability verification: team management 17/17 passed (r1), complete employee
+resource closure 65/65 passed (r2), frontend lint/build passed. The 1440/390 member
+grid screenshots were inspected. A technical-only binding case verifies no invented
+business count and both internal bindings still available in the detail summary;
+publication/draft/history tests still select the exact original revision. These are
+isolated fixtures; installed ordinary-account acceptance remains coordinator-owned.

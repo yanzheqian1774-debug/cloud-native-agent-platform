@@ -1,6 +1,6 @@
 import type {EmployeeAuthoring,EmployeeDefinitionSummary,EmployeeDefinition} from '../api/digitalEmployees';
 import './EmployeeCollectionCard.css';
-const resourceKinds={SKILL:'技能',MCP:'MCP',KNOWLEDGE:'知识',AGENT:'职责定义',WORKFLOW:'工作流',RUNTIME_PROFILE:'运行配置'} as const;
+const resourceKinds={SKILL:'技能',MCP:'MCP',KNOWLEDGE:'知识'} as const;
 export function EmployeeCollectionCard({revisions,value,ready,error,stale=false,selectedRevision,onSelect}:{revisions:EmployeeDefinitionSummary[];value:EmployeeAuthoring|null|undefined;ready:boolean;error?:string;stale?:boolean;selectedRevision?:string;onSelect:(item:EmployeeDefinitionSummary)=>void}){
  const publication=value?.publication.status==='AVAILABLE'?value.publication.definition:null;
  const draft=value?.draft.status==='AVAILABLE'?value.draft.definition:null;
@@ -11,8 +11,8 @@ export function EmployeeCollectionCard({revisions,value,ready,error,stale=false,
   <div className="employee-member-card-head"><span className="employee-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg></span><span className="employee-member-state">{publication?(stale?'已读发布 · 待核对':'当前发布'):draft?(stale?'已读草稿 · 待核对':'修改草稿'):'发布状态待核实'}</span></div>
   <h3>{primary.role}</h3><p className="employee-member-duty">{definition?definition.responsibilities.slice(0,2).join('；')||'此版本尚未填写职责。':ready?'职责摘要暂未核实':'正在核对职责…'}</p>
   {stale&&<p role="status">显示上次核对内容，当前状态待重新确认。{error}</p>}
-  {members?<div className="employee-member-resource-counts" aria-label="所选版本资源分类">{Object.entries(resourceKinds).filter(([kind])=>members.some(member=>member.kind===kind)).map(([kind,label])=><span key={kind}>{label} <strong>{members.filter(member=>member.kind===kind).length}</strong></span>)}{members.length===0&&<span>此版本已登记的资源绑定为 0 项</span>}</div>:<p className="employee-member-resource-unknown">资源组成暂未核实</p>}
-  <div className="employee-member-primary"><button onClick={()=>onSelect(primary)}>查看数字人</button>{publication&&<button className="employee-member-secondary" onClick={()=>onSelect(publication)}>{stale?'查看已读发布版本':'查看当前发布'}</button>}</div>
+  {members?<div className="employee-member-resource-counts" aria-label="所选版本资源分类">{Object.entries(resourceKinds).filter(([kind])=>members.some(member=>member.kind===kind)).map(([kind,label])=><span key={kind}>{label} <strong>{members.filter(member=>member.kind===kind).length}</strong></span>)}{members.length===0&&<span>此版本已登记的资源绑定为 0 项</span>}{members.length>0&&!members.some(member=>member.kind in resourceKinds)&&<span>此版本未登记技能、MCP或知识的直接绑定</span>}</div>:<p className="employee-member-resource-unknown">资源组成暂未核实</p>}
+  <div className="employee-member-primary"><button onClick={()=>onSelect(primary)}>查看数字人</button></div>
   <div className="employee-version-options">
    {!publication&&<p>{!ready?'正在核对发布…':value?.publication.status==='WITHDRAWN'?'当前发布已撤销':'当前发布暂未核实'}</p>}
    {draft?<div><button onClick={()=>onSelect(draft)}>{stale?'查看已读草稿':'查看修改草稿'}</button><small>{publication?'已有修改草稿；发布内容保持不变':'当前可读草稿，发布状态另行核对'}</small></div>:<p>{!ready?'正在核对草稿…':value?.draft.status==='NONE'?'暂无修改草稿':'修改草稿暂未核实'}</p>}
