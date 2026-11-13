@@ -28,7 +28,7 @@ const advanced: Entry[] = [
 ];
 function EntryLink({entry}:{entry:Entry}) {
   const {search,pathname}=useLocation();
-  const employeeAlias=entry.to==="/digital-employees"&&pathname==="/employees",teamAlias=entry.to==="/teams"&&pathname==="/employees";
+  const employeeAlias=entry.to==="/digital-employees"&&pathname==="/employees",teamAlias=entry.to==="/teams"&&["/employees","/digital-employees"].includes(pathname);
   if(teamAlias)return <Link className="active" aria-current="page" to="/teams"><NavigationIcon name={entry.icon}/><span>{entry.label}</span></Link>;
   return <NavLink className={({isActive})=>isActive||employeeAlias||teamAlias?"active":undefined} aria-current={employeeAlias||teamAlias?"page":undefined} to={resourceNavigationUrl(employeeAlias?"/employees":entry.to,search)} data-resource-kind={entry.icon==="skill"||entry.icon==="mcp"?entry.icon:undefined} aria-label={entry.to==="/attention"?"Attention":undefined}>
     <NavigationIcon name={entry.icon}/><span>{entry.label}</span>

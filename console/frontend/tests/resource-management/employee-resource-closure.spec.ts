@@ -288,7 +288,7 @@ test('business collection preserves filters and scroll through exact employee de
  await expect(page.getByRole('region',{name:'选中员工详情',exact:true})).toBeHidden();
  await page.getByLabel('搜索当前结果',{exact:true}).fill('检查员');
  await page.getByRole('combobox',{name:'发布状态',exact:true}).selectOption('NOT_PUBLISHED');
- const row=page.locator('.employee-row-main').filter({hasText:'检查员 16'});
+ const row=page.getByRole('article',{name:'检查员 16',exact:true}).getByRole('button',{name:'查看数字人',exact:true});
  await row.scrollIntoViewIfNeeded();
  const position=await page.locator('.employee-collection-rows').evaluate(n=>n.scrollTop);
  expect(position).toBeGreaterThan(0);
@@ -325,9 +325,9 @@ test('collection separates authoritative publication and draft from listed histo
  const draft={...structuredClone(original),employeeDefinitionRevisionId:'employee-revision:draft',employeeDefinitionDigest:'a'.repeat(64),publicationState:'NOT_PUBLISHED' as const,lifecycleState:'DRAFT' as const,responsibilities:['新草稿职责'],aggregateVersion:3};
  extra.records.set(current.employeeDefinitionRevisionId,current);extra.records.set(draft.employeeDefinitionRevisionId,draft);
  await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card).toHaveCount(1);
- await expect(card.getByText('当前发布职责',{exact:true})).toBeVisible();await expect(card.getByText('新草稿职责',{exact:true})).toBeVisible();
+ await expect(card.getByText('当前发布职责',{exact:true})).toBeVisible();await expect(card.getByText('已有修改草稿；发布内容保持不变',{exact:true})).toBeVisible();
  await card.getByRole('button',{name:'查看当前发布',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('当前发布版本');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(current.employeeDefinitionRevisionId);
- await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await card.getByRole('button',{name:'查看修改草稿',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('修改草稿 · 待验证');
+ await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await card.getByRole('button',{name:'查看修改草稿',exact:true}).click();await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('修改草稿 · 待验证');await expect(page.getByRole('region',{name:'员工资源组成'})).toContainText('新草稿职责');
  await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await card.locator('summary').click();await card.getByRole('combobox').selectOption(old);await expect(page.locator('.employee-detail-context .employee-state-chip')).toHaveText('历史发布版本');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);expect(extra.posts).toHaveLength(0);
 });
 
@@ -337,7 +337,7 @@ for(const mode of ['unavailable','withdrawn','wrong-parent','identity-change'] a
   if(mode==='identity-change')state.otherIdentity=true;
   return route.fulfill({json:envelope({basis:'OWNER_FACT_ORDER',parent:{...original,...(mode==='wrong-parent'?{employeeDefinitionDigest:'0'.repeat(64)}:{})},aggregateVersion:1,head:{status:'NOT_AVAILABLE'},publication:{status:mode==='withdrawn'?'WITHDRAWN':'NOT_AVAILABLE'},draft:{status:'NOT_AVAILABLE'},executionStarted:false})});
  });
- await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card.getByText(mode==='withdrawn'?'当前发布已撤销':'当前发布暂未核实',{exact:true})).toBeVisible();await expect(card.getByText('修改草稿暂未核实',{exact:true})).toBeVisible();await expect(card.getByRole('button',{name:'查看当前发布',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'查看修改草稿',exact:true})).toHaveCount(0);expect(extra.posts).toHaveLength(0);
+ await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card.getByText(mode==='withdrawn'?'当前发布已撤销':'当前发布暂未核实',{exact:true})).toBeVisible();await expect(card.getByText('修改草稿暂未核实',{exact:true})).toBeVisible();await expect(card.getByText('资源组成暂未核实',{exact:true})).toBeVisible();await expect(card.getByText('此版本已登记的资源绑定为 0 项',{exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'查看当前发布',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'查看修改草稿',exact:true})).toHaveCount(0);expect(extra.posts).toHaveLength(0);
 });
 
 for(const mode of ['published','validated'] as const)test('fresh authoring lifecycle overrides stale selected metadata: '+mode,async({page})=>{
@@ -418,4 +418,20 @@ test('resource return focuses the originating duty when two duties share one res
  await expect(links.last()).toBeFocused();await expect(links.first()).not.toBeFocused();
  await expect.poll(()=>page.locator('.employee-detail-body').evaluate(n=>n.scrollTop)).toBeCloseTo(before,0);
  expect(extra.posts).toHaveLength(0);
+});
+
+test('member resource round trip restores scope bound query batch and list position',async({page})=>{
+ const {state,extra,original}=await fixture(page);const calls:string[]=[];const skill=original.members.find(member=>member.kind==='SKILL')!;skill.revisionId='revision:2';skill.digest='b'.repeat(64);
+ const fillers=Array.from({length:10},(_,i)=>({...original,employeeDefinitionId:'employee:filler-'+i,role:'引用员工 '+i}));
+ await page.route('**/api/workbench/v1/employees?**',route=>{const cursor=new URL(route.request().url()).searchParams.get('cursor')??'';calls.push(cursor);return route.fulfill({json:envelope({items:cursor==='page-two'?[...fillers,original]:[{...original,employeeDefinitionId:'employee:previous',role:'前页成员'}],nextCursor:cursor==='page-two'?null:'page-two'})})});
+ await page.setViewportSize({width:1440,height:900});await page.goto('/employees?q='+encodeURIComponent('引用'));
+ await page.getByRole('button',{name:'加载下一页 →',exact:true}).click();await expect(page.getByRole('button',{name:'重新核对版本',exact:true})).toBeEnabled();const card=page.getByRole('article',{name:original.role,exact:true});await card.getByRole('button',{name:'查看数字人',exact:true}).scrollIntoViewIfNeeded();
+ const scroll=await page.locator('.employee-collection-rows').evaluate(n=>n.scrollTop);expect(scroll).toBeGreaterThan(0);
+ await card.getByRole('button',{name:'查看数字人',exact:true}).click();await expect(page.locator('.employee-detail-context h2')).toHaveText(original.role);
+ const resource=page.getByRole('article',{name:'技能绑定资源',exact:true});await resource.getByRole('link',{name:'查看详情',exact:true}).click();await page.getByRole('link',{name:'返回引用员工',exact:true}).click();
+ await expect(page).toHaveURL(new RegExp('employeeDefinitionRevisionId='+encodeURIComponent(original.employeeDefinitionRevisionId)));
+ await expect(page.getByRole('button',{name:'资源组成',exact:true})).toHaveClass(/active/);
+ await page.getByRole('button',{name:'← 返回员工集合',exact:true}).click();await expect(page.getByLabel('搜索当前结果',{exact:true})).toHaveValue('引用');await expect(page.getByRole('navigation',{name:'员工分页'})).toContainText('第 2 批');await expect(page.getByRole('button',{name:'重新核对版本',exact:true})).toBeEnabled();
+ await expect.poll(()=>page.locator('.employee-collection-rows').evaluate(n=>n.scrollTop)).toBeGreaterThan(scroll-5);
+ await page.getByRole('button',{name:'← 上一页',exact:true}).click();await expect(page.getByRole('navigation',{name:'员工分页'})).toContainText('第 1 批');expect(calls).toContain('page-two');state.otherIdentity=true;await page.goto('/employees');await expect(page.getByLabel('搜索当前结果',{exact:true})).toHaveValue('');await expect(page.getByRole('navigation',{name:'员工分页'})).toContainText('第 1 批');expect(extra.posts).toEqual([]);expect(state.posts).toEqual([]);
 });
