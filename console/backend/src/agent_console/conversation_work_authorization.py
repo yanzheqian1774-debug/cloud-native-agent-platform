@@ -151,6 +151,7 @@ class ConversationWorkAuthorization:
             return source, {
                 ExactGrant("BUSINESS_PROBLEM", "READ", problem_resource(problem)),
                 ExactGrant("PLAN", "PREPARE", "plan:prepare:" + problem),
+                ExactGrant("PLAN", "READ", "plan:prepared:" + problem),
                 ExactGrant(
                     "MODEL_GOVERNANCE",
                     "INVOKE_MODEL",

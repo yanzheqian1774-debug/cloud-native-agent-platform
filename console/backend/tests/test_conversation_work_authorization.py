@@ -37,6 +37,7 @@ def work(ordinary):  # noqa: F811
             "BUSINESS_PROBLEM", "TRANSITION", problem_resource("ordinary-new-problem")
         ),
         ExactGrant("PLAN", "PREPARE", "plan:prepare:ordinary-new-problem"),
+        ExactGrant("PLAN", "READ", "plan:prepared:ordinary-new-problem"),
         ExactGrant(
             "MODEL_GOVERNANCE", "INVOKE_MODEL", e.planning.configuration["model_target"]
         ),
@@ -75,7 +76,7 @@ def test_create_and_exact_planning_permissions_are_durable_and_idempotent(work):
     e.work.before(e.reviewer, "CREATE_PROBLEM", e.create, {}, expected)
     e.work.after(e.reviewer, "CREATE_PROBLEM", e.create, e.created)
     first = decisions(e)
-    assert len(first) == 4
+    assert len(first) == 5
     assert {r["basis_type"] for r in first} == {"POLICY"}
     assert {r["issuer_principal_id"] for r in first} == {
         "policy:f3-conversation-experience"
@@ -287,4 +288,4 @@ def test_concurrent_tabs_share_the_same_exact_permission_decisions(work):
         ]
         for future in futures:
             future.result(timeout=60)
-    assert len(decisions(e)) == 3
+    assert len(decisions(e)) == 4
