@@ -274,7 +274,13 @@ def test_permission_denial_starts_no_worker_and_zero_network(network, monkeypatc
     assert network.endpoint.requests == 0
 
 
+@pytest.mark.parametrize(
+    "network", [{"totalTimeoutSeconds": 5, "readTimeoutSeconds": 5}], indirect=True
+)
 def test_client_cancellation_reaps_and_persists_unknown(network, record_property):
+    # Cancellation is tested after the observable HTTPS accept event. Keep
+    # startup within a bounded setup allowance instead of racing the separate
+    # one-second deadline tests before the request reaches the endpoint.
     network.endpoint.mode = "cancel"
 
     async def exercise():

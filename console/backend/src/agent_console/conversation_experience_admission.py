@@ -14,6 +14,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .authority_contracts import AuthenticationSource, AuthorityError
+from .draft_assistance import DraftAssistanceError
 from .task_delegation import Limits, digest
 
 LEDGER = "ledger:f3-main-experience:20261112"
@@ -23,7 +24,9 @@ _binding = ContextVar("verified_conversation_experience_request", default=None)
 class ExperiencePolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schemaVersion: Literal[
-        "f3-conversation-experience.v1", "f3-conversation-experience.v2"
+        "f3-conversation-experience.v1",
+        "f3-conversation-experience.v2",
+        "f3-conversation-experience.v3",
     ]
     tenantId: Literal["s5-323-demo"]
     securityDomain: Literal["isolated-real-demo"]
@@ -37,10 +40,27 @@ class ExperiencePolicy(BaseModel):
     externalWrites: Literal[False]
     allowanceId: str | None = Field(default=None, min_length=1, max_length=200)
     historyReadEnabled: bool | None = None
+    ownedConversationUnderstanding: Literal[True] | None = None
+    predecessorSchemaVersion: (
+        Literal["f3-conversation-experience.v1", "f3-conversation-experience.v2"] | None
+    ) = None
+    predecessorPolicyDigest: str | None = Field(default=None, pattern="^[a-f0-9]{64}$")
 
     @model_validator(mode="after")
     def allowance_version(self):
-        if (self.schemaVersion == "f3-conversation-experience.v2") != (
+        successor = self.schemaVersion == "f3-conversation-experience.v3"
+        if successor != bool(self.ownedConversationUnderstanding) or successor != bool(
+            self.predecessorSchemaVersion and self.predecessorPolicyDigest
+        ):
+            raise ValueError("CONTEXT_ADMISSION_POLICY_SUCCESSOR_INVALID")
+        if not successor and (
+            self.predecessorSchemaVersion or self.predecessorPolicyDigest
+        ):
+            raise ValueError("CONTEXT_ADMISSION_POLICY_SUCCESSOR_INVALID")
+        effective_schema = (
+            self.predecessorSchemaVersion if successor else self.schemaVersion
+        )
+        if (effective_schema == "f3-conversation-experience.v2") != (
             self.allowanceId is not None
         ):
             raise ValueError("CONTEXT_ADMISSION_ALLOWANCE_VERSION_MISMATCH")
@@ -49,6 +69,17 @@ class ExperiencePolicy(BaseModel):
 
 def begin_bound(service, context, *, conversation, message_id, **kwargs):
     """Called only after the API has verified ownership and exact user content."""
+    admission = getattr(
+        getattr(service, "authorization", None), "context_admission", None
+    )
+    experience = getattr(admission, "experience", None)
+    if experience and experience.matches(context):
+        try:
+            with admission.repository.connection_scope() as c:
+                experience._require(admission, c, context)
+                experience.conversation_scope(c, context, conversation, message_id)
+        except AuthorityError as exc:
+            raise DraftAssistanceError(exc.reason_code) from exc
     token = _binding.set((conversation, message_id, kwargs["key"]))
     try:
         return service.begin(context, **kwargs)
@@ -62,7 +93,24 @@ class ConversationExperienceAdmission:
         if not self.path.is_absolute() or self.path.stat().st_mode & 0o077:
             raise AuthorityError("CONTEXT_ADMISSION_EXPERIENCE_POLICY_INVALID")
         self.document = ExperiencePolicy.model_validate_json(self.path.read_text())
-        self.policy_digest = digest(
+        base = self.document.model_dump(
+            mode="json",
+            exclude_none=True,
+            exclude={
+                "historyReadEnabled",
+                "ownedConversationUnderstanding",
+                "predecessorSchemaVersion",
+                "predecessorPolicyDigest",
+            },
+        )
+        if self.document.ownedConversationUnderstanding:
+            base["schemaVersion"] = self.document.predecessorSchemaVersion
+        self.policy_digest = digest(base)
+        if self.document.ownedConversationUnderstanding and (
+            self.document.predecessorPolicyDigest != self.policy_digest
+        ):
+            raise AuthorityError("CONTEXT_ADMISSION_POLICY_PREDECESSOR_MISMATCH")
+        self.understanding_policy_digest = digest(
             self.document.model_dump(
                 mode="json", exclude_none=True, exclude={"historyReadEnabled"}
             )
@@ -161,6 +209,51 @@ class ConversationExperienceAdmission:
             raise AuthorityError("CONTEXT_ADMISSION_EXPERIENCE_EXPIRED")
         return account, now, expires
 
+    def conversation_scope(self, c, context, conversation, message_id):
+        if conversation in self.document.conversations:
+            return False
+        if not self.document.ownedConversationUnderstanding:
+            raise AuthorityError("CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED")
+        known = c.execute(
+            "SELECT 1 FROM private_conversation.conversations v JOIN "
+            "private_conversation.messages m "
+            "USING(tenant_id,security_domain,conversation_id) "
+            "WHERE v.tenant_id=%s AND v.security_domain=%s AND v.conversation_id=%s "
+            "AND v.owner_id=%s AND v.archived_at IS NULL AND m.message_id=%s "
+            "AND m.author_id=%s AND NOT EXISTS (SELECT 1 FROM "
+            "private_conversation.message_facts f WHERE f.tenant_id=m.tenant_id "
+            "AND f.security_domain=m.security_domain "
+            "AND f.conversation_id=m.conversation_id "
+            "AND f.message_id=m.message_id) FOR SHARE OF v,m",
+            (
+                context.scope.tenant_id,
+                context.scope.security_domain,
+                conversation,
+                context.principal_id,
+                message_id,
+                context.principal_id,
+            ),
+        ).fetchone()
+        if not known:
+            raise AuthorityError("CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED")
+        return True
+
+    def require_record(self, c, context, row):
+        if not row or not row["record"].get("owned_understanding_policy_digest"):
+            return
+        record = row["record"]
+        if (
+            not self.document.ownedConversationUnderstanding
+            or record["owned_understanding_policy_digest"]
+            != self.understanding_policy_digest
+            or row["subject_id"] != context.principal_id
+        ):
+            raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
+        if not self.conversation_scope(
+            c, context, record["conversation_id"], record["first_user_message_id"]
+        ):
+            raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
+
     def prepare(self, service, c, context, invocation):
         from .context_call_admission import active, lock, request_row
 
@@ -168,7 +261,6 @@ class ConversationExperienceAdmission:
         binding = _binding.get()
         if (
             not binding
-            or binding[0] not in self.document.conversations
             or not binding[1]
             or binding[2] != invocation.scoped_idempotency_key
             or invocation.initiating_principal_id != context.principal_id
@@ -176,6 +268,7 @@ class ConversationExperienceAdmission:
             != service.configuration["profile_revision_id"]
         ):
             raise AuthorityError("CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED")
+        general = self.conversation_scope(c, context, binding[0], binding[1])
         lock(c, invocation.context_id)
         row = request_row(c, invocation.context_id)
         if row:
@@ -184,6 +277,7 @@ class ConversationExperienceAdmission:
                 row["record"].get("conversation_id"),
             ) != (self.policy_digest, binding[0]):
                 raise AuthorityError("CONTEXT_ADMISSION_CONFIGURATION_MISMATCH")
+            self.require_record(c, context, row)
             active(c, row, service.configuration)
             return True
         history = c.execute(
@@ -202,7 +296,7 @@ class ConversationExperienceAdmission:
         record = {
             "task_id": "F3-CONVERSATION-EXPERIENCE",
             "phase": "understanding",
-            "synthetic_only": True,
+            "synthetic_only": not general,
             "external_writes": False,
             "context_id": invocation.context_id,
             "first_invocation_id": invocation.invocation_id,
@@ -216,7 +310,14 @@ class ConversationExperienceAdmission:
             "authorization_digest": self.document.authorizationDigest,
             "conversation_id": binding[0],
             "first_user_message_id": binding[1],
-            "scenario": self.document.conversations[binding[0]],
+            "scenario": self.document.conversations.get(
+                binding[0], "GENERAL_CONVERSATION_UNDERSTANDING"
+            ),
+            **(
+                {"owned_understanding_policy_digest": self.understanding_policy_digest}
+                if general
+                else {}
+            ),
             "ledger_expires_at": expires.isoformat(),
             **(
                 {"budget_allowance_id": self.document.allowanceId}
@@ -243,7 +344,9 @@ class ConversationExperienceAdmission:
         decision = {
             "type": "F3_CONVERSATION_EXPERIENCE",
             "request": record,
-            "policy_digest": self.policy_digest,
+            "policy_digest": self.understanding_policy_digest
+            if general
+            else self.policy_digest,
             "ledger_unchanged": True,
         }
         c.execute(
@@ -268,7 +371,9 @@ class ConversationExperienceAdmission:
             event_type="CONTEXT_CALL_ADMISSION",
             actor_id="policy:f3-conversation-experience",
             outcome="APPROVED",
-            reason="BOUNDED_SYNTHETIC_EXPERIENCE",
+            reason="BOUNDED_GENERAL_UNDERSTANDING"
+            if general
+            else "BOUNDED_SYNTHETIC_EXPERIENCE",
             occurred_at=now,
             scope=context.scope,
             subject_id=invocation.context_id,
@@ -305,6 +410,9 @@ class ConversationExperienceAdmission:
                 or row["record"].get("experience_policy_digest") != self.policy_digest
             ):
                 raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
+            self.require_record(c, context, row)
+            general = bool(row["record"].get("owned_understanding_policy_digest"))
+            basis = self.understanding_policy_digest if general else self.policy_digest
             active(c, row, service.configuration)
             credential_id = service.repository._current_credential_id(
                 c,
@@ -349,9 +457,11 @@ class ConversationExperienceAdmission:
                     "policy:f3-conversation-experience",
                     invocation.context_id,
                     True,
-                    "BOUNDED_SYNTHETIC_EXPERIENCE",
+                    "BOUNDED_GENERAL_UNDERSTANDING"
+                    if general
+                    else "BOUNDED_SYNTHETIC_EXPERIENCE",
                     "POLICY",
-                    self.policy_digest,
+                    basis,
                     grants.generation.policy_version,
                     "f3-experience:" + invocation.context_id,
                     now,
@@ -369,7 +479,7 @@ class ConversationExperienceAdmission:
                         True,
                         decision.reason_category,
                         "POLICY",
-                        self.policy_digest,
+                        basis,
                         decision.policy_version,
                         decision.audit_source,
                         now,
@@ -397,7 +507,9 @@ class ConversationExperienceAdmission:
                     event_type="CONTEXT_EXPERIENCE_EXACT_GRANTED",
                     actor_id=decision.issuer_principal_id,
                     outcome="APPROVED",
-                    reason="BOUNDED_SYNTHETIC_EXPERIENCE",
+                    reason="BOUNDED_GENERAL_UNDERSTANDING"
+                    if general
+                    else "BOUNDED_SYNTHETIC_EXPERIENCE",
                     occurred_at=now,
                     scope=context.scope,
                     subject_id=request_id,

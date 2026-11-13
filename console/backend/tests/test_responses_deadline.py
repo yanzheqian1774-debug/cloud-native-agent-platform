@@ -43,12 +43,15 @@ def assert_reaped(d):
 )
 def test_phase_substitute_has_total_bound_and_reaps(phase, record_property):
     with pytest.raises(boundary.ResponsesBoundaryError) as raised:
-        boundary.supervise(StalledJob(phase), config())
+        # Spawn/import time is part of the budget. Allow this phase-specific
+        # fixture to reach its stage under concurrent test load; startup itself
+        # remains covered by the separate one-second startup deadline test.
+        boundary.supervise(StalledJob(phase), config(total=3, connect=3))
     d = raised.value.diagnostic
     record_property("deadline", d)
     assert d["stage"] == phase  # prove fixture reached the intended phase
     assert d["reason"] == "TOTAL_DEADLINE"
-    assert 0.9 <= d["decision_seconds"] < 1.5
+    assert 2.9 <= d["decision_seconds"] < 3.5
     assert_reaped(d)
 
 

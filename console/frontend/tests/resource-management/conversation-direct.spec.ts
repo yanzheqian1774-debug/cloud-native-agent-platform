@@ -383,3 +383,31 @@ for(const longDescription of [false,true])test(`corrected task keeps canonical g
  await expect(page.getByRole('alert')).toBeVisible();await page.reload();await expect(page.getByRole('alert')).toBeVisible();
  expect(planning).toHaveLength(1);expect(creates).toHaveLength(1);expect(criteria).toHaveLength(1);expect(state.calls).toHaveLength(1);
 });
+
+for(const question of ['你好','解释一下缓存和数据库的区别'])test('unclassified ordinary question remains lightweight '+question,async({page})=>{
+ const state=await directFixture(page);state.messages[0].content=question;state.journal.state.question=question;state.journal.state.messages=[{id:'user:1',text:question}];
+ let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/draft-assistance/invocations',async route=>{await gate;await route.fallback()});
+ await page.goto('/work?conversation=direct');
+ await expect(page.getByRole('region',{name:'全流程进展'})).toBeVisible();
+ await expect(page.locator('.journey-stages')).toHaveCount(0);
+ expect(state.writes.some(p=>p.endsWith('/problems')||p.includes('/execute'))).toBe(false);
+ release();await expect(page.locator('#conversation-message-a1')).toBeVisible();
+ expect(state.calls).toHaveLength(1);expect(state.sources).toBe(0);
+ expect(JSON.parse(String(state.calls[0].content)).messages.at(-1).text).toBe(question);
+});
+
+test('conversation admission refusal retains first cause across refresh without read or redispatch',async({page},testInfo)=>{
+ const state=await directFixture(page);state.missingResult=true;
+ state.journal.state={...state.journal.state,understandingProtocol:3,pending:'understanding',error:'Error: CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED'};
+ const original=JSON.stringify(state.journal);
+ await page.goto('/work?conversation=direct');
+ await expect(page.getByRole('heading',{name:'本次提问尚未开始处理',exact:true})).toBeVisible();
+ await expect(page.getByRole('alert')).toContainText('原提问已保留');
+ await expect(page.locator('.journey-stages')).toHaveCount(0);
+ await page.screenshot({path:testInfo.outputPath('admission-not-started.png')});
+ await page.reload();await expect(page.getByRole('heading',{name:'本次提问尚未开始处理',exact:true})).toBeVisible();
+ expect(state.recoveries).toBe(0);expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);
+ expect(JSON.stringify(state.journal)).toBe(original);
+ await expect(page.getByText('DRAFT_ASSISTANCE_NOT_FOUND',{exact:false})).toHaveCount(0);
+});

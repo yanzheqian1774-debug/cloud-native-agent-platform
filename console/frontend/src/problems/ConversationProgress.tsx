@@ -17,6 +17,7 @@ const messages:Record<string,string>={
 };
 export function ConversationProgress({recoveryState,phase,pending,busy,error,execution,hasExecution,separatePreparation=false}:Props){
  if(['OBSERVED','AUTHORIZATION_PENDING','AUTHORIZED','DISPATCHED','CONTINUING'].includes(recoveryState??''))return <section className="journey-progress" aria-label="全流程进展"><p role="status" aria-live="polite"><strong>{recoveryState==='CONTINUING'?'正在处理恢复请求':recoveryState==='AUTHORIZED'?'已可继续原问题':recoveryState==='DISPATCHED'?'本次处理已提交':'恢复申请已提交，等待核对；当前无需操作。'}</strong></p><p>{recoveryState==='CONTINUING'?'已有进展会持续呈现，结果返回后在原会话继续。':recoveryState==='AUTHORIZED'?'请在原会话选择继续，尚未自动执行。':recoveryState==='DISPATCHED'?'可读取本次处理结果，不会重复提交。':'会持续读取核对进展，不会自动执行任务。'}</p></section>;
+ if(phase==='UNDERSTAND'&&!hasExecution)return <section className="journey-progress" aria-label="全流程进展"><p role="status" aria-live="polite"><strong>{error?.includes('CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED')?'本次提问尚未开始处理':error?'本次提问需要核查':busy?'正在理解你的提问':'正在核对提问记录'}</strong></p><p>{error?.includes('CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED')?'会话接入检查未通过，原提问已保留，不会自动重发。':error?'原提问与已有内容已保留，请查看会话中的说明。':'收到回复后会在本会话呈现；需要开展任务时再显示执行进度。'}</p></section>;
  const state=execution?.progress?.state;
  const terminalFailure=['FAILED','RECOVERY_REQUIRED','CANCELLED','CANCELED','UNKNOWN'].includes(state??'');
  const stopped=phase==='UNDERSTANDING_FAILED'||Boolean(error)||['FAILED','RECOVERY_REQUIRED','CANCELLED','CANCELED','UNKNOWN'].includes(state??'');

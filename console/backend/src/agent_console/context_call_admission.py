@@ -119,6 +119,9 @@ class ContextCallAdmission:
             return
         if self.experience and self.experience.matches(context):
             self.experience._require(self, c, context)
+            self.experience.require_record(
+                c, context, request_row(c, invocation.context_id)
+            )
         from .draft_assistance_authorization import model_grant, request_grant
         from .local_accounts import current_session_account
 
@@ -273,6 +276,8 @@ class ContextCallAdmission:
             if self.experience and self.experience.matches(context):
                 self.experience._require(self, c, context)
             row = request_row(c, invocation.context_id)
+            if self.experience and self.experience.matches(context):
+                self.experience.require_record(c, context, row)
             if row is None:
                 return old_context(c, invocation.context_id)
             try:
