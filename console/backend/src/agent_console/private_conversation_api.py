@@ -484,6 +484,23 @@ def install_private_conversations(
 
         return safe(request, observe)
 
+    @app.get(PREFIX + "/conversations/{identity}/criterion-status")
+    def criterion_status(
+        request: Request,
+        identity: str,
+        draftInvocationId: str = Query(min_length=1, max_length=200),
+        requestKey: str = Query(min_length=1, max_length=200),
+    ):
+        def observe(ctx):
+            reader = getattr(app.state, "owned_business_criterion_read", None)
+            if reader is None:
+                raise ConversationError(
+                    "CONVERSATION_CRITERION_STATUS_UNAVAILABLE", 503
+                )
+            return reader.read(ctx, identity, draftInvocationId, requestKey)
+
+        return safe(request, observe)
+
     @app.get(PREFIX + "/conversations/{identity}/head")
     def head(request: Request, identity: str):
         return safe(request, lambda ctx: service.head(ctx, identity))

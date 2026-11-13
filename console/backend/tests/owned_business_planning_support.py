@@ -249,6 +249,11 @@ def governed_planning_service(e, semantics):
         idempotency_key="owned-actual-plan",
     )
 
+    if getattr(e, "consumer_question_input", None) is not None:
+        request = PlanningRequest.model_validate(
+            e.consumer_question_input["planningRequest"]
+        )
+
     @contextmanager
     def opened():
         try:
@@ -317,9 +322,11 @@ def document_semantics(e, target):
     return FlexiblePlanSemantics.model_validate(value)
 
 
-def generate_proposal(e):
+def generate_proposal(e, *, before_planning=None):
     activate_created(e)
     _, _, current = planning_application(e)
+    if before_planning is not None:
+        before_planning(e, current)
     semantics = document_semantics(e, current["target"])
     with governed_planning_service(e, semantics) as (
         service,

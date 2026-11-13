@@ -515,3 +515,65 @@ def check_question_input_bff(e, automation, adapter, problem):
             == before
         )
     return result
+
+
+def prepare_current_resource_reads(e, automation):
+    """Use the existing bounded READ owner before capability observation."""
+    from datetime import timedelta
+
+    from agent_console.test_resource_read_access import prepare
+    from agent_console.test_resource_read_policy import TestReadPolicy
+    from agent_console.workbench_prepared_resources import OWNERS, reference
+
+    targets = [
+        dict(
+            owner=OWNERS[kind],
+            action="READ_RESOURCE",
+            resource=reference(kind, ref.resource_id, ref.revision_id),
+            digest=ref.digest,
+            purpose="RESOURCE_PREPARATION",
+        )
+        for kind, ref in e.consumer_refs.items()
+    ]
+    employee = e.consumer_employee
+    targets.append(
+        dict(
+            owner="EMPLOYEE",
+            action="READ",
+            resource=f"employee:{employee.resource_id}:{employee.revision_id}",
+            digest=employee.digest,
+            purpose="RESOURCE_PREPARATION",
+        )
+    )
+    policy = TestReadPolicy(
+        schemaVersion="test-resource-read-policy.v1",
+        policyId="joint-preplanning-read",
+        policyVersion="1",
+        enabled=True,
+        tenant=e.context.scope.tenant_id,
+        securityDomain=e.context.scope.security_domain,
+        subjects=(e.context.principal_id,),
+        issuer=automation.policy.issuer,
+        credentialPath=automation.policy.credentialPath,
+        expiresAt=automation.grants.clock() + timedelta(minutes=10),
+        grantTTLSeconds=120,
+        targets=targets,
+    )
+    with e.repo.connection_scope() as c:
+        prior = c.execute("SELECT grant_id FROM authorization_admin.grants").fetchall()
+        result = prepare(policy, automation.grants, e.context, c, "preplanning-read")
+        assert len(result["items"]) == 5
+        assert {item["state"] for item in result["items"]} <= {"EFFECTIVE", "APPROVED"}
+        new = c.execute(
+            "SELECT owner,action FROM authorization_admin.grants "
+            "WHERE NOT(grant_id=ANY(%s))",
+            ([row["grant_id"] for row in prior],),
+        ).fetchall()
+        assert all(row["action"] in {"READ", "READ_RESOURCE"} for row in new)
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM execution_authority.resource_automation"
+            ).fetchone()["n"]
+            == 0
+        )
+    return result

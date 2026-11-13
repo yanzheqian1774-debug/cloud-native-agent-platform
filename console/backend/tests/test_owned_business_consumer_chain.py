@@ -125,11 +125,43 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
         AuthorizedOwnerAuthority,
         AuthorizedOwnerCall,
     )
-    from owned_business_consumer_support import resource_automation
+    from owned_business_consumer_support import (
+        check_question_input_bff,
+        prepare_current_resource_reads,
+        resource_automation,
+    )
     from owned_business_planning_support import generate_proposal
 
-    e = generate_proposal(owned_created)
-    automation, adapter = resource_automation(e, e.consumer_planning_app, tmp_path)
+    e = owned_created
+    revision = e.created["revision"]
+    calls = len(e.calls)
+    linked = e.draft.link_problem(
+        e.context,
+        e.business_result["invocationId"],
+        problem_id=revision["business_problem_id"],
+        problem_revision_id=revision["revision_id"],
+        problem_digest=revision["digest"],
+    ).invocation
+    assert linked.aggregate_version == e.business_result["aggregateVersion"] + 1
+    consumers = {}
+
+    def before_planning(e, current):
+        automation, adapter = resource_automation(e, e.consumer_planning_app, tmp_path)
+        prepare_current_resource_reads(e, automation)
+        routed = check_question_input_bff(
+            e, automation, adapter, current["target"]["problem"]
+        )
+        observed = routed["activityRequirement"]["memberCapabilityObservation"]
+        assert observed["operations"]
+        assert {item["operation"] for item in observed["operations"]} == set(
+            e.business_owner.policy.scopes[0].operations
+        )
+        assert len(e.calls) == calls
+        e.consumer_question_input = routed
+        consumers.update(automation=automation, adapter=adapter)
+
+    generate_proposal(e, before_planning=before_planning)
+    automation, adapter = consumers["automation"], consumers["adapter"]
     from agent_console.plan_suggestion_domain import ProposalRevision
 
     proposal = e.consumer_proposal
@@ -191,9 +223,6 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
     import json
 
     assert ready["state"] == "READY", json.dumps(ready, ensure_ascii=False, indent=2)
-    from owned_business_consumer_support import check_question_input_bff
-
-    check_question_input_bff(e, automation, adapter, problem)
     assert (
         invoke(
             automation,

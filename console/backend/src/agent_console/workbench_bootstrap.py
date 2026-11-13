@@ -1194,9 +1194,15 @@ def build_workbench_composition(
                 application.state.understanding_adoption = adoption_owner
         if owned_business is not None and owned_business.policy.enabled:
             from .owned_business_creation_read import OwnedBusinessCreationRead
+            from .owned_business_criterion_read import OwnedBusinessCriterionRead
 
             application.state.owned_business_creation_read = OwnedBusinessCreationRead(
                 owned_business, authorizer, business_problems.problems
+            )
+            application.state.owned_business_criterion_read = (
+                OwnedBusinessCriterionRead(
+                    owned_business, authorizer, business_problems.problems
+                )
             )
         if continuation_path:
             continuation.capability_contract_reader = getattr(
