@@ -12,6 +12,7 @@ from .native_wait_configuration import DurableWaitConfiguration
 from .native_wait_owner import NativeWaitOwner
 from .native_wait_store import NativeWaitStore
 from .native_wait_types import WaitIdentity
+from .owned_business_retained_history import configured_paths
 from .owned_business_work_reader import OwnedBusinessWorkReader
 
 
@@ -53,6 +54,9 @@ def accept_if_waiting(call, app, preparation, value):
         adapter.authorization,
         call.authority.generation,
         adapter.controller.readiness.recovery_epoch,
+        retained_history_paths=configured_paths(
+            os.environ.get("OWNED_BUSINESS_RETAINED_HISTORY_POLICIES")
+        ),
     )
     identity = WaitIdentity.model_validate(row["record"]["identity"])
     cp = NativeWaitStore(c, identity).checkpoint(row["checkpoint_digest"])

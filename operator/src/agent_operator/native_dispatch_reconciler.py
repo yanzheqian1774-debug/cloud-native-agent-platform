@@ -783,12 +783,21 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
             owned_business = None
             business_policy_path = os.environ.get("OWNED_BUSINESS_ADMISSION_POLICY")
             if business_policy_path:
+                from agent_console.owned_business_retained_history import (
+                    configured_paths,
+                )
                 from agent_console.owned_business_work_reader import (
                     OwnedBusinessWorkReader,
                 )
 
                 candidate = OwnedBusinessWorkReader(
-                    business_policy_path, reader, generation.generation, recovery_epoch
+                    business_policy_path,
+                    reader,
+                    generation.generation,
+                    recovery_epoch,
+                    retained_history_paths=configured_paths(
+                        os.environ.get("OWNED_BUSINESS_RETAINED_HISTORY_POLICIES")
+                    ),
                 )
                 if candidate.policy.enabled:
                     owned_business = candidate
