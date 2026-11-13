@@ -1,7 +1,8 @@
 import {test,expect,type Page} from '@playwright/test';
 async function fixture(page:Page){
  const writes:string[]=[];
- const problem={business_problem_id:'legacy-only',revision_id:'old-r1',revision:1,title:'未关联会话的历史问题',description:'保留旧问题与修订',created_at:'2026-11-01T00:00:00Z',digest:'a'.repeat(64),status:'DRAFT'};
+ const problem={business_problem_id:'legacy-only',revision_id:'old-r1',revision:1,title:'未关联会话的历史问题',description:'保留旧问题与修订',created_at:'2026-11-01T00:00:00Z',digest:'a'.repeat(64),status:'DRAFT',scope:{tenantId:'tenant',securityDomain:'domain'},owner_id:'human:ordinary',created_by:'human:ordinary',predecessor_revision_id:null};
+ const second={...problem,business_problem_id:'legacy-second',revision_id:'old-r2',title:'另一项历史业务问题',description:'第二个独立问题的描述'};
  await page.route('**/api/**',route=>{
   const request=route.request(),path=new URL(request.url()).pathname,result=(value:unknown)=>route.fulfill({json:{result:value}});
   if(request.method()!=='GET'){writes.push(path);return route.fulfill({status:405,json:{reasonCode:'READ_ONLY_AUDIT'}})}
@@ -12,8 +13,9 @@ async function fixture(page:Page){
   if(path.endsWith('/conversations'))return result({items:Array.from({length:30},(_,i)=>({conversation_id:'c'+i,title:'历史会话 '+i,created_at:'2026-11-12T00:00:00Z'}))});
   if(path.endsWith('/journey'))return result({version:0,state:null});
   if(/\/conversations\/c\d+$/.test(path))return result({conversation:{conversation_id:path.split('/').at(-1),title:'我的保留会话',version:1},messages:[{message_id:'old',content:'已保存的说明',author_id:'human:ordinary',created_at:'2026-11-12T00:00:00Z',disposition:'GOAL_RECORDED'}],links:[]});
-  if(path.endsWith('/problems'))return result({problems:[problem]});
-  if(path.endsWith('/problems/legacy-only'))return result({problem:{...problem,current_revision_id:'old-r1'},revisions:[problem]});
+  if(path.endsWith('/problems'))return result({problems:[problem,second]});
+  if(/\/problems\/legacy-(only|second)$/.test(path)){const selected=path.endsWith('legacy-only')?problem:second;return result({problem:{...selected,current_revision_id:selected.revision_id,current_state:'DRAFT',aggregate_version:1},revisions:[selected],lifecycle:[]})}
+  if(/\/(criteria|criteria-sets)$/.test(path))return result({revisions:[]});
   return result({items:[],entries:[],problems:[],criteria:[],sets:[],rejectedResources:0});
  });return writes;
 }
@@ -61,4 +63,18 @@ test('selected task, resource and employee navigation share icon styling',async(
   colors.push(await link.evaluate(n=>getComputedStyle(n).color));expect(await link.locator('svg').evaluate(n=>getComputedStyle(n).stroke)).toBe(colors.at(-1));
  }
  expect(new Set(colors).size).toBe(1);expect(writes).toEqual([]);
+});
+
+test('explicit legacy reader selects existing problems and returns without exposing a new task composer',async({page},testInfo)=>{
+ const writes=await fixture(page);await page.setViewportSize({width:1440,height:900});await page.goto('/work?legacy=1&panel=existing');
+ await expect(page.getByRole('heading',{name:'历史业务问题',exact:true})).toBeVisible();await expect(page.locator('#problem-composer')).toHaveCount(0);await expect(page.getByRole('heading',{name:'新建对话',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'＋ 新建对话',exact:true})).toHaveCount(0);
+ await expect(page.locator('.skill-frame-breadcrumb')).toHaveText('历史业务问题');await page.screenshot({path:testInfo.outputPath('legacy-reader-1440.png')});
+ for(const title of ['未关联会话的历史问题','另一项历史业务问题']){
+  await page.getByRole('navigation',{name:'业务问题列表'}).getByRole('button',{name:new RegExp(title)}).click();
+  await expect(page.locator('#formal-problem-message')).toContainText(title);await expect(page.locator('#formal-problem-message').getByRole('button',{name:'修改正式问题'})).toBeVisible();
+  await nav(page).getByRole('link',{name:'历史业务问题',exact:true}).click();await expect(page.getByRole('heading',{name:'历史业务问题',exact:true})).toBeVisible();await expect(page.locator('#problem-composer')).toHaveCount(0);
+ }
+ await page.reload();await expect(page.getByRole('heading',{name:'历史业务问题',exact:true})).toBeVisible();expect(writes).toEqual([]);
+ await page.goto('/work?legacy=1&draft=normal');await expect(page.getByRole('heading',{name:'新建对话',exact:true})).toBeVisible();await expect(page.locator('#problem-composer')).toBeVisible();
+ await page.goto('/work?draft=normal-new');await expect(page.locator('#private-input')).toBeVisible();expect(writes).toEqual([]);
 });

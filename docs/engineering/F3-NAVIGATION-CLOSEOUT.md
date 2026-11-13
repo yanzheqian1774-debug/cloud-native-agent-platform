@@ -44,3 +44,19 @@ changed; native scrollbars are retained and never display:none/width:0. Hover ha
 stronger thumb, stable gutter geometry is verified, forced-colors uses native auto.
 Actual resource/employee detail roundtrip is covered elsewhere; this package re-ran
 historical-work return and navigation/menu restoration, not every detail editor.
+
+## Follow-up: explicit historical problem reader
+
+Installed ordinary-account evidence navigation-team-installed-actual-r2 showed an
+empty historical selection incorrectly presented as 新建对话 with a new-question
+composer. The follow-up only changes legacy=1&panel=existing with no selected problem:
+a historical heading, existing-problem selector, truthful empty/read-failure states,
+and no composer/new-question guidance. Selecting a problem keeps the original deep
+link/details/authority behavior. Normal new conversation and legacy draft routes are
+unchanged. No ConversationJourney modifications or actual service calls.
+
+Follow-up verification: f3-legacy-reader-r2 passed 21/21 isolated tests, including
+cross-selection of two independent historical problems, return/reload, retained
+formal-edit affordance, and unaffected ordinary/legacy-new composers. Zero POSTs in
+the new scenario. Final 1440 screenshot was inspected, including historical breadcrumb.
+Frontend build passed through test preview; this is not installed-account acceptance.
