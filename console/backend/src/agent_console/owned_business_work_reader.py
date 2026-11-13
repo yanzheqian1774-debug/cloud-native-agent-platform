@@ -43,11 +43,22 @@ class OwnedBusinessBinding:
 
 
 class OwnedBusinessWorkReader:
-    def __init__(self, path, authorization, generation, recovery_epoch):
+    def __init__(
+        self,
+        path,
+        authorization,
+        generation,
+        recovery_epoch,
+        *,
+        retained_history_paths=(),
+    ):
         self.path = path
         self.policy = OwnedBusinessPolicy.load(path)
         self.authorization = authorization
         self.generation, self.recovery_epoch = generation, recovery_epoch
+        from .owned_business_retained_history import retained_readers
+
+        self.retained_history = retained_readers(self, retained_history_paths)
 
     def _reads(self, c, context, grants, now, *, history=False):
         states = self.authorization.has_current_grants(
@@ -174,6 +185,14 @@ class OwnedBusinessWorkReader:
         p, now = self.policy, datetime.now(UTC)
         require(isinstance(problem, ExactReference), "EXACT_PROBLEM_REQUIRED")
         require(p.enabled and OwnedBusinessPolicy.load(self.path) == p, "DISABLED")
+        if history and self.retained_history:
+            from .owned_business_retained_history import select_reader
+
+            retained = select_reader(self, c, context, problem)
+            if retained is not None:
+                return retained.work(
+                    c, context, problem, source_digest=source_digest, history=True
+                )
         require(
             (
                 context.scope.tenant_id,

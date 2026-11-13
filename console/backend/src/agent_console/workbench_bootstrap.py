@@ -609,9 +609,14 @@ def build_workbench_composition(
                         bind_created_object as bind_owned_business,
                     )
                     from .owned_business_postgres import migrate as migrate_business
+                    from .owned_business_retained_history import configured_paths
 
                     owned_business = OwnedBusinessAdmission(
-                        admission, owned_business_path
+                        admission,
+                        owned_business_path,
+                        retained_history_paths=configured_paths(
+                            os.environ.get("OWNED_BUSINESS_RETAINED_HISTORY_POLICIES")
+                        ),
                     )
                     if owned_business.policy.enabled:
                         migrate_business(admission.repository)

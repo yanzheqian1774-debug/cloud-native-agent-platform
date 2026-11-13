@@ -23,7 +23,7 @@ def require(condition, reason):
 
 
 class OwnedBusinessAdmission:
-    def __init__(self, root, path):
+    def __init__(self, root, path, *, retained_history_paths=()):
         self.root, self.path = root, path
         self.policy = OwnedBusinessPolicy.load(path)
         self.grants = root.delegation.grants
@@ -32,6 +32,7 @@ class OwnedBusinessAdmission:
             self.grants.authorization,
             self.grants.generation.generation,
             self.grants.recovery_epoch,
+            retained_history_paths=retained_history_paths,
         )
 
     def _policy(self, c, context):

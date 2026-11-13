@@ -301,3 +301,68 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
         assert len(e.calls) == e.business_model_call_count
     finally:
         native.pool.close()
+
+
+def test_successor_retains_old_policy_history_without_execution(
+    owned_created, tmp_path, monkeypatch
+):
+    import json
+    from datetime import datetime, timedelta
+
+    from agent_console import owned_business_work_reader
+    from agent_console.owned_business_admission import OwnedBusinessAdmission
+
+    e = owned_created
+    prior = e.business_owner
+    value = prior.policy.model_dump(mode="json")
+    value.update(
+        policyVersion="history-window-successor",
+        expiresAt=(prior.policy.expiresAt + timedelta(hours=1)).isoformat(),
+    )
+    path = tmp_path / "successor.json"
+    path.write_text(json.dumps(value))
+    path.chmod(0o600)
+    successor = OwnedBusinessAdmission(
+        prior.root, path, retained_history_paths=[prior.path]
+    )
+    revision = e.created["revision"]
+    problem = ExactReference(
+        resource_id=revision["business_problem_id"],
+        revision_id=revision["revision_id"],
+        digest=revision["digest"],
+    )
+    after_expiry = prior.policy.expiresAt + timedelta(seconds=1)
+
+    class AfterExpiry(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return after_expiry
+
+    monkeypatch.setattr(owned_business_work_reader, "datetime", AfterExpiry)
+    from test_local_accounts_postgres import login
+
+    monkeypatch.setattr(e.routing_sessions, "clock", lambda: after_expiry)
+    renewed = login(e.routing_sessions, "reviewer324")
+    _, current_context = e.routing_sessions.authenticate_session(renewed.value)
+    with e.repo.connection_scope() as c:
+        history = successor.work(c, current_context, problem, history=True)
+        assert history.history_only
+        assert history.policy_digest == prior.policy.digest
+        assert history.expires_at <= prior.policy.expiresAt < after_expiry
+    with (
+        e.repo.connection_scope() as c,
+        pytest.raises(AuthorityError, match="POLICY_BINDING_CHANGED"),
+    ):
+        successor.work(c, current_context, problem)
+    with e.repo.connection_scope() as c:
+        c.execute(
+            "INSERT INTO authorization_admin.owned_business_revocations"
+            "(admission_id,actor_id,reason_code) VALUES(%s,%s,%s)",
+            (history.admission_id, e.context.principal_id, "USER_REQUESTED"),
+        )
+    with (
+        e.repo.connection_scope() as c,
+        pytest.raises(AuthorityError, match="ADMISSION_REVOKED"),
+    ):
+        successor.work(c, current_context, problem, history=True)
+    assert len(e.calls) == e.business_model_call_count
