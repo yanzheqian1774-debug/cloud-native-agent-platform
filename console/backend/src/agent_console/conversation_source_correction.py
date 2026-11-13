@@ -1,11 +1,12 @@
 # ruff: noqa: E501,RUF001 -- Exact owner SQL and business-facing Chinese messages.
 """Explicit source correction before any CREATE fact; no model or execution call."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from psycopg.types.json import Jsonb
 
 from .authority_contracts import AuthorityError, ExactGrant
+from .context_call_admission import request_row
 from .execution_domain import ScopeIdentity
 from .plan_suggestion_domain import ExactReference
 from .planning_candidates import read_published
@@ -50,7 +51,7 @@ def correct(reader, records, ctx, conversation, body):
         )
         if status["state"] != "NOT_CREATED":
             raise ConversationError("CONVERSATION_SOURCE_CORRECTION_NOT_SAFE", 409)
-        _, _, now, _, value, _ = owner._source_evidence(
+        _, _, now, _, value, ancestry = owner._source_evidence(
             c, ctx, body["draftInvocationId"]
         )
         try:
@@ -90,20 +91,9 @@ def correct(reader, records, ctx, conversation, body):
             raise ConversationError(
                 "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
             )
-        for item in messages:
-            stored = c.execute(
-                "SELECT content FROM private_conversation.messages WHERE tenant_id=%s AND "
-                "security_domain=%s AND conversation_id=%s AND message_id=%s AND author_id=%s",
-                (
-                    *scope,
-                    str(item.get("id", "")).removeprefix("user:"),
-                    ctx.principal_id,
-                ),
-            ).fetchone()
-            if not stored or stored["content"] != item.get("text"):
-                raise ConversationError(
-                    "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
-                )
+        messages, repairs = canonical_history(
+            c, ctx, scope, state, messages, value, ancestry
+        )
         identity = str(uuid4())
         text = f"更正本次资料为“{name}”。替换此前选择的资料，保留原问题与已补充的要求；请重新核对这份资料后继续，旧资料与草案保留为历史。"
         c.execute(
@@ -144,13 +134,14 @@ def correct(reader, records, ctx, conversation, body):
             "requestKey": body["requestKey"],
             "correctionMessageId": identity,
             "state": "NOT_CREATED",
+            "messageIdentityRepairs": repairs,
         }
         next_state = {
             "key": "source-correction:" + identity,
             "phase": "UNDERSTAND",
             "understandingProtocol": 3,
             "userMessageId": identity,
-            "question": messages[0]["text"],
+            "question": state["question"],
             "messages": [*messages, {"id": "user:" + identity, "text": text}],
             "source": source,
             "sourceCorrections": [*state.get("sourceCorrections", []), previous],
@@ -169,3 +160,94 @@ def correct(reader, records, ctx, conversation, body):
             "state": next_state,
             "replayed": False,
         }
+
+
+def canonical_history(c, ctx, scope, state, messages, value, ancestry):
+    """Repair only legacy first-ID loss using the authorized root owner binding."""
+    origin_id = (
+        ancestry[-1]["target"]["original_context_id"] if ancestry else value.context_id
+    )
+    origin = request_row(c, origin_id)
+    record = origin["record"] if origin else {}
+    canonical_id = record.get("first_user_message_id")
+    canonical_present = any(
+        item.get("id") == "user:" + str(canonical_id) for item in messages
+    )
+    result, repairs = [], []
+    for index, item in enumerate(messages):
+        message_id = str(item.get("id", "")).removeprefix("user:")
+        stored = c.execute(
+            "SELECT author_id,content,EXISTS (SELECT 1 FROM private_conversation.message_facts f "
+            "WHERE f.tenant_id=m.tenant_id AND f.security_domain=m.security_domain "
+            "AND f.conversation_id=m.conversation_id AND f.message_id=m.message_id) AS is_fact "
+            "FROM private_conversation.messages m WHERE "
+            "tenant_id=%s AND security_domain=%s AND conversation_id=%s AND message_id=%s",
+            (*scope, message_id),
+        ).fetchone()
+        if stored and stored["is_fact"]:
+            raise ConversationError(
+                "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
+            )
+        if (
+            stored
+            and stored["author_id"] == ctx.principal_id
+            and stored["content"] == item.get("text")
+        ):
+            if index == 0 and not canonical_present and canonical_id != message_id:
+                raise ConversationError(
+                    "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
+                )
+            result.append(item)
+            continue
+        if (
+            stored
+            or canonical_present
+            or index != 0
+            or not str(item.get("id", "")).startswith("user:")
+        ):
+            raise ConversationError(
+                "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
+            )
+        try:
+            UUID(message_id)
+        except ValueError as exc:
+            raise ConversationError(
+                "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
+            ) from exc
+        # _source_evidence already locked and reauthorized every ancestry context.
+        if not (
+            record.get("conversation_id") == scope[2]
+            and record.get("subject_id") == ctx.principal_id
+            and record.get("first_invocation_id")
+            and canonical_id
+            and item.get("text") == state.get("question")
+        ):
+            raise ConversationError(
+                "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
+            )
+        bound = c.execute(
+            "SELECT content FROM private_conversation.messages m WHERE "
+            "m.tenant_id=%s AND m.security_domain=%s AND m.conversation_id=%s "
+            "AND m.message_id=%s AND m.author_id=%s AND NOT EXISTS "
+            "(SELECT 1 FROM private_conversation.message_facts f WHERE "
+            "f.tenant_id=m.tenant_id AND f.security_domain=m.security_domain "
+            "AND f.conversation_id=m.conversation_id AND f.message_id=m.message_id)",
+            (*scope, canonical_id, ctx.principal_id),
+        ).fetchone()
+        if not bound or bound["content"] != item.get("text"):
+            raise ConversationError(
+                "CONVERSATION_SOURCE_CORRECTION_HISTORY_CHANGED", 409
+            )
+        # Text confirms the exact bound message; it is never used to find one.
+        repaired = {"id": "user:" + canonical_id, "text": bound["content"]}
+        result.append(repaired)
+        repairs.append(
+            {
+                "oldId": item["id"],
+                "newId": repaired["id"],
+                "originContextId": origin_id,
+                "originInvocationId": record["first_invocation_id"],
+                "basis": "OWNED_ROOT_CONTEXT_FIRST_USER_MESSAGE",
+            }
+        )
+    return result, repairs

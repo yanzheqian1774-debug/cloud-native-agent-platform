@@ -1,12 +1,13 @@
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
-import {fixture as maintenance,principal} from '../helpers/resourceMaintenanceFixture';
+import {fixture as maintenance,principal,skillId} from '../helpers/resourceMaintenanceFixture';
 import type {SaveTeamCommand,TeamDetail,TeamRecord} from '../../src/api/digitalEmployees';
 const envelope=(result:unknown)=>({schemaVersion:'workbench-operation.v1',result,continuationIds:[]});
 const canonical=(v:unknown):unknown=>typeof v==='string'?v.normalize('NFC'):Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a<b?-1:1).map(([k,x])=>[k,canonical(x)])):v;
 const employee={resourceKind:'DIGITAL_EMPLOYEE_DEFINITION',employeeDefinitionId:'employee:team-test',employeeDefinitionRevisionId:'employee-revision:one',employeeDefinitionDigest:'a'.repeat(64),aggregateVersion:4,role:'材料检查员',responsibilities:['检查材料'],members:[],publicationState:'PUBLISHED',lifecycleState:'PUBLISHED'};
 const work={workflowRunId:'run:review',preparationDigest:'b'.repeat(64),title:'核对发布说明的回退证据',createdAt:'2026-11-11T00:00:00Z',initiatorId:principal.principalId,executionState:'SUCCEEDED',displayState:'completed',progressVersion:1,problemId:'problem:review',problemRevisionId:'revision:review',problemDigest:'c'.repeat(64),pendingQuestionCount:0,artifactCount:1,businessResolution:'UNDETERMINED',originConversationId:null,originVerified:false,planVersion:1,participantCount:1,completedTaskCount:1,taskCount:1,updatedAt:null};
-async function fixture(page:Page){
+async function fixture(page:Page,employeeValue:typeof employee=employee){
+ const employee=employeeValue;
  const auth=await maintenance(page,true);const state={auth,records:new Map<string,TeamDetail>(),posts:[] as SaveTeamCommand[],lose:false,wrong:false,deny:false,ownerUnavailable:false,work:{...work},unavailable:false};
  await page.route('**/api/workbench/v1/employees**',async route=>{const path=new URL(route.request().url()).pathname;return route.fulfill({json:envelope(path.endsWith('/employees')?{items:[employee],nextCursor:null}:path.endsWith('/authoring')?{basis:'OWNER_FACT_ORDER',parent:employee,aggregateVersion:employee.aggregateVersion,head:{status:'AVAILABLE',definition:employee},publication:{status:'AVAILABLE',definition:employee},draft:{status:'NONE'},executionStarted:false}:path.endsWith('/history')?{items:[employee],nextCursor:null,executionStarted:false}:employee)})});
  await page.route('**/api/workbench/v1/prepared-executions/'+work.preparationDigest,route=>route.fulfill({json:envelope({workflowRunId:work.workflowRunId,digest:work.preparationDigest,executionStarted:true,preparation:{plan_id:'plan:review',plan_version:1,source_snapshot:{resource_id:'doc:review',revision_id:'doc-revision:1',digest:'d'.repeat(64)},semantics:{title:work.title,target:{problem:{resource_id:work.problemId,revision_id:work.problemRevisionId,digest:work.problemDigest}},tasks:[]},participants:[]},progress:{state:'SUCCEEDED',version:1,tasks:[]},events:[],artifacts:[],outcome:null,resourceUses:[],admission:{state:'ADMITTED',reason:null}})}));
@@ -97,4 +98,39 @@ test('F3 all members uses a compact responsive grid with true classified binding
  await page.route('**/api/workbench/v1/employees**',route=>{const path=decodeURIComponent(new URL(route.request().url()).pathname),item=members.find(m=>path.includes('/'+m.employeeDefinitionId+'/'))??members[0];return route.fulfill({json:envelope(path.endsWith('/employees')?{items:members,nextCursor:null}:path.endsWith('/authoring')?{basis:'OWNER_FACT_ORDER',parent:item,aggregateVersion:item.aggregateVersion,head:{status:'AVAILABLE',definition:item},publication:{status:'AVAILABLE',definition:item},draft:{status:'NONE'},executionStarted:false}:item)})});
  await page.setViewportSize({width:1440,height:900});await page.goto('/employees');await expect(page.locator('.employee-version-card')).toHaveCount(6);const card=page.getByRole('article',{name:'资料核对员 1',exact:true});await expect(card.getByLabel('所选版本资源分类')).toHaveText(/技能 1知识 1/);await expect(card).not.toContainText('本体 0');await expect(card).not.toContainText('工具 0');await expect(card).not.toContainText('职责定义');await expect(card).not.toContainText('运行配置');await expect(card.getByRole('button',{name:'查看当前发布',exact:true})).toHaveCount(0);await expect(page.getByRole('region',{name:'当前加载范围'})).toBeHidden();await expect(page.getByRole('region',{name:'选中员工详情'})).toBeHidden();
  const columns=await page.locator('.employee-collection-rows').evaluate(node=>getComputedStyle(node).gridTemplateColumns.split(' ').length);expect(columns).toBe(3);await page.screenshot({path:info.outputPath('members-grid-1440.png')});await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('members-grid-390.png')});expect(state.posts).toEqual([]);
+});
+
+test('team search survives exact member return, editing, save and history',async({page})=>{
+ const state=await fixture(page);await prepare(page);await page.getByRole('button',{name:'保存团队分工',exact:true}).click();await expect(page.getByRole('button',{name:'修改团队分工',exact:true})).toBeVisible();
+ const query='交接';await page.goto('/teams?'+new URLSearchParams({q:query}));await page.getByRole('link',{name:'查看团队',exact:true}).click();expect(new URL(page.url()).searchParams.get('q')).toBe(query);
+ await page.getByRole('button',{name:'修改团队分工',exact:true}).click();await page.getByLabel('在本团队的职责',{exact:true}).fill('返回后继续核对');await page.getByRole('link',{name:'查看职责与资源',exact:true}).click();expect(new URL(page.url()).searchParams.get('teamDirectoryQuery')).toBe(query);await page.getByRole('link',{name:'返回原团队',exact:true}).click();await expect(page.getByLabel('在本团队的职责',{exact:true})).toHaveValue('返回后继续核对');expect(new URL(page.url()).searchParams.get('q')).toBe(query);
+ await page.getByRole('button',{name:'核对团队分工',exact:true}).click();await page.getByRole('button',{name:'保存团队分工',exact:true}).click();await expect(page.getByRole('button',{name:'修改团队分工',exact:true})).toBeVisible();expect(new URL(page.url()).searchParams.get('q')).toBe(query);
+ await page.getByText('查看版本依据',{exact:true}).click();await page.getByRole('link',{name:'查看上一版本',exact:true}).click();expect(new URL(page.url()).searchParams.get('q')).toBe(query);await expect(page.getByRole('button',{name:'修改团队分工',exact:true})).toBeDisabled();await page.getByRole('link',{name:'← 返回团队目录',exact:true}).click();await expect(page.getByLabel('搜索当前结果',{exact:true})).toHaveValue(query);expect(state.posts).toHaveLength(2);
+});
+
+test('new team draft and directory return retain search without writes',async({page})=>{
+ const state=await fixture(page);await page.goto('/teams?'+new URLSearchParams({q:'材料 A&B'}));await page.getByRole('link',{name:'创建团队',exact:true}).click();await expect(page.getByLabel('团队名称',{exact:true})).toBeVisible();expect(new URL(page.url()).searchParams.get('q')).toBe('材料 A&B');await page.reload();await page.getByRole('link',{name:'← 返回团队目录',exact:true}).click();await expect(page.getByLabel('搜索当前结果',{exact:true})).toHaveValue('材料 A&B');expect(state.posts).toHaveLength(0);
+});
+
+for(const mode of ['matched','revoked-team','wrong-member','duplicate-team'] as const)test('team resource lineage '+mode,async({page})=>{
+ const member={...employee,members:[{kind:'SKILL',resourceId:skillId,revisionId:'revision:1',digest:'a'.repeat(64)}]} as unknown as typeof employee;
+ const state=await fixture(page,member);state.auth.resource.publishedRevisionId='revision:1';state.auth.resource.lifecycleState='PUBLISHED';state.auth.resource.revisions[0].state='PUBLISHED';
+ await prepare(page);await page.getByRole('button',{name:'保存团队分工',exact:true}).click();await expect(page.getByRole('button',{name:'修改团队分工',exact:true})).toBeVisible();
+ const teamUrl=new URL(page.url());teamUrl.searchParams.set('q','交接');await page.goto(teamUrl.toString());await page.getByRole('link',{name:'查看成员',exact:true}).click();
+ await page.getByRole('link',{name:'查看详情',exact:true}).click();await expect(page.getByRole('link',{name:'返回引用员工',exact:true})).toBeVisible();
+ if(mode==='duplicate-team'){const url=new URL(page.url());url.searchParams.append('teamRef','other');await page.goto(url.toString());await expect(page.getByRole('link',{name:'返回引用员工',exact:true})).toHaveCount(0);return}
+ if(mode==='revoked-team')state.deny=true;
+ if(mode==='wrong-member'){const detail=[...state.records.values()][0];detail.revision.members[0].employee_revision_id='other';detail.digest=createHash('sha256').update(JSON.stringify(canonical(detail.revision))).digest('hex')}
+ await page.getByRole('link',{name:'返回引用员工',exact:true}).click();expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(member.employeeDefinitionRevisionId);
+ if(mode==='matched'){await page.getByRole('link',{name:'返回原团队',exact:true}).click();await expect(page).toHaveURL(teamUrl.toString())}else{await expect(page.getByText('团队归属与维护人：暂未提供',{exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'返回原团队',exact:true})).toHaveCount(0)}
+ expect(state.posts).toHaveLength(1);
+});
+
+for(const mode of ['missing','duplicate','long-query','bad-digest'] as const)test('employee resources survive invalid team navigation '+mode,async({page})=>{
+ const member={...employee,members:[{kind:'SKILL',resourceId:skillId,revisionId:'revision:1',digest:'a'.repeat(64)}]} as unknown as typeof employee;const state=await fixture(page,member);
+ const query=new URLSearchParams({employeeDefinitionId:member.employeeDefinitionId,employeeDefinitionRevisionId:member.employeeDefinitionRevisionId,section:'overview',detail:'1',teamRef:'team:bad'});
+ if(mode!=='missing'){query.set('teamRevision','revision:bad');query.set('teamDigest',mode==='bad-digest'?'invalid':'a'.repeat(64))}
+ if(mode==='duplicate')query.append('teamRef','team:duplicate');if(mode==='long-query')query.set('teamDirectoryQuery','x'.repeat(201));
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/employees?'+query);
+ await expect(page.getByRole('link',{name:'查看详情',exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'返回原团队',exact:true})).toHaveCount(0);const href=await page.getByRole('link',{name:'查看详情',exact:true}).getAttribute('href');expect(new URL(href!,'http://local').searchParams.has('teamRef')).toBe(false);if(mode==='long-query')expect(new URL(page.url()).searchParams.get('teamDirectoryQuery')).toHaveLength(201);expect(errors).toEqual([]);expect(state.posts).toHaveLength(0);
 });

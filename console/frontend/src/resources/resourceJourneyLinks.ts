@@ -48,7 +48,13 @@ export function employeeReferenceHref(employee: {identity: string;revision: stri
   return '/employees?' + p;
 }
 
-export const employeeReturnKeys=['employeeRef','employeeRev','employeeDigest','employeeResourceBack','employeeSection','employeeViewReturn'];
+const employeeTeamKeys=['teamRef','teamRevision','teamDigest','teamDirectoryQuery'];
+function employeeTeamContext(params:URLSearchParams){
+ if(!employeeTeamKeys.some(k=>params.has(k)))return null;
+ if(employeeTeamKeys.some(k=>params.getAll(k).length>1)||!identity(params.get('teamRef'))||!identity(params.get('teamRevision'))||!/^[a-f0-9]{64}$/.test(params.get('teamDigest')??'')||(params.get('teamDirectoryQuery')?.length??0)>200)return null;
+ return {teamRef:params.get('teamRef')!,teamRevision:params.get('teamRevision')!,teamDigest:params.get('teamDigest')!,...(params.has('teamDirectoryQuery')?{teamDirectoryQuery:params.get('teamDirectoryQuery')!}:{})};
+}
+export const employeeReturnKeys=['employeeRef','employeeRev','employeeDigest','employeeResourceBack','employeeSection','employeeViewReturn',...employeeTeamKeys];
 export function employeeReturnContext(params:URLSearchParams){
  if(!employeeReturnKeys.some(k=>params.has(k)))return null;
  if(employeeReturnKeys.some(k=>params.getAll(k).length>1)||!identity(params.get('employeeRef'))||!identity(params.get('employeeRev'))||!/^[a-f0-9]{64}$/.test(params.get('employeeDigest')??''))throw Error('EMPLOYEE_RETURN_UNSAFE');
@@ -57,7 +63,8 @@ export function employeeReturnContext(params:URLSearchParams){
  const raw=params.get('employeeResourceBack'),back=raw?safeResourceReturn(raw):null;if(raw&&!back)throw Error('EMPLOYEE_RETURN_UNSAFE');
  const section=params.get('employeeSection')??'capabilities',view=params.get('employeeViewReturn');
  if(!['overview','capabilities','instances','assignments'].includes(section)||(view!==null&&view!=='professional'))throw Error('EMPLOYEE_RETURN_UNSAFE');
- return {section,view,id:params.get('employeeRef')!,revision:params.get('employeeRev')!,digest:params.get('employeeDigest')!,back,capabilityBack};
+ const team=employeeTeamContext(params);if(employeeTeamKeys.some(k=>params.has(k))&&!team)throw Error('EMPLOYEE_RETURN_UNSAFE');
+ return {section,view,id:params.get('employeeRef')!,revision:params.get('employeeRev')!,digest:params.get('employeeDigest')!,back,capabilityBack,team};
 }
 export function employeeMemberHref(href:string,item:{employeeDefinitionId:string;employeeDefinitionRevisionId:string;employeeDefinitionDigest:string}){
  const u=new URL(href,window.location.origin);if(u.origin!==window.location.origin||!['/skills','/mcp','/knowledge','/agents'].includes(u.pathname))return href;
@@ -66,6 +73,7 @@ export function employeeMemberHref(href:string,item:{employeeDefinitionId:string
  if(['overview','capabilities','instances','assignments'].includes(section))u.searchParams.set('employeeSection',section);
  if(current.get('employeeView')==='professional')u.searchParams.set('employeeViewReturn','professional');
  const capabilityBack=safeCapabilityReturn(current.get('capabilityReturn'));if(current.getAll('capabilityReturn').length===1&&capabilityBack)u.searchParams.set('capabilityReturn',capabilityBack);
+ const team=employeeTeamContext(current);if(team)for(const [key,value] of Object.entries(team))u.searchParams.set(key,value);
  const back=safeResourceReturn(current.get('resourceBack'));if(back)u.searchParams.set('employeeResourceBack',back);
  employeeReturnContext(u.searchParams);return u.pathname+'?'+u.searchParams;
 }

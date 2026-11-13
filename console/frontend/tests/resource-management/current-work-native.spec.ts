@@ -150,3 +150,51 @@ test('requester and direct-start provenance stay separate from worker assignment
  await page.screenshot({path:testInfo.outputPath('task-attribution-initiated-1440.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:testInfo.outputPath('task-attribution-390.png'),fullPage:true});expect(state.writes).toEqual([]);
 });
+
+
+test('direct tasks prepares prior history once before reading; polling remains read only',async({page})=>{
+ const state=await fixture(page);state.mode='running';let prepares=0;const events:string[]=[];
+ await page.route('**/api/workbench/v1/conversations/capabilities',route=>route.fulfill({json:{result:{enabled:true,historyReadPreparation:true}}}));
+ await page.route('**/api/workbench/v1/current-work/history-access',async route=>{expect(route.request().method()).toBe('POST');expect(route.request().headers()['x-csrf-token']).toBe('fixture');prepares++;events.push('prepare');await route.fulfill({json:{result:{available:true,hasMore:false,partial:false,checked:1,prepared:1}}});});
+ await page.route('**/api/workbench/v1/current-work?*',async route=>{events.push('read');await route.fallback()});
+ await page.clock.install();await page.goto('/tasks');await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);
+ expect(events.slice(0,2)).toEqual(['prepare','read']);expect(prepares).toBe(1);
+ await page.clock.fastForward(10_500);await expect.poll(()=>state.requests.length).toBeGreaterThan(1);expect(prepares).toBe(1);
+ await page.getByRole('button',{name:'重新读取',exact:true}).click();await expect.poll(()=>prepares).toBe(2);await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);
+ expect(state.writes).toEqual([]);
+});
+
+test('partial history preparation keeps readable rows and discloses incomplete history',async({page})=>{
+ await fixture(page);
+ await page.route('**/api/workbench/v1/conversations/capabilities',route=>route.fulfill({json:{result:{enabled:true,historyReadPreparation:true}}}));
+ await page.route('**/api/workbench/v1/current-work/history-access',route=>route.fulfill({json:{result:route.request().postDataJSON()?.afterConversationId?{available:true,hasMore:false,partial:false,checked:1,prepared:1,failed:0}:{available:true,hasMore:true,partial:true,nextConversationId:"older-anchor",checked:20,prepared:19,failed:1}}}));
+ await page.goto('/tasks');await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);
+ await expect(page.getByText('部分历史记录的读取权限尚未恢复，当前列表仅包含可读取的记录。')).toBeVisible();
+ const request=page.waitForRequest(r=>r.url().endsWith('/current-work/history-access')&&r.postDataJSON()?.afterConversationId==='older-anchor');
+ await page.getByRole('button',{name:'继续核对更早的历史记录',exact:true}).click();await request;
+ await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);
+ await expect(page.getByText('部分历史记录的读取权限尚未恢复，当前列表仅包含可读取的记录。')).toBeVisible();
+ await expect(page.getByRole('button',{name:'继续核对更早的历史记录',exact:true})).toHaveCount(0);
+
+});
+
+test('failed history preparation does not retry on filters or hide current readable rows',async({page})=>{
+ await fixture(page);let prepares=0;
+ await page.route('**/api/workbench/v1/conversations/capabilities',route=>route.fulfill({json:{result:{enabled:true,historyReadPreparation:true}}}));
+ await page.route('**/api/workbench/v1/current-work/history-access',route=>{prepares++;return route.fulfill({status:503,json:{reasonCode:'CONVERSATION_HISTORY_UNAVAILABLE'}})});
+ await page.goto('/tasks');await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);
+ await expect(page.getByText('历史记录读取状态尚未核实，当前列表仅包含已有权限可读取的记录。')).toBeVisible();
+ await page.getByRole('button',{name:'会话发起',exact:true}).click();await expect(page.getByRole('button',{name:'查看任务',exact:true})).toHaveCount(25);expect(prepares).toBe(1);
+});
+
+
+for(const failure of [true,false])test(`unverified task history never claims zero records (${failure?'failure':'partial'})`,async({page})=>{
+ await fixture(page);
+ await page.route('**/api/workbench/v1/conversations/capabilities',route=>route.fulfill({json:{result:{enabled:true,historyReadPreparation:true}}}));
+ await page.route('**/api/workbench/v1/current-work/history-access',route=>failure?route.fulfill({status:503,json:{reasonCode:'UNAVAILABLE'}}):route.fulfill({json:{result:{available:true,hasMore:true,partial:true,nextConversationId:'next',failed:0}}}));
+ await page.route('**/api/workbench/v1/current-work?*',route=>route.fulfill({json:{result:{schemaVersion:'current-work-directory.v1',scopeFilter:'visible',subject:'human:alice',tenantId:'fixture',securityDomain:'isolated',complete:true,questionStatusComplete:true,total:0,counts:{completed:0,waiting:0,running:0,failed:0,cancelled:0,unknown:0},items:[],nextCursor:null}}}));
+ await page.goto('/tasks');await expect(page.getByText('尚未取得可读记录，历史读取仍待核实。')).toBeVisible();
+ await expect(page.getByText(/共 0 条/)).toHaveCount(0);
+ await expect(page.locator('.f3-work-metrics strong').filter({hasText:/^0$/})).toHaveCount(0);
+ await expect(page.getByText('历史记录数量待核实',{exact:false})).toBeVisible();
+});

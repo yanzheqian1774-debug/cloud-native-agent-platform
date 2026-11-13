@@ -240,10 +240,16 @@ def prepare(service, records, context, conversation, c):
 
 def install_history_access(service, authorizer):
     from fastapi import Request
-    from pydantic import BaseModel, ConfigDict
+    from pydantic import BaseModel, ConfigDict, Field
 
     class PrepareHistory(BaseModel):
         model_config = ConfigDict(extra="forbid")
+
+    class PrepareTaskHistory(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        afterConversationId: str | None = Field(
+            default=None, min_length=1, max_length=200
+        )
 
     def install(app, authenticate, require_csrf, boundary_policy):
         app.state.conversation_history_access_available = lambda context: bool(
@@ -251,6 +257,25 @@ def install_history_access(service, authorizer):
             and service.experience.document.historyReadEnabled is True
             and service.experience.matches(context)
         )
+
+        @app.post("/api/workbench/v1/current-work/history-access")
+        def prepare_task_history(request: Request, spec: PrepareTaskHistory):
+            from .current_work_history_access import prepare_directory
+
+            session, context = authenticate(request)
+            require_csrf(request, session)
+            actions = getattr(app.state, "conversation_actions", None)
+            if actions is None or request.query_params:
+                raise AuthorityError("CONVERSATION_HISTORY_UNAVAILABLE")
+            return {
+                "result": prepare_directory(
+                    service,
+                    actions.records,
+                    authorizer,
+                    context,
+                    spec.afterConversationId,
+                )
+            }
 
         @app.post("/api/workbench/v1/conversations/{conversation}/history-access")
         def prepare_history(conversation: str, request: Request, spec: PrepareHistory):

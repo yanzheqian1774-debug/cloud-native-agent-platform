@@ -30,3 +30,18 @@ async function readBoundedDirectoryPage(input:DirectoryInput,signal:AbortSignal)
  if(conversationScope(await readWorkbenchSession(signal))!==conversationScope(session))throw Error('登录身份已变化，请重新读取当前工作。');
  return {page,viewKey};
 }
+
+export async function prepareDirectoryHistory(afterConversationId?:string){
+ const session=await readWorkbenchSession(AbortSignal.timeout(15000));
+ const capability=await fetch('/api/workbench/v1/conversations/capabilities',{credentials:'same-origin',signal:AbortSignal.timeout(15000)});
+ if(!capability.ok)throw new WorkbenchRequestError('CONVERSATION_HISTORY_UNAVAILABLE',capability.status);
+ const capabilities=await capability.json();
+ if(capabilities.result?.historyReadPreparation!==true)return {partial:false,incomplete:false,hasMore:false,nextConversationId:null as string|null};
+ const response=await fetch('/api/workbench/v1/current-work/history-access',{method:'POST',credentials:'same-origin',signal:AbortSignal.timeout(60000),headers:{'Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify(afterConversationId?{afterConversationId}:{})});
+ const body=await response.json();
+ if(!response.ok)throw new WorkbenchRequestError(body.reasonCode??'CONVERSATION_HISTORY_UNAVAILABLE',response.status);
+ if(conversationScope(await readWorkbenchSession(AbortSignal.timeout(15000)))!==conversationScope(session))throw Error('登录身份已变化');
+ const value=body.result;
+ if(typeof value?.partial!=='boolean'||typeof value.hasMore!=='boolean'||(value.hasMore&&(typeof value.nextConversationId!=='string'||!value.nextConversationId)))throw Error('历史读取结果尚未核实');
+ return {partial:value.partial as boolean,incomplete:value.partial===true&&(!value.hasMore||value.failed!==0),hasMore:value.hasMore as boolean,nextConversationId:value.hasMore?value.nextConversationId as string:null};
+}

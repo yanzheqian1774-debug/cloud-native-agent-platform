@@ -474,3 +474,11 @@ for(const mode of ['existing','absent','race','denied','other404','mismatch','po
   await page.reload();await expect(page.getByRole('button',{name:'重新读取可用资料'})).toBeVisible();expect(s.modelCalls).toBe(0);
   await page.getByRole('button',{name:'重新读取可用资料'}).click();await expect.poll(()=>s.journal.state?.phase).toBe('CLARIFY');expect(reads).toBe(1);expect(s.modelCalls).toBe(0);expect(s.journal.state?.userMessageId).toBe('original');expect(s.journal.state?.draft).toMatchObject({invocationId:'completed',state:'SUCCEEDED'});
  });
+
+test('initial question cites the server saved message identity and refresh never substitutes an optimistic id',async({page})=>{
+ const s=await fixture(page),savedId='6afb547e-0ddb-40a5-b4e2-dffed962d08e';let calls=0;
+ await page.route('**/draft-assistance/capabilities',route=>route.fulfill({json:{result:{conversationUnderstanding:true}}}));
+ await page.route('**/conversations/new/messages',async route=>{const body=route.request().postDataJSON();s.messages.push({message_id:savedId,author_id:'human:development-admin',content:body.content,disposition:'GOAL_RECORDED'});return route.fulfill({json:{result:{identity:savedId}}})});
+ await page.route('**/draft-assistance/invocations',async route=>{calls++;const body=route.request().postDataJSON(),content=JSON.parse(body.content);expect(body.conversationMessageId).toBe(savedId);expect(content.messages[0]).toEqual({id:'user:'+savedId,text:prompt});return route.fulfill({json:{result:{invocationId:'actual-primary',contextId:'actual-context',turnId:'actual-turn',turnVersion:1,state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'请确认检查范围',draft:null,conversationDelivery:{state:'SAVED',messageId:'answer'}}}})});
+ await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect.poll(()=>s.journal.state?.phase).toBe('CLARIFY');expect(s.journal.state?.userMessageId).toBe(savedId);expect(s.journal.state?.messages).toEqual([{id:'user:'+savedId,text:prompt}]);expect(calls).toBe(1);await page.reload();await expect(page.getByText('请确认检查范围',{exact:true})).toBeVisible();expect(calls).toBe(1);expect(s.journal.state?.messages).toEqual([{id:'user:'+savedId,text:prompt}]);
+});
