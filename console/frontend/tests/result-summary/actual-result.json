@@ -1,0 +1,633 @@
+{
+  "review": {
+    "scope": "生产环境",
+    "policyId": "production-handover-policy",
+    "documentId": "order-release",
+    "ruleResult": {
+      "scope": "生产环境",
+      "findings": [
+        {
+          "kind": "SINGLE_VALUE_FIELD",
+          "field": "唯一上线负责人",
+          "status": "CONFLICT",
+          "section": "交接责任",
+          "evidence": [
+            {
+              "line": 3,
+              "text": "## 交接责任",
+              "documentId": "order-release"
+            },
+            {
+              "line": 6,
+              "text": "唯一上线负责人：李明（合成角色）",
+              "documentId": "order-release"
+            },
+            {
+              "line": 7,
+              "text": "唯一上线负责人：陈玲（合成角色）",
+              "documentId": "order-release"
+            }
+          ],
+          "ruleCode": "release_owner",
+          "ruleName": "同一批次唯一上线负责人",
+          "observedValues": [
+            "李明（合成角色）",
+            "陈玲（合成角色）"
+          ],
+          "absenceCheckedAgainst": null
+        },
+        {
+          "kind": "SINGLE_VALUE_FIELD",
+          "field": "影响范围",
+          "status": "UNKNOWN",
+          "section": "变更范围",
+          "evidence": [
+            {
+              "line": 8,
+              "text": "## 变更范围",
+              "documentId": "order-release"
+            },
+            {
+              "line": 9,
+              "text": "影响范围：待确认",
+              "documentId": "order-release"
+            }
+          ],
+          "ruleCode": "impact_scope",
+          "ruleName": "影响范围已明确",
+          "observedValues": [
+            "待确认"
+          ],
+          "absenceCheckedAgainst": null
+        },
+        {
+          "kind": "REQUIRED_SECTION",
+          "field": null,
+          "status": "MISSING",
+          "section": "回退步骤",
+          "evidence": [],
+          "ruleCode": "rollback",
+          "ruleName": "生产变更回退步骤",
+          "observedValues": [],
+          "absenceCheckedAgainst": "4a16afac634c3565b4a621457986b2a0d75712ae8403b9ec499699d3813ac39e"
+        },
+        {
+          "kind": "SINGLE_VALUE_FIELD",
+          "field": "验证记录",
+          "status": "SATISFIED",
+          "section": "验证依据",
+          "evidence": [
+            {
+              "line": 10,
+              "text": "## 验证依据",
+              "documentId": "order-release"
+            },
+            {
+              "line": 11,
+              "text": "验证记录：合成测试记录 TEST-001，查询接口与缓存失效用例通过。",
+              "documentId": "order-release"
+            }
+          ],
+          "ruleCode": "validation",
+          "ruleName": "提供验证记录",
+          "observedValues": [
+            "合成测试记录 TEST-001，查询接口与缓存失效用例通过。"
+          ],
+          "absenceCheckedAgainst": null
+        }
+      ],
+      "documentId": "order-release",
+      "limitations": [
+        "SYNTHETIC_ONLY",
+        "EXPLICIT_SECTION_AND_LINE_LABELS_ONLY",
+        "SATISFIED_IS_RULE_MATCH_NOT_BUSINESS_CORRECTNESS"
+      ],
+      "rulesDigest": "a57907c72c7f98f1048befde0b3f7b5cb25a9244f0230b1fd232165ce93acad0",
+      "sourceDigest": "f231837aa6f77675069562246ca00ba31fd16a67643483122c0f3851aa14c4eb",
+      "documentTitle": "订单服务生产上线交接说明（合成测试）",
+      "schemaVersion": "document-rule-result.v1",
+      "documentDigest": "4a16afac634c3565b4a621457986b2a0d75712ae8403b9ec499699d3813ac39e",
+      "businessConclusion": "UNDETERMINED"
+    },
+    "ruleBinding": {
+      "scope": "生产环境",
+      "source": {
+        "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+        "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+        "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+      },
+      "ontology": {
+        "digest": "7a1350006da996e93098e91e32c904703ef22473a03876fe4ea6c2ea6a0c137f",
+        "resource_id": "f3-production-handover-20261113",
+        "revision_id": "r1"
+      },
+      "mapping_code": "production_handover",
+      "schema_version": "document-semantics-binding.v1"
+    },
+    "sourceDigest": "37eda450967a2d58478c7fef62082317dc47ca14f1449b07bba0d004e234d87b",
+    "sourceSnapshot": {
+      "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+      "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+      "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+    },
+    "missingSections": [
+      "回退步骤"
+    ],
+    "incompleteSections": [
+      "交接责任",
+      "变更范围"
+    ]
+  },
+  "progress": {
+    "runId": "workflow-run:3f4ba02708b98920d8871cf0e9612e7268f271accf5a2b8c963a6deae803d91d",
+    "steps": [
+      {
+        "id": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4:0:MODEL",
+        "decision": {
+          "action": "CLARIFY",
+          "question": "请确认：是否按“生产环境”规范，仅对订单服务“模拟发布001”开展只读交接文档核查，不执行上线或认定实际测试通过？"
+        },
+        "at": "2026-11-13T15:38:52.116109+00:00",
+        "output": null,
+        "toolState": "NOT_STARTED"
+      },
+      {
+        "id": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4:1:MODEL",
+        "decision": {
+          "tool": "read_document",
+          "action": "TOOL",
+          "arguments": {
+            "id": "order-release"
+          }
+        },
+        "at": "2026-11-13T15:41:37.006763+00:00",
+        "output": {
+          "lines": [
+            {
+              "line": 1,
+              "text": "# 订单服务上线交接说明"
+            },
+            {
+              "line": 2,
+              "text": "本文为合成测试材料，不执行真实上线。"
+            },
+            {
+              "line": 3,
+              "text": "## 交接责任"
+            },
+            {
+              "line": 4,
+              "text": "系统：订单服务"
+            },
+            {
+              "line": 5,
+              "text": "发布批次：模拟发布001"
+            },
+            {
+              "line": 6,
+              "text": "唯一上线负责人：李明（合成角色）"
+            },
+            {
+              "line": 7,
+              "text": "唯一上线负责人：陈玲（合成角色）"
+            },
+            {
+              "line": 8,
+              "text": "## 变更范围"
+            },
+            {
+              "line": 9,
+              "text": "影响范围：待确认"
+            },
+            {
+              "line": 10,
+              "text": "## 验证依据"
+            },
+            {
+              "line": 11,
+              "text": "验证记录：合成测试记录 TEST-001，查询接口与缓存失效用例通过。"
+            }
+          ],
+          "documentId": "order-release",
+          "sourceDigest": "37eda450967a2d58478c7fef62082317dc47ca14f1449b07bba0d004e234d87b",
+          "documentDigest": "4e2a4c8c7994e3ee5a1de071101d53030aed734dcc31e6bbe26f11eb10570747",
+          "sourceSnapshot": {
+            "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+            "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+            "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+          }
+        },
+        "toolState": "COMPLETED"
+      },
+      {
+        "id": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4:2:MODEL",
+        "decision": {
+          "tool": "read_document",
+          "action": "TOOL",
+          "arguments": {
+            "id": "production-handover-policy"
+          }
+        },
+        "at": "2026-11-13T15:41:43.770133+00:00",
+        "output": {
+          "lines": [
+            {
+              "line": 1,
+              "text": "# 生产上线交接检查规范"
+            },
+            {
+              "line": 2,
+              "text": "仅适用于同一系统、同一发布批次的生产变更上线交接，不适用于访谈纪要或其他文档。"
+            },
+            {
+              "line": 3,
+              "text": "## 交接责任"
+            },
+            {
+              "line": 4,
+              "text": "同一系统与同一发布批次必须明确一位唯一上线负责人；多个不同人名仅在此单值约束下算冲突。"
+            },
+            {
+              "line": 5,
+              "text": "## 变更范围"
+            },
+            {
+              "line": 6,
+              "text": "说明本次生产变更的影响范围，待确认不能视为已明确。"
+            },
+            {
+              "line": 7,
+              "text": "## 回退步骤"
+            },
+            {
+              "line": 8,
+              "text": "生产变更应提供回退步骤、触发条件及负责人；本规范适用的交接缺少该章节时需补齐。"
+            },
+            {
+              "line": 9,
+              "text": "## 验证依据"
+            },
+            {
+              "line": 10,
+              "text": "提供变更的验证记录。文字存在仅代表规则匹配，不代表测试实际通过。"
+            }
+          ],
+          "documentId": "production-handover-policy",
+          "sourceDigest": "37eda450967a2d58478c7fef62082317dc47ca14f1449b07bba0d004e234d87b",
+          "documentDigest": "4cb872a5f699483a5f828ea65b5ca32a046d9b94ca17c7ec6217bf1adafdaf08",
+          "sourceSnapshot": {
+            "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+            "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+            "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+          }
+        },
+        "toolState": "COMPLETED"
+      },
+      {
+        "id": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4:3:MODEL",
+        "decision": {
+          "tool": "review_document",
+          "action": "TOOL",
+          "arguments": {
+            "policyId": "production-handover-policy",
+            "documentId": "order-release"
+          }
+        },
+        "at": "2026-11-13T15:41:50.205317+00:00",
+        "output": {
+          "scope": "生产环境",
+          "policyId": "production-handover-policy",
+          "documentId": "order-release",
+          "ruleResult": {
+            "scope": "生产环境",
+            "findings": [
+              {
+                "kind": "SINGLE_VALUE_FIELD",
+                "field": "唯一上线负责人",
+                "status": "CONFLICT",
+                "section": "交接责任",
+                "evidence": [
+                  {
+                    "line": 3,
+                    "text": "## 交接责任",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 6,
+                    "text": "唯一上线负责人：李明（合成角色）",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 7,
+                    "text": "唯一上线负责人：陈玲（合成角色）",
+                    "documentId": "order-release"
+                  }
+                ],
+                "ruleCode": "release_owner",
+                "ruleName": "同一批次唯一上线负责人",
+                "observedValues": [
+                  "李明（合成角色）",
+                  "陈玲（合成角色）"
+                ],
+                "absenceCheckedAgainst": null
+              },
+              {
+                "kind": "SINGLE_VALUE_FIELD",
+                "field": "影响范围",
+                "status": "UNKNOWN",
+                "section": "变更范围",
+                "evidence": [
+                  {
+                    "line": 8,
+                    "text": "## 变更范围",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 9,
+                    "text": "影响范围：待确认",
+                    "documentId": "order-release"
+                  }
+                ],
+                "ruleCode": "impact_scope",
+                "ruleName": "影响范围已明确",
+                "observedValues": [
+                  "待确认"
+                ],
+                "absenceCheckedAgainst": null
+              },
+              {
+                "kind": "REQUIRED_SECTION",
+                "field": null,
+                "status": "MISSING",
+                "section": "回退步骤",
+                "evidence": [],
+                "ruleCode": "rollback",
+                "ruleName": "生产变更回退步骤",
+                "observedValues": [],
+                "absenceCheckedAgainst": "4a16afac634c3565b4a621457986b2a0d75712ae8403b9ec499699d3813ac39e"
+              },
+              {
+                "kind": "SINGLE_VALUE_FIELD",
+                "field": "验证记录",
+                "status": "SATISFIED",
+                "section": "验证依据",
+                "evidence": [
+                  {
+                    "line": 10,
+                    "text": "## 验证依据",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 11,
+                    "text": "验证记录：合成测试记录 TEST-001，查询接口与缓存失效用例通过。",
+                    "documentId": "order-release"
+                  }
+                ],
+                "ruleCode": "validation",
+                "ruleName": "提供验证记录",
+                "observedValues": [
+                  "合成测试记录 TEST-001，查询接口与缓存失效用例通过。"
+                ],
+                "absenceCheckedAgainst": null
+              }
+            ],
+            "documentId": "order-release",
+            "limitations": [
+              "SYNTHETIC_ONLY",
+              "EXPLICIT_SECTION_AND_LINE_LABELS_ONLY",
+              "SATISFIED_IS_RULE_MATCH_NOT_BUSINESS_CORRECTNESS"
+            ],
+            "rulesDigest": "a57907c72c7f98f1048befde0b3f7b5cb25a9244f0230b1fd232165ce93acad0",
+            "sourceDigest": "f231837aa6f77675069562246ca00ba31fd16a67643483122c0f3851aa14c4eb",
+            "documentTitle": "订单服务生产上线交接说明（合成测试）",
+            "schemaVersion": "document-rule-result.v1",
+            "documentDigest": "4a16afac634c3565b4a621457986b2a0d75712ae8403b9ec499699d3813ac39e",
+            "businessConclusion": "UNDETERMINED"
+          },
+          "ruleBinding": {
+            "scope": "生产环境",
+            "source": {
+              "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+              "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+              "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+            },
+            "ontology": {
+              "digest": "7a1350006da996e93098e91e32c904703ef22473a03876fe4ea6c2ea6a0c137f",
+              "resource_id": "f3-production-handover-20261113",
+              "revision_id": "r1"
+            },
+            "mapping_code": "production_handover",
+            "schema_version": "document-semantics-binding.v1"
+          },
+          "sourceDigest": "37eda450967a2d58478c7fef62082317dc47ca14f1449b07bba0d004e234d87b",
+          "sourceSnapshot": {
+            "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+            "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+            "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+          },
+          "missingSections": [
+            "回退步骤"
+          ],
+          "incompleteSections": [
+            "交接责任",
+            "变更范围"
+          ]
+        },
+        "toolState": "COMPLETED"
+      },
+      {
+        "id": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4:4:MODEL",
+        "decision": {
+          "tool": "build_report",
+          "action": "TOOL",
+          "arguments": {}
+        },
+        "at": "2026-11-13T15:41:56.796816+00:00",
+        "output": {
+          "scope": "生产环境",
+          "policyId": "production-handover-policy",
+          "documentId": "order-release",
+          "ruleResult": {
+            "scope": "生产环境",
+            "findings": [
+              {
+                "kind": "SINGLE_VALUE_FIELD",
+                "field": "唯一上线负责人",
+                "status": "CONFLICT",
+                "section": "交接责任",
+                "evidence": [
+                  {
+                    "line": 3,
+                    "text": "## 交接责任",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 6,
+                    "text": "唯一上线负责人：李明（合成角色）",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 7,
+                    "text": "唯一上线负责人：陈玲（合成角色）",
+                    "documentId": "order-release"
+                  }
+                ],
+                "ruleCode": "release_owner",
+                "ruleName": "同一批次唯一上线负责人",
+                "observedValues": [
+                  "李明（合成角色）",
+                  "陈玲（合成角色）"
+                ],
+                "absenceCheckedAgainst": null
+              },
+              {
+                "kind": "SINGLE_VALUE_FIELD",
+                "field": "影响范围",
+                "status": "UNKNOWN",
+                "section": "变更范围",
+                "evidence": [
+                  {
+                    "line": 8,
+                    "text": "## 变更范围",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 9,
+                    "text": "影响范围：待确认",
+                    "documentId": "order-release"
+                  }
+                ],
+                "ruleCode": "impact_scope",
+                "ruleName": "影响范围已明确",
+                "observedValues": [
+                  "待确认"
+                ],
+                "absenceCheckedAgainst": null
+              },
+              {
+                "kind": "REQUIRED_SECTION",
+                "field": null,
+                "status": "MISSING",
+                "section": "回退步骤",
+                "evidence": [],
+                "ruleCode": "rollback",
+                "ruleName": "生产变更回退步骤",
+                "observedValues": [],
+                "absenceCheckedAgainst": "4a16afac634c3565b4a621457986b2a0d75712ae8403b9ec499699d3813ac39e"
+              },
+              {
+                "kind": "SINGLE_VALUE_FIELD",
+                "field": "验证记录",
+                "status": "SATISFIED",
+                "section": "验证依据",
+                "evidence": [
+                  {
+                    "line": 10,
+                    "text": "## 验证依据",
+                    "documentId": "order-release"
+                  },
+                  {
+                    "line": 11,
+                    "text": "验证记录：合成测试记录 TEST-001，查询接口与缓存失效用例通过。",
+                    "documentId": "order-release"
+                  }
+                ],
+                "ruleCode": "validation",
+                "ruleName": "提供验证记录",
+                "observedValues": [
+                  "合成测试记录 TEST-001，查询接口与缓存失效用例通过。"
+                ],
+                "absenceCheckedAgainst": null
+              }
+            ],
+            "documentId": "order-release",
+            "limitations": [
+              "SYNTHETIC_ONLY",
+              "EXPLICIT_SECTION_AND_LINE_LABELS_ONLY",
+              "SATISFIED_IS_RULE_MATCH_NOT_BUSINESS_CORRECTNESS"
+            ],
+            "rulesDigest": "a57907c72c7f98f1048befde0b3f7b5cb25a9244f0230b1fd232165ce93acad0",
+            "sourceDigest": "f231837aa6f77675069562246ca00ba31fd16a67643483122c0f3851aa14c4eb",
+            "documentTitle": "订单服务生产上线交接说明（合成测试）",
+            "schemaVersion": "document-rule-result.v1",
+            "documentDigest": "4a16afac634c3565b4a621457986b2a0d75712ae8403b9ec499699d3813ac39e",
+            "businessConclusion": "UNDETERMINED"
+          },
+          "ruleBinding": {
+            "scope": "生产环境",
+            "source": {
+              "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+              "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+              "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+            },
+            "ontology": {
+              "digest": "7a1350006da996e93098e91e32c904703ef22473a03876fe4ea6c2ea6a0c137f",
+              "resource_id": "f3-production-handover-20261113",
+              "revision_id": "r1"
+            },
+            "mapping_code": "production_handover",
+            "schema_version": "document-semantics-binding.v1"
+          },
+          "reportDigest": "c5c2ec381743025af6cb0563106982afbd94821e8f51c42f48178783af427f98",
+          "sourceDigest": "37eda450967a2d58478c7fef62082317dc47ca14f1449b07bba0d004e234d87b",
+          "sourceSnapshot": {
+            "digest": "99aca5f9d52c0e7565543ddcfde1a5feed0966c32c451bd29cba1ce52fb6bee4",
+            "resource_id": "knowledge:fc86ac08-e435-4a29-968e-ebc3350361f9",
+            "revision_id": "knowledge-revision:c9f0c95a-8db5-4a37-a26a-fe9b4c6e4376"
+          },
+          "missingSections": [
+            "回退步骤"
+          ],
+          "completionAnswer": {
+            "scope": "生产环境",
+            "reportDigest": "c5c2ec381743025af6cb0563106982afbd94821e8f51c42f48178783af427f98",
+            "missingSections": [
+              "回退步骤"
+            ],
+            "incompleteSections": [
+              "交接责任",
+              "变更范围"
+            ]
+          },
+          "incompleteSections": [
+            "交接责任",
+            "变更范围"
+          ]
+        },
+        "toolState": "COMPLETED"
+      },
+      {
+        "id": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4:5:MODEL",
+        "decision": {
+          "action": "FINISH",
+          "answer": {
+            "scope": "生产环境",
+            "reportDigest": "c5c2ec381743025af6cb0563106982afbd94821e8f51c42f48178783af427f98",
+            "missingSections": [
+              "回退步骤"
+            ],
+            "incompleteSections": [
+              "交接责任",
+              "变更范围"
+            ]
+          }
+        },
+        "at": "2026-11-13T15:42:03.140413+00:00",
+        "output": null,
+        "toolState": "NOT_STARTED"
+      }
+    ],
+    "questions": [
+      {
+        "invocationId": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4",
+        "questionKey": "skill-invocation:7254687b3773a84ae2ab5c2409ae98915d569b046ee947514bc95006a15db0e4:0:INPUT",
+        "questionDigest": "56596b7fec559a662af98cb1f37327a88f94331ee21f9f4491422e3546f91f4e",
+        "question": "请确认：是否按“生产环境”规范，仅对订单服务“模拟发布001”开展只读交接文档核查，不执行上线或认定实际测试通过？",
+        "expiresAt": "2026-11-13T15:41:52.608096+00:00",
+        "answer": "确认。按生产环境规范，仅核查订单服务模拟发布001的合成交接文档；不执行上线，不把验证记录视为实际测试通过。请继续检查遗漏、冲突和待确认事项，并在这里返回依据。",
+        "expired": true
+      }
+    ],
+    "modelInFlight": false
+  }
+}

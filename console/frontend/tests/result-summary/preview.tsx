@@ -1,0 +1,16 @@
+import {createRoot} from 'react-dom/client';
+import {BrowserRouter} from 'react-router-dom';
+import {DocumentRuleResultView} from '../../src/problems/DocumentRuleResultView';
+import {NativeLiveProgress} from '../../src/problems/NativeLiveProgress';
+import {ConversationProgress} from '../../src/problems/ConversationProgress';
+import type {ExecutionView} from '../../src/api/preparedExecution';
+import {documentBusinessSummary} from '../../src/problems/documentRuleSummary';
+import '../../src/styles/product-experience.css';
+import '../../src/styles/prototype-frame.css';
+import '../../src/problems/PrivateConversation.css';
+import './preview.css';
+import '../../src/problems/DocumentArtifactView.css';
+import fixture from './actual-result.json';
+const report={schemaVersion:'document-review-output.v1',operation:'RENDER_REPORT',documentReview:fixture.review,sourceSnapshot:fixture.review.sourceSnapshot};
+const execution={artifacts:[{contentAccess:'AUTHORIZED',content:JSON.stringify(report)}],progress:{state:'SUCCEEDED',tasks:[]},preparation:{source_snapshot:fixture.review.sourceSnapshot,participants:[]}} as unknown as ExecutionView;
+createRoot(document.getElementById('root')!).render(<BrowserRouter><main><header><h1>交接说明核对结果</h1><p>受控组件展示 · 使用已保存真实结果结构，非在线验收</p></header><div className="preview-columns"><section><p className="document-lead">{documentBusinessSummary(execution)}</p><DocumentRuleResultView review={fixture.review}/></section><aside><ConversationProgress phase="DONE" busy={false} execution={execution} hasExecution/><NativeLiveProgress digest="fixture-read-only" conversation="fixture-result" csrf="unused" executionState="SUCCEEDED"/></aside></div></main></BrowserRouter>);

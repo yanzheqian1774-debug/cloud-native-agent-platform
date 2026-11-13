@@ -1,3 +1,4 @@
+import {documentBusinessSummary} from './documentRuleSummary';
 import type {ExecutionView} from '../api/preparedExecution';
 
 type Props={feedback?:{title:string;detail:string};recoveryState?:string;separatePreparation?:boolean;phase:string;pending?:string;busy:boolean;error?:string;execution:ExecutionView|null;hasExecution:boolean};
@@ -32,7 +33,7 @@ export function ConversationProgress({feedback,recoveryState,phase,pending,busy,
  let text=messages[pending??'']??(['CLARIFY','PLANNING_CLARIFY'].includes(phase)?'需要你确认资料或补充一个必要信息，回答后在这里继续。':hasExecution?'执行请求已返回，正在读取任务进展。':'已收到问题，正在准备理解目标。');
  if(hasExecution&&execution?.progress){const done=tasks.filter(t=>t.state==='SUCCEEDED').length;text=`已完成 ${done}/${tasks.length} 个任务，已生成 ${execution.artifacts.length} 份产物。${reporting?'正在整理结果报告。':'下方持续展示实际动作和返回结果。'}`;}
  if(readingSaved)text='正在读取已保存的执行进度与结果；这次打开不会重新提交或执行任务。';
- if(complete)text=`任务已完成，已生成 ${execution?.artifacts.length??0} 份产物。结果与核验依据在本会话下方；业务是否解决以评价结果为准。`;
+ if(complete)text=(execution&&documentBusinessSummary(execution))??`任务已完成，已生成 ${execution?.artifacts.length??0} 份产物。结果与核验依据在本会话下方；业务是否解决以评价结果为准。`;
  if(stopped)text=state==='RECOVERY_REQUIRED'||state==='UNKNOWN'?'执行结果尚待核实，已有进展保留，不会自动重跑。':terminalFailure?'本次执行已失败或取消，已有进展保留，请查看下方记录。':'最新进展暂无法确认，已有内容保留；请核对下方说明，不会自动重发请求。';
  if(phase==='UNDERSTANDING_FAILED')text='理解结果格式未通过校验，原问题和资料已保留；等待你选择是否沿用原问题继续，不会自动重试。';
  if(unverified)text='上次请求的结果尚待核实，已有进展保留；刷新不会重复提交。';
