@@ -3,7 +3,7 @@ import {test,expect,type Page} from '@playwright/test';
 const digest='a'.repeat(64),problem={business_problem_id:'problem',revision_id:'revision',digest:'b'.repeat(64)},ref={resource_id:problem.business_problem_id,revision_id:problem.revision_id,digest:problem.digest};
 async function fixture(page:Page,phase='PLAN',enabled=true){
  const question={invocationId:'native-one',questionKey:'question-one',questionDigest:'c'.repeat(64),question:'请确认采用内部交接规范还是外部规范？',expiresAt:'2099-01-01T00:00:00Z',answer:null as string|null,expired:false};
- const state={question,phase,executionState:'RUNNING',failureReason:null as string|null,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
+ const state={question,phase,longRail:false,executionState:'RUNNING',failureReason:null as string|null,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
   messages:[{message_id:'original',content:'帮我检查交接材料',author_id:'human:alice',disposition:'GOAL_RECORDED',request_key:'original'}] as Record<string,unknown>[],version:1,last:null as Record<string,unknown>|null,
   journal:{version:7,state:{key:'original-work',phase,pending:phase==='PLAN'?'planning':phase==='EXECUTE'?'execute':undefined,error:phase==='EXECUTE'?'上次执行结果尚待核实':undefined,question:'帮我检查交接材料',problem,messages:[{id:'user:original',text:'帮我检查交接材料'}],log:['原工作已保存'],...(phase==='RUNNING'?{execution:digest}:{})}}};
  await page.route('**/api/**',async route=>{
@@ -29,7 +29,7 @@ async function fixture(page:Page,phase='PLAN',enabled=true){
    if(state.dropStream)return route.fulfill({headers:{'Content-Type':'text/event-stream'},body:'event: progress\ndata: {"kind":"stage","stage":"processing"}\n\n'});
    return result(response);
   }
-  if(path.endsWith('/native-progress'))return result({steps:[],questions:[question],modelInFlight:false});
+  if(path.endsWith('/native-progress'))return result({steps:Array.from({length:state.longRail?20:0},(_,i)=>({id:'step-'+i,decision:{action:'TOOL',tool:'inspect_records'},output:{matches:[]},toolState:'COMPLETED'})),questions:[question],modelInFlight:false});
   if(path.endsWith('/native-answers')){state.ownerPosts.push(body);expect(body).toMatchObject({invocationId:question.invocationId,questionKey:question.questionKey,questionDigest:question.questionDigest,conversationId:'routing'});if(state.ownerReceipt==='rejected')return route.fulfill({status:422,json:{reasonCode:'INVALID_ANSWER'}});question.answer=body.answer;if(state.ownerReceipt==='lost')return route.abort();return result({accepted:true})}
   if(path.includes('/prepared-executions/'))return result({digest,executionStarted:true,preparation:{plan_id:'plan',plan_version:1,plan_digest:'e'.repeat(64),approval_id:'approval',source_snapshot:{resource_id:'source',revision_id:'1',digest:'f'.repeat(64)},semantics:{title:'交接核对',target:{problem:ref},tasks:[]},participants:[]},progress:{state:state.executionState,version:1,tasks:state.executionState==='RUNNING'?[]:[{task_id:'analysis',state:state.executionState,attempt_ordinal:1,reason:state.failureReason}]},resourceUses:[],artifacts:[],events:[],outcome:null,admission:{state:'ADMITTED',reason:null}});
   if(path.endsWith('/problems'))return result({problems:[]});
@@ -141,4 +141,19 @@ for(const [state,reason,label] of [['FAILED','InternalError','本次执行已失
 });
 test('routing receipt names the accepting stage instead of the current question',()=>{
  expect(routingReceiptNotice('选择交接资料',{kind:'UNDERSTANDING',invocationId:'old'})).toContain('补充“选择交接资料”已由资料理解接收');expect(routingReceiptNotice('补充计划',{kind:'PLANNING',invocationId:'old'})).toContain('方案准备接收');expect(routingReceiptNotice('原补充')).toContain('原处理阶段接收');
+});
+
+for(const width of [1440,900,390])test(`long Native progress rail scrolls independently at ${width}`,async({page},info)=>{
+ await page.setViewportSize({width,height:1000});const s=await fixture(page,'RUNNING');s.longRail=true;await page.goto('/work?conversation=routing');
+ const rail=page.locator('.f3-progress-rail'),dock=page.locator('.f3-composer-dock');
+ if(width<=1100)await page.getByRole('button',{name:'展开工作进展',exact:true}).click();
+ await expect(rail.locator('[data-native-step]')).toHaveCount(20);
+ const before=await dock.boundingBox();
+ const measure=await rail.evaluate(el=>{const b=el.getBoundingClientRect();const ancestors=[];for(let p=el.parentElement;p;p=p.parentElement){const c=getComputedStyle(p);ancestors.push({class:p.className,height:p.getBoundingClientRect().height,display:c.display,rows:c.gridTemplateRows,align:c.alignItems})}el.scrollTop=el.scrollHeight;return {height:b.height,y:b.y,client:el.clientHeight,scroll:el.scrollHeight,top:el.scrollTop,align:getComputedStyle(el).alignSelf,ancestors}});
+ await info.attach('rail-measurement',{body:JSON.stringify(measure,null,2),contentType:'application/json'});
+ expect(measure.top).toBeGreaterThan(0);expect(measure.y+measure.height).toBeLessThanOrEqual(1001);
+ await rail.locator('[data-native-step="step-19"]').scrollIntoViewIfNeeded();
+ const bottom=await rail.locator('[data-native-step="step-19"]').boundingBox();expect(bottom!.y+bottom!.height).toBeLessThanOrEqual(measure.y+measure.height+1);
+ expect(await dock.boundingBox()).toEqual(before);expect(s.modelCalls).toHaveLength(0);expect(s.ownerPosts).toHaveLength(0);
+ await page.screenshot({path:info.outputPath(`rail-${width}.png`),fullPage:true});
 });

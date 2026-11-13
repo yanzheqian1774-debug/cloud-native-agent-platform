@@ -244,3 +244,10 @@
 .f3-conversation .private-heading .work-view-tabs{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0;padding:0;border:0;flex-shrink:0}
 .private-heading .work-view-tabs button{padding:6px 10px;font-size:13px;line-height:20px}.private-heading .work-view-tabs small{font-size:11px;color:#637796;flex-basis:100%;text-align:right}
 @media(max-width:600px){.px-shell.journey-shell .f3-conversation>.private-heading{height:auto;min-height:76px;max-height:120px;flex-wrap:wrap;gap:4px;padding:8px 16px}.private-heading-title{flex-basis:100%}.f3-conversation .private-heading h1{white-space:nowrap;font-size:17px;margin:0}.private-heading-title>p{display:none}.private-heading .work-view-tabs small{flex-basis:auto}.f3-conversation .private-heading .work-view-tabs{max-width:100%}}
+
+/* The desktop rail must use its bounded grid track, not its content height. */
+@media(min-width:1101px){
+ .px-shell.journey-shell .f3-conversation .f3-progress-rail{
+  height:100%;max-height:100%;align-self:stretch;overscroll-behavior:contain;
+ }
+}
