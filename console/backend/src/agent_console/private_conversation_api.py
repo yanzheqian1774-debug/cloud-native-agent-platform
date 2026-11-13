@@ -459,6 +459,16 @@ def install_private_conversations(
     def read(request: Request, identity: str):
         return safe(request, lambda ctx: service.read(ctx, identity))
 
+    @app.get(PREFIX + "/conversations/{identity}/sources")
+    def conversation_sources(request: Request, identity: str):
+        def read_sources(ctx):
+            access = getattr(app.state, "conversation_source_access", None)
+            if access is None:
+                raise ConversationError("CONVERSATION_SOURCE_ACCESS_UNAVAILABLE", 503)
+            return access.catalogue(ctx, identity)
+
+        return safe(request, read_sources)
+
     @app.get(PREFIX + "/conversations/{identity}/head")
     def head(request: Request, identity: str):
         return safe(request, lambda ctx: service.head(ctx, identity))

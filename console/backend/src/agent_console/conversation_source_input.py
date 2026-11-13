@@ -98,7 +98,9 @@ def read_selected(automation, call, selected):
     )
 
 
-def source_reader(automation, authorizer, records, *, adoption=False):
+def source_reader(
+    automation, authorizer, records, *, adoption=False, owned_access=None
+):
     def read(context, conversation, message_id):
         def resolve(call):
             records.owned(call.connection, context, conversation)
@@ -159,6 +161,19 @@ def source_reader(automation, authorizer, records, *, adoption=False):
                 ).fetchone()
                 if not selected or not selected["state"].get("source"):
                     return None
+            if owned_access is not None:
+                admission = getattr(
+                    getattr(owned_access.draft_service, "authorization", None),
+                    "context_admission",
+                    None,
+                )
+                experience = getattr(admission, "experience", None)
+                if (
+                    experience
+                    and experience.matches(context)
+                    and experience.document.ownedConversationUnderstanding
+                ):
+                    return owned_access.execute(context, conversation, resolve)
             return authorizer.execute(
                 context,
                 (

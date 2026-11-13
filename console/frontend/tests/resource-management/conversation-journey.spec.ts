@@ -61,12 +61,12 @@ test('old misleading clarification journal renders stopped and an unknown receip
 });
 
 test('known coverage rejection reads actual gaps and proposes one bounded successor without replaying selection',async({page})=>{
- const s=await fixture(page),ref={resource_id:'source',revision_id:'1',digest:'a'.repeat(64)};let calls=0;
+ const s=await fixture(page),ref={resource_id:'source',revision_id:'1',digest:'a'.repeat(64)};let calls=0;const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  s.journal={version:10,state:{key:'k',question:prompt,phase:'SELECT_RESOURCES',pending:'select-resources',error:'Error: AUTOMATIC_SELECTION_COVERAGE_BLOCKED',messages:[{id:'user:q',text:prompt}],log:[],source:{source:ref},problem:{business_problem_id:'p'},planning:{result:{proposal:{proposal_id:'proposal',revision:1},proposal_digest:'b'.repeat(64)}},confirmation:{digest:'c'.repeat(64),plan:{plan_id:'proposal',version:1}}}};
  await page.route('**/api/workbench/v1/planning-v2/proposal/resource-coverage?version=1',route=>route.fulfill({json:{result:{planId:'proposal',planVersion:1,planDigest:'c'.repeat(64),subject:'human:development-admin',candidates:[{state:'REJECTED',reason:'PENDING_MEMBER_REQUIREMENT_UNAVAILABLE'}],selection:null,state:'BLOCKED'}}}));
  await page.route('**/question-activity-input',route=>route.fulfill({json:{result:{state:'READY',planningRequest:{target:{},answers:['original goal'],idempotency_key:route.request().postDataJSON().idempotencyKey,policy:{schema_version:'planning-policy.v2',mode:'FREE',required_operations:[],prohibited_operations:[],business_acceptance_as_task:false,template:null},output_language:'zh-CN'}}}}));
  await page.route('**/planning-v2/invocations',route=>{calls++;const body=route.request().postDataJSON();expect(body.source_proposal).toEqual({resource_id:'proposal',revision_id:'1',digest:'b'.repeat(64)});expect(body.answers.at(-1)).toContain('PENDING_MEMBER_REQUIREMENT_UNAVAILABLE');expect(body.idempotency_key).toBe('k:planning:1');return route.fulfill({status:503,json:{reasonCode:'REPAIR_TEST_STOP'}})});
- await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);await expect(page.getByText('本次请求尚未完成或结果待核实，已有内容已保留。')).toBeVisible();await expect(page.getByRole('heading',{name:'本次处理需要核查',exact:true})).toBeVisible();expect(s.journal.state?.cycle).toBe(1);expect(s.journal.state?.expectedPlanVersion).toBe(1);await page.reload();await expect(page.getByText('本次请求尚未完成或结果待核实，已有内容已保留。')).toBeVisible();await expect(page.getByRole('heading',{name:'本次处理需要核查',exact:true})).toBeVisible();expect(calls).toBe(1);
+ await page.goto('/work?conversation=new');await expect.poll(()=>calls).toBe(1);expect(errors).toEqual([]);await expect(page.getByText('本次请求尚未完成或结果待核实，已有内容已保留。')).toBeVisible();await expect(page.getByRole('heading',{name:'本次处理需要核查',exact:true})).toBeVisible();expect(s.journal.state?.cycle).toBe(1);expect(s.journal.state?.expectedPlanVersion).toBe(1);await page.reload();await expect(page.getByText('本次请求尚未完成或结果待核实，已有内容已保留。')).toBeVisible();await expect(page.getByRole('heading',{name:'本次处理需要核查',exact:true})).toBeVisible();expect(calls).toBe(1);
 });
 
 
@@ -124,7 +124,7 @@ test('first understanding request remains visible before the model returns witho
  const s=await fixture(page);let release!:()=>void;const gate=new Promise<void>(r=>release=r);let calls=0;
  await page.route('**/draft-assistance/invocations',async route=>{calls++;await gate;await route.fulfill({json:{result:{invocationId:'draft',contextId:'context',turnId:'turn',turnVersion:1,state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'还需要确认范围',draft:null}}});});
  await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await page.getByRole('button',{name:'使用2026-08、2026-09销售测试资料'}).click();
- await expect.poll(()=>calls).toBe(1);await expect(page.getByLabel('全流程进展')).toContainText('正在理解你的问题，等待目标整理结果。');await expect(page.getByLabel('全流程进展').locator('[aria-current=step]')).toContainText('理解问题');expect(s.modelCalls).toBe(0);release();await expect(page.getByText('还需要确认范围',{exact:true})).toBeVisible();expect(calls).toBe(1);
+ await expect.poll(()=>calls).toBe(1);await expect(page.getByLabel('全流程进展')).toContainText('正在理解你的提问');await expect(page.getByLabel('全流程进展')).toContainText('收到回复后会在本会话呈现');expect(s.modelCalls).toBe(0);release();await expect(page.getByText('还需要确认范围',{exact:true})).toBeVisible();expect(calls).toBe(1);
 });
 
 test('planning has its own visible pending state before its sole model response',async({page})=>{
@@ -466,3 +466,11 @@ for(const mode of ['existing','absent','race','denied','other404','mismatch','po
  }
  expect(s.modelCalls).toBe(0);
 });
+
+ test('saved NEEDS_DATA source failure recovers by read only in the original conversation',async({page})=>{
+  const s=await fixture(page);s.journal={version:5,state:{key:'saved',phase:'UNDERSTAND',pending:'source-discovery',error:'Error: 规划服务未能完成此操作 AUTHORIZATION_NOT_FOUND',understandingProtocol:3,userMessageId:'original',question:prompt,messages:[{id:'user:original',text:prompt}],log:[],draft:{invocationId:'completed',state:'SUCCEEDED',resultKind:'NEEDS_DATA',conversationDelivery:{state:'SAVED'}}}};
+  let reads=0;await page.route('**/conversations/new/sources',route=>{reads++;return route.fulfill({json:{result:{items:[]}}})});
+  await page.setViewportSize({width:1440,height:1000});await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'重新读取可用资料'})).toBeVisible();await expect(page.locator('#source-reply')).toBeVisible();await page.screenshot({path:test.info().outputPath('source-recovery-1440.png'),fullPage:true});
+  await page.reload();await expect(page.getByRole('button',{name:'重新读取可用资料'})).toBeVisible();expect(s.modelCalls).toBe(0);
+  await page.getByRole('button',{name:'重新读取可用资料'}).click();await expect.poll(()=>s.journal.state?.phase).toBe('CLARIFY');expect(reads).toBe(1);expect(s.modelCalls).toBe(0);expect(s.journal.state?.userMessageId).toBe('original');expect(s.journal.state?.draft).toMatchObject({invocationId:'completed',state:'SUCCEEDED'});
+ });

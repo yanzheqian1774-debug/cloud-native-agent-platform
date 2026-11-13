@@ -1069,10 +1069,20 @@ def build_workbench_composition(
                 business_problems,
                 application.state.conversation_actions,
             )
+            from .conversation_source_access import ConversationSourceAccess
+
+            owned_source_access = ConversationSourceAccess(
+                resource_automation,
+                authorizer,
+                application.state.conversation_actions.records,
+                draft_assistance,
+            )
+            application.state.conversation_source_access = owned_source_access
             application.state.conversation_source_input = source_reader(
                 resource_automation,
                 authorizer,
                 application.state.conversation_actions.records,
+                owned_access=owned_source_access,
             )
             if conversation_adoption is not None:
                 from .draft_assistance_api import _payload
@@ -1092,6 +1102,7 @@ def build_workbench_composition(
                     authorizer,
                     application.state.conversation_actions.records,
                     adoption=True,
+                    owned_access=owned_source_access,
                 )
                 application.state.conversation_adoption_source_input = adoption_source
 
