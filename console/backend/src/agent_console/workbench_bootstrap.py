@@ -62,6 +62,8 @@ from agent_console.workbench_team import team_operations
 from agent_console.workbench_workflow import workflow_operations
 from agent_console.workflow_definition_service import WorkflowDefinitionService
 
+from .native_typed_answer import settlement_reader_for_services
+
 
 @dataclass(slots=True)
 class WorkbenchComposition:
@@ -93,6 +95,7 @@ def build_workbench_composition(
     conversation_adoption: DraftAssistanceService | None = None,
     conversation_source_adoption: DraftAssistanceService | None = None,
     conversation_typed_answers: DraftAssistanceService | None = None,
+    conversation_structured_understanding: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
     model_repository=None,
     planning_v2_enabled: bool = False,
@@ -616,6 +619,27 @@ def build_workbench_composition(
                         authorizer,
                         os.environ.get("F3_TYPED_QUESTION_ANSWER_POLICY", ""),
                     )
+                if conversation_structured_understanding is not None:
+                    if (
+                        conversation_typed_answers is None
+                        or conversation_typed_answers.profile.adapter_revision
+                        != "v3-relation-adoption-source-answers"
+                        or (
+                            conversation_structured_understanding.profile.adapter_revision
+                            != "v4-structured-conversation"
+                        )
+                    ):
+                        raise ValueError(
+                            "STRUCTURED_UNDERSTANDING_PREDECESSOR_REQUIRED"
+                        )
+                    configure_adoption(
+                        conversation_structured_understanding,
+                        admission,
+                        conversation_typed_answers.authorization.context_admission,
+                        foundation.grants,
+                        authorizer,
+                        os.environ.get("F3_STRUCTURED_UNDERSTANDING_POLICY", ""),
+                    )
                 owned_business_path = os.environ.get("OWNED_BUSINESS_ADMISSION_POLICY")
                 if owned_business_path:
                     from .owned_business_admission import (
@@ -1000,9 +1024,10 @@ def build_workbench_composition(
                         prepared_execution_coordinator,
                         sales_v2_candidate=sales_v2_candidate,
                         typed_settlement_reader=(
-                            conversation_typed_answers.budget.read_invocation_settlement
-                            if conversation_typed_answers is not None
-                            else None
+                            settlement_reader_for_services(
+                                conversation_typed_answers,
+                                conversation_structured_understanding,
+                            )
                         ),
                     )
                     if prepared_execution_coordinator is not None
@@ -1106,11 +1131,19 @@ def build_workbench_composition(
                             (
                                 install_draft_assistance_routes(
                                     draft_assistance,
-                                    conversation_typed_answers
+                                    conversation_structured_understanding
+                                    or conversation_typed_answers
                                     or conversation_source_adoption
                                     or conversation_adoption
                                     or conversation_routing,
                                     retained_routing_services=(
+                                        conversation_typed_answers,
+                                        conversation_source_adoption,
+                                        conversation_adoption,
+                                        conversation_routing,
+                                    )
+                                    if conversation_structured_understanding is not None
+                                    else (
                                         conversation_source_adoption,
                                         conversation_adoption,
                                         conversation_routing,
@@ -1208,10 +1241,17 @@ def build_workbench_composition(
                     application.state.conversation_relation_reader,
                     application.state.conversation_actions.records,
                     draft_assistance,
-                    conversation_typed_answers
+                    conversation_structured_understanding
+                    or conversation_typed_answers
                     or conversation_source_adoption
                     or conversation_adoption,
-                    retained=(conversation_source_adoption, conversation_adoption)
+                    retained=(
+                        conversation_typed_answers,
+                        conversation_source_adoption,
+                        conversation_adoption,
+                    )
+                    if conversation_structured_understanding is not None
+                    else (conversation_source_adoption, conversation_adoption)
                     if conversation_typed_answers is not None
                     else (conversation_adoption,)
                     if conversation_source_adoption is not None
@@ -1244,7 +1284,8 @@ def build_workbench_composition(
                 adoption_owner = UnderstandingAdoptionApplication(
                     application.state.conversation_actions,
                     draft_assistance,
-                    conversation_typed_answers
+                    conversation_structured_understanding
+                    or conversation_typed_answers
                     or conversation_source_adoption
                     or conversation_adoption,
                     application.state.conversation_draft_service_for,
@@ -1252,7 +1293,13 @@ def build_workbench_composition(
                     source_metadata,
                     _payload,
                     source_transaction=owned_source_access.authorizer.controller.protected_request,
-                    retained=(conversation_source_adoption, conversation_adoption)
+                    retained=(
+                        conversation_typed_answers,
+                        conversation_source_adoption,
+                        conversation_adoption,
+                    )
+                    if conversation_structured_understanding is not None
+                    else (conversation_source_adoption, conversation_adoption)
                     if conversation_typed_answers is not None
                     else (conversation_adoption,)
                     if conversation_source_adoption is not None

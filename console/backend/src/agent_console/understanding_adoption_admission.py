@@ -37,6 +37,7 @@ def configure(service, root, previous, grants, authorizer, policy_path):
         "v3-relation-adoption",
         "v3-relation-adoption-source",
         "v3-relation-adoption-source-answers",
+        "v4-structured-conversation",
     }:
         raise AuthorityError("UNDERSTANDING_ADOPTION_PROFILE_INVALID")
     configuration = configured_limits(
@@ -62,6 +63,13 @@ def configure(service, root, previous, grants, authorizer, policy_path):
         previous_origin is None
         or previous_origin.routing is not previous
         or previous_origin.profile.adapter_revision != "v3-relation-adoption-source"
+    ):
+        raise AuthorityError("UNDERSTANDING_ADOPTION_PREDECESSOR_MISMATCH")
+    if service.profile.adapter_revision == "v4-structured-conversation" and (
+        previous_origin is None
+        or previous_origin.routing is not previous
+        or previous_origin.profile.adapter_revision
+        != "v3-relation-adoption-source-answers"
     ):
         raise AuthorityError("UNDERSTANDING_ADOPTION_PREDECESSOR_MISMATCH")
     service.authorization = GrantAdministrationDraftAuthorization(

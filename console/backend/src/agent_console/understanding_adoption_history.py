@@ -20,6 +20,7 @@ def source(resolver, c, context, invocation_id, conversation):
             "v3-relation-adoption",
             "v3-relation-adoption-source",
             "v3-relation-adoption-source-answers",
+            "v4-structured-conversation",
         }
         and resolver.routing.experience.root is resolver.root
         and resolver.routing.experience.routing_document.scopeMode

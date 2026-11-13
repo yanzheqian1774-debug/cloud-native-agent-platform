@@ -43,6 +43,7 @@ class UnderstandingAdoptionApplication:
                 "v3-relation-adoption",
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             },
             "UNAVAILABLE",
         )

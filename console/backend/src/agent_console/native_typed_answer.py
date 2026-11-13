@@ -67,7 +67,8 @@ def verified_interpretation(
     require(
         invocation
         and invocation.snapshot
-        and invocation.snapshot.adapter_revision == REVISION
+        and invocation.snapshot.adapter_revision
+        in {REVISION, "v4-structured-conversation"}
     )
     grant = read_grant(invocation)
     call.authority.require(
@@ -146,3 +147,38 @@ def verified_interpretation(
         "questionDigest": body["questionDigest"],
     }
     return {**value, "interpretationDigest": digest(value)}
+
+
+def settlement_reader_for_services(*services):
+    """Select only an explicitly retained exact profile; never the latest budget."""
+    readers = {}
+    for service in services:
+        if service is None:
+            continue
+        profile = service.profile
+        require(profile.adapter_revision in {REVISION, "v4-structured-conversation"})
+        key = (
+            profile.adapter_revision,
+            profile.profile_revision_id,
+            profile.profile_digest,
+        )
+        require(key not in readers)
+        readers[key] = service.budget.read_invocation_settlement
+    if not readers:
+        return None
+
+    def read(connection, invocation):
+        require(invocation.snapshot is not None)
+        snapshot = invocation.snapshot
+        key = (
+            snapshot.adapter_revision,
+            invocation.profile_revision_id,
+            snapshot.profile_digest,
+        )
+        reader = readers.get(key)
+        require(reader is not None)
+        # Original budget owner rechecks scope, reservation/invocation, pricing
+        # and authoritative settlement on this same caller connection.
+        return reader(connection, invocation)
+
+    return read

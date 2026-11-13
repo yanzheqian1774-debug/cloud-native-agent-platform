@@ -224,6 +224,7 @@ def _profile(
         "v3-relation-adoption",
         "v3-relation-adoption-source",
         "v3-relation-adoption-source-answers",
+        "v4-structured-conversation",
     }:
         expected = expected | {"policyDigest"}
     if (
@@ -300,6 +301,10 @@ def _profile(
             (
                 "v3-relation-adoption-source-answers",
                 "conversation-understanding-output.v3-relation-adoption-answers",
+            ),
+            (
+                "v4-structured-conversation",
+                "conversation-understanding-wire.v4",
             ),
         }
     )
@@ -395,6 +400,7 @@ def _profile(
                     "v3-relation-adoption",
                     "v3-relation-adoption-source",
                     "v3-relation-adoption-source-answers",
+                    "v4-structured-conversation",
                 }
                 and document["policyDigest"] != policy.digest
             ):

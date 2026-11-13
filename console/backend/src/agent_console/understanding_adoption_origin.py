@@ -50,6 +50,7 @@ class AdoptionOrigin:
                 "v3-relation-adoption",
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             }
             and self.routing.experience.root is self.root
             and self.routing.experience.routing_document.scopeMode

@@ -210,6 +210,10 @@ class DraftPolicy:
     @property
     def schema(self) -> dict:
         # Return a fresh copy; callers cannot mutate the policy for later requests.
+        if self.revision == "v4-structured-conversation":
+            from .structured_understanding_policy import SCHEMA
+
+            return json.loads(json.dumps(SCHEMA))
         if self.revision == "v3-relation-adoption-source-answers":
             from .conversation_typed_answer_policy import SCHEMA
 
@@ -251,6 +255,7 @@ class DraftPolicy:
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
                         "v3-relation-adoption-source-answers",
+                        "v4-structured-conversation",
                     }
                     else CONTEXT_VERSION,
                 },
@@ -269,6 +274,13 @@ class PolicyValidationError(ValueError):
 
 
 def policy_for(adapter_revision: str, schema_version: str) -> DraftPolicy:
+    if (adapter_revision, schema_version) == (
+        "v4-structured-conversation",
+        "conversation-understanding-wire.v4",
+    ):
+        from .structured_understanding_policy import INSTRUCTIONS
+
+        return DraftPolicy(adapter_revision, schema_version, INSTRUCTIONS)
     if (adapter_revision, schema_version) == ("v1", V1_SCHEMA_VERSION):
         return DraftPolicy("v1", V1_SCHEMA_VERSION, V1_INSTRUCTIONS)
     if (adapter_revision, schema_version) == ("v2", V2_SCHEMA_VERSION):

@@ -206,6 +206,10 @@ class ExactFileOpenAICredentialResolver:
                     "v3-relation-adoption-source-answers",
                     "conversation-understanding-output.v3-relation-adoption-answers",
                 ),
+                (
+                    "v4-structured-conversation",
+                    "conversation-understanding-wire.v4",
+                ),
             }
         ):
             raise DraftAssistanceError("CREDENTIAL_RESOLUTION_FAILED")
@@ -282,6 +286,10 @@ class OpenAIResponsesDraftTransport:
                     "v3-relation-adoption-source-answers",
                     "conversation-understanding-output.v3-relation-adoption-answers",
                 ),
+                (
+                    "v4-structured-conversation",
+                    "conversation-understanding-wire.v4",
+                ),
             }
             or profile.maximum_output_tokens != self.configuration.maximum_output_tokens
             or profile.total_timeout_seconds != self.configuration.total_timeout_seconds
@@ -298,6 +306,7 @@ class OpenAIResponsesDraftTransport:
                 "v3-relation-adoption",
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             }:
                 (
                     conversation_context_references
@@ -309,6 +318,7 @@ class OpenAIResponsesDraftTransport:
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
                         "v3-relation-adoption-source-answers",
+                        "v4-structured-conversation",
                     }
                     else context_references
                 )(content)
@@ -316,6 +326,7 @@ class OpenAIResponsesDraftTransport:
                     "v3-relation-adoption",
                     "v3-relation-adoption-source",
                     "v3-relation-adoption-source-answers",
+                    "v4-structured-conversation",
                 } and any(
                     r.startswith("server-message:")
                     for r in conversation_context_references(content)
@@ -362,11 +373,13 @@ class OpenAIResponsesDraftTransport:
                 "v3-relation-adoption",
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             }:
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
             if policy.revision in {
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             }:
                 from .understanding_source_body import provider_attachment
 
@@ -397,6 +410,7 @@ class OpenAIResponsesDraftTransport:
             "v3-relation-adoption",
             "v3-relation-adoption-source",
             "v3-relation-adoption-source-answers",
+            "v4-structured-conversation",
         }:
             from .conversation_relation_context import provider_input
 
@@ -408,6 +422,11 @@ class OpenAIResponsesDraftTransport:
                     "content": [{"type": "input_text", "text": provider_input()}],
                 }
             )
+        if policy.revision == "v4-structured-conversation":
+            from .structured_understanding_wire import compile_schema
+
+            snapshot = json.loads(document["input"][-1]["content"][0]["text"])
+            document["text"]["format"]["schema"] = compile_schema(snapshot)
         payload = json.dumps(
             document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")
@@ -759,6 +778,7 @@ class OpenAIResponsesDraftTransport:
                 "v3-relation-adoption",
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             }:
                 sent = json.loads(request.payload)
                 refs = (
@@ -771,6 +791,7 @@ class OpenAIResponsesDraftTransport:
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
                         "v3-relation-adoption-source-answers",
+                        "v4-structured-conversation",
                     }
                     else context_references
                 )(sent["input"][0]["content"][0]["text"])
@@ -778,19 +799,30 @@ class OpenAIResponsesDraftTransport:
                 "v3-relation-adoption",
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             }:
                 from .understanding_adoption_policy import server_references
 
                 refs |= server_references(request.payload)
             validation_stage = "LOCAL_RESULT"
-            understanding = validate_result(result, policy, refs)
+            if policy.revision == "v4-structured-conversation":
+                from .conversation_typed_answer_policy import validate as typed_validate
+                from .structured_understanding_wire import decode_request
+
+                result = decode_request(texts[0], request.payload, refs)
+                understanding = typed_validate(result, refs)
+            else:
+                understanding = validate_result(result, policy, refs)
             validation_stage = "ROUTE_BINDING"
             route = None
             if policy.revision == "v3-relation":
                 from .conversation_relation_context import validated_route
 
                 route = validated_route(result, request.payload)
-            elif policy.revision == "v3-relation-adoption-source-answers":
+            elif policy.revision in {
+                "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
+            }:
                 from .conversation_typed_answer_policy import route as typed_route
 
                 route = typed_route(result, request.payload)
@@ -798,6 +830,7 @@ class OpenAIResponsesDraftTransport:
                 "v3-relation-adoption",
                 "v3-relation-adoption-source",
                 "v3-relation-adoption-source-answers",
+                "v4-structured-conversation",
             }:
                 from .understanding_adoption_policy import route as adoption_route
 
@@ -823,6 +856,7 @@ class OpenAIResponsesDraftTransport:
             "v3-relation-adoption",
             "v3-relation-adoption-source",
             "v3-relation-adoption-source-answers",
+            "v4-structured-conversation",
         }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),
@@ -841,6 +875,7 @@ class OpenAIResponsesDraftTransport:
             "v3-relation-adoption",
             "v3-relation-adoption-source",
             "v3-relation-adoption-source-answers",
+            "v4-structured-conversation",
         }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),

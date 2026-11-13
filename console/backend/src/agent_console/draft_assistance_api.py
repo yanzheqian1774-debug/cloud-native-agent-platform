@@ -252,6 +252,7 @@ def install_draft_assistance_routes(
                             "v3-relation-adoption",
                             "v3-relation-adoption-source",
                             "v3-relation-adoption-source-answers",
+                            "v4-structured-conversation",
                         }
                         and getattr(app.state, "understanding_adoption", None)
                         is not None
@@ -380,6 +381,7 @@ def install_draft_assistance_routes(
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
                         "v3-relation-adoption-source-answers",
+                        "v4-structured-conversation",
                     }
                     or not conversation
                     or body.parentContextId
@@ -403,6 +405,7 @@ def install_draft_assistance_routes(
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
                         "v3-relation-adoption-source-answers",
+                        "v4-structured-conversation",
                     }:
                         raise DraftAssistanceError(
                             "CONVERSATION_UNDERSTANDING_UNAVAILABLE"
@@ -450,6 +453,7 @@ def install_draft_assistance_routes(
                             "v3-relation-adoption",
                             "v3-relation-adoption-source",
                             "v3-relation-adoption-source-answers",
+                            "v4-structured-conversation",
                         }
                     )
                     reader = getattr(

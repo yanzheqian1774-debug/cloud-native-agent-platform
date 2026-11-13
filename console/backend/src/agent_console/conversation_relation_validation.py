@@ -99,6 +99,7 @@ def install(app, authenticate, service, service_for, payload, status):
                     "v3-relation-adoption",
                     "v3-relation-adoption-source",
                     "v3-relation-adoption-source-answers",
+                    "v4-structured-conversation",
                 }
                 and getattr(app.state, "understanding_adoption", None) is not None,
             )
