@@ -942,6 +942,12 @@ def guard_budget(connection, budget, invocation, quote):
     from .context_call_admission import guard
     from .planning_call_admission import guard as planning_guard
 
+    service = getattr(budget, "service_planning_admission", None)
+    if service is not None and service.guard(connection, budget, invocation, quote):
+        return (
+            False  # Same original ledger/caps; no legacy Human identity substitution.
+        )
+
     if planning_guard(connection, budget, invocation, quote):
         return False
     if guard(connection, budget, invocation, quote):

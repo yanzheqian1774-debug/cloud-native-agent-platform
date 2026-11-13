@@ -1,0 +1,73 @@
+固定工作自动执行后继：源码及契约核查 / G1候选
+2026-11-14；源码基线 f3-fixed-work-authoring / b92d797，加未部署固定配置候选。只读；没有实际授权、模型、DB或host操作。
+
+一、已证实现有owner，不是新建调度平台
+1. authority_contracts.py AuthenticationSource.SERVICE_CREDENTIAL / VerifiedPrincipal；grant_administration_application.py _current_credential 338-373严格匹配service-only credential、principal、scope、expiry、tombstones。真实服务身份可以复用现认证机制；不使用human cookie、浏览器CSRF或伪造context。服务主体具体ID必须由root真实登记，不在设计中编造已存在ID。
+2. GrantAdministrationService.submit_request/decide_request/assign_offer/mint_owner_continuation复用精确动态对象授权。服务取得自己的continuation，独立issuer决定；固定工作保存/TEAM REVISE不能授START。
+3. PlanningApplication.confirm负责真实proposal/revision/digest到plan/approval；save_suggestion只接受invocation-backed正常来源。prepare_synthetic_validation明确namespace s5-324-native-capability、domain isolated-native-validation及HUMAN_SYNTHETIC_VALIDATION，不可用于本F3通用周期模板。
+4. workbench_prepared_execution.PreparedExecutionOwner: PREPARE_NATIVE_EXECUTION核真实Plan/批准与映射；START_PREPARED_EXECUTION先app.start再coordinator(call,p)，同owner事务形成Run和入队。仅调用app.start不等于完整启动。
+5. PreparedExecutionApplication.start按scope+actor+key与scope+run锁；精确payload冲突拒绝；原prepared_start_commands幂等回执。validate_approved_preparation核原Plan/approval/source/员工/Skill/映射，不复制approval。
+6. ExecutionPreparation.run_id='workflow-run:'+preparation.digest。相同plan/preparation换key仍同一Run；周期新实例必须有真正新正常计划/准备身份，不可把新key当新实例。
+7. NativeLoopRuntime.decide复用真实ledger reserve、journal claim、current authority、dispatch_guard与usage结算；固定工作不得另建计数器替代原预算。停机/授权到期不释放UNKNOWN预留。
+8. operator/workflow_graph仅现workflow依赖就绪调度，没有已证成日历/外部事件owner。配置trigger字段当前只是结构化意向。
+
+二、Accepted与候选必须区分
+ADR-0001 Decision Status Accepted：Kubernetes现控制面；本方案不替代其effect/state owner。
+docs/engineering/S5-V023-IMPL-324-EXECUTION-DELTA-G2.md D324-7明确ACCEPTED，A4正式owner精确后继，A5独立Plan/Run决定，A6逐effect资源/预算，A8只有隔离合成来源。这不能被泛化为任意服务模板计划授权。
+ARCH-300文件头仍Proposed/Not Started；本核查引用其中主体continuation边界与现实现一致，不能将该文件标题本身当新的Accepted服务授权。已有实现可复用不等于本工作获实际grant。
+ARCH-208文件同样Proposed；不以其候选文字给新周期语义背书。
+
+三、可先G1实现的窄纵向切片（等待独立review；默认OFF）
+“固定配置→一次已批准工作实例的服务接续→真实START→结果关联”，不是无人生成未来计划。
+前置：真实正常主线已经产生一个新的独立problem/criteria/approved plan/preparation；来源、主体及服务自己的精确授权均可核验。新实例不得来自旧UNKNOWN恢复；不改变已有准备主体要求，任何现owner拒绝都阻断。
+适配器只做：绑定exact fixed-work revision/digest和exact preparation；接收一个可信显式触发信号；复用同事务PreparedExecutionOwner START+coordinator；持久trigger→Run回执；GET复用现EXECUTION READ及产物权限。未配置精确服务身份、执行策略、准入、预算连接则拒绝。不得借authoringPolicy或READ创建execution权。
+建议接口：POST nested fixed-work revision /execution-bindings（只登记精确已准备对象，非确认计划）；POST /fixed-work-triggers（内部服务、无browser伪装）；GET nested /trigger-receipts。前端仍不出现启用周期按钮，直到下一阶段周期实例化具备。
+
+四、最小字段与当前边界
+ExecutionPolicy: policyId/revision/digest、scope、servicePrincipalId、credentialIdReference（非secret）、independentIssuerBasis、workRevision+digest、preparationDigest及plan/version/digest/approvalId、allowedOperations、exact source/resource tuple、purpose、notBefore/expiresAt、original ledgerId及现有总上限引用、triggerTypes={EXPLICIT_ONCE}、maxConcurrent=1、overlap=SKIP、enabled=false。
+Binding: workId/revision/digest、team exact、policy digest、original authenticated creator、service subject、exact preparation/run、original conversation/readback target、immutable owner approval references。所有引用从owner读取，不信客户端声称approved。
+Receipt: scope+service+workRevision+triggerSource+eventId（唯一），payloadDigest、bindingDigest、policyDigest、receivedAt、scheduledSlotUTC可空、runId、startCommandKey、status仅适配器观察、lastOwnerObservation。不要写入Native状态列。
+未来定时去重identity应(work immutable revision, schedule revision, UTC slot)，DST fold两个不同UTC槽；missed-slot默认SKIP，不补发历史。未来事件需已注册来源+eventId+payloadDigest，同ID异payload409。来源尚未接即不可用，不能接任意客户端eventID当可信事件。
+
+五、事务与崩溃
+使用现PG新增附属schema记录，不加新数据库/queue。需要新增迁移：尚未分配编号、不占0068；先请root预留再实现。0067配置schema不改已冻结文件。
+事务锁顺序：适配器scope/work revision锁→trigger identity锁→原START owner既有key/run锁；固定顺序且不持锁等待provider。核policy有效期/current credential及全部grant→读真实binding→插receipt（未提交）→原START+coordinator（同c）→写准确run回执→commit。任一步失败全回滚；必须隔离PG验证coordinator异常回滚无Run/dispatch/receipt。
+丢HTTP响应：同event/key只读owner回执，不新event、不新run；若原事务commit有Run则返回它。partial/inconsistent则UNKNOWN阻断，不自造not-started。START重复会再次进入coordinator：必须实际验证原coordinator幂等，不只断言start表唯一。
+并发不同事件指向同preparation：返回INSTANCE_ALREADY_BOUND/原run，不宣称第二周期成功。当前RUN UNKNOWN/INPUT等待保持未完成且阻止重叠；不改为失败后重发。
+取消：暂停仅停止未来trigger claim，不cancel当前Run。已有Run取消必须当前EXECUTION CANCEL与现cancel owner；发出取消意图不意味着CANCELLED。恢复pause不会补发过期slots。
+配置新revision不自动迁移已有binding/未来授权；旧Run继续按原refs读回。凭据/授权/策略/预算到期阻断新START与effect，已提交状态仍由原owner收集证据。policy配置替换必须root受控激活，不能把本地文件读取宣称DB事务撤销。
+
+六、真正缺的周期实例化契约，不能用G1适配伪造
+循环复用一个prepared digest不会产生新Run。现无通用SERVICE_FIXED_WORK_TEMPLATE来源；当前normal save_suggestion要求真实模型invocation，synthetic origin受D324-7 A8明确限制。要无模型周期模板直接构造proposal/approval，新增可信来源/改变现plan准入边界，需具体追加架构决定，不是改subject字段。
+最小待审差异：新增明确POLICY_FIXED_WORK_INSTANCE来源，绑定已确认definition revision、trigger receipt、当前service和独立批准依据；仍由原Plan owner生成独立proposal并正常记录审批，不将模板确认冒充逐Run批准；独立Run准入、原预算与source/资源核对保留。是否允许已批准模板政策代办理每轮Plan确认必须明确，不由agent自行补签。
+替代无需该新来源：每轮走真实已批准模型/规划owner（有独立service调用准入、原ledger）；目前owned-business human/browser限定不能直接复用，需受限service policy适配且不扩大具体模型授权。这会每轮产生真实模型成本，不是默认推荐省调用路线。
+因此先做精确已批准准备的单次桥是可实施工程范围，但不能报告自动周期已完成；剩余定义实例化/授权、时间和可信事件产生器、真实运行/结果UI分别保留。
+
+七、验证计划
+普通维护READ不能绑定START；服务跨主体/跨scope/错digest/过期/撤销/无独立START全部拒绝；保存配置不产生Run。真实隔离owner测试同事件并发1Run，异payload冲突，不同事件同prepared不新Run；coordinator失败全回滚；响应丢失只读原回执；UNKNOWN不重复effect；pause后旧Run可READ且无新claim；预算不足只由原owner拒绝不新ledger；已批准资源版本漂移拒绝。启用/真实演示仅root。
+当前没有实现新代码/迁移/测试。该计划应经独立静态review和root确认本slice依赖后再编码。
+
+八、追加端到端核查：服务Native并非现成可用（本节限制第三节候选）
+只读同时核root当前源码：native_loop_subject.configured_subject 的EXACT_ORIGINAL_SUBJECT明确只接受human:，NativeLoopRuntime.run核command.principal与配置相同。故SERVICE_CREDENTIAL认证支持不能推导服务Native循环现已支持。不能用human:前缀给服务起名规避。
+第三节服务纵向slice须先补独立EXACT_SERVICE_SUBJECT配置模式：从现已验证service credential绑定读取真实subject、保持command同principal/scope/current授权，明确批准的模型使用和原ledger引用；不得移除原human模式约束。它是新的受限适配候选，是否现Accepted授权足以覆盖待独立review；未经具体依据不得称直接可启动。可先实现完全当前主体的显式一次运行关联（用户主动沿现owner，无无人周期承诺），但不要以此替代服务闭环。
+预算进一步区分：NativeLoopRuntime有独立call_cap<=24、cost<=2_000_000静态护栏，并核ledgerId。原平台100/$10不是该静态护栏的自动替代；本包不改变任何cap，真实配置/root现ledger同时约束，以更严者阻断。新服务模型准入没有现成事实，不能复用human原准入决定。
+
+九、独立review收口 / 实施硬门（resource agent只读）
+0069已由root明确分配触发回执，0068保持Nativewait独占。单次exact准备→原START+coordinator→附属receipt无新可信来源/Run状态，可作G1默认off适配。
+实施前硬门：prepared/正常规划/服务模型准入必须本来允许该真实service；不能仅新增EXACT_SERVICE_SUBJECT配置将human已准备对象换主体。缺任何一项一律拒绝；不通过“先启动再测试”发现。
+GET旧回执：用当前精确EXECUTION READ及原scope/绑定核验，不要求旧START/policy写租约仍有效才能看已完成结果；新trigger/写必须重核有效policy和START。状态读取不授执行，也不暴露无READ的内容。
+独立review仅静态G1范围认可，未执行测试或实际验收，完整周期来源/服务准入仍未完成。
+
+实施阶段边界（本包）
+0069独立fixed_work_triggers schema，固定不可变回执；按当前可信原主体显式触发（BROWSER_SESSION），必须当前精确EXECUTION START/TEAM READ和准备对象prepared_by同主体。无bootstrap环境启用，无timer。EXPLICIT_SERVICE先明确503，不能把未完成服务准入当默认成立。
+同事件幂等、相同preparation不同event拒绝；已有普通START但无trigger receipt拒绝误认领。核原START精确key/run锁后检查已有run，避免并发普通START被包装为新trigger。原START owner/coordinator同一连接事务，不新增effect owner。
+READ旧回执保持当前精确EXECUTION READ+原主体/原path，不依赖过期写policy。并不报告结果成功，状态只START_COMMITTED，实际运行/结果仍现owner读取。
+测试使用原PreparedExecutionOwner/PreparedNativeCoordinator和独立随机PG，授权与发布资源为显式synthetic fixture，无真实host/model；不得将它称service端到端通过。
+正常服务模型准入适配/每轮新计划/独立审批/后续时间事件产生器还未完成，配置和本桥不能替代整体固定工作交付。
+
+正常service可做的最小Native适配（不等于完整service准入）
+新增显式EXACT_SERVICE_SUBJECT模式只收service:非空主体及serviceCredentialId非secret引用；原human/default配置不变。NativeLoopRuntime依旧非admin必须有authorize_current；进入run前再核command原subject、SERVICE_CREDENTIAL、exact credential引用，否则在任何owner/model访问前拒绝。真实current credential/generation/撤销与模型/资源准入保持原路径，不复制人身份。
+该模式只是消除原字符串human硬编码障碍，不可当服务审批事实。one-use触发policy的EXPLICIT_SERVICE仍503，直到正常模型/计划service admission真实owner接线具备；不把新模式自动接通触发、更不启用runtime配置。
+
+实装预算说明：本桥没有在START前创建模型预留，也不声称预算不足一定0Run。真实模型效应依旧到Native模型owner的reserve/dispatch_guard才可开始，预算不足会阻止调用，可能留下已创建但被阻断的Run。后继service准入应补与具体本轮模型上界绑定的现预算owner预检/正常预留，不造另一账本；当前本桥不启服务触发、不提高既有cap。
+同work未终态防护：固定trigger还锁scope/work并读其既有receipt所关联原progress；非SUCCEEDED/FAILED/CANCELLED或缺观察均拒绝新prepared/event。此处不靠host退出推断UNKNOWN，不改旧状态。它不是跨所有owner的全局并发管理；后续人工显式retry仍原授权边界。

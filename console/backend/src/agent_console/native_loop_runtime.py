@@ -38,7 +38,11 @@ from .native_document_skill import (
 from .native_employee_context import read_bound_employee_context
 from .native_loop_journal import NativeLoopJournal
 from .native_loop_provider import NativeDecisionJob
-from .native_loop_subject import configured_subject, require_original_subject
+from .native_loop_subject import (
+    configured_service_credential,
+    configured_subject,
+    require_original_subject,
+)
 from .ontology_execution import parse_preparation
 from .plan_suggestion_runtime import build_planning_runtime
 from .planning_measurement import settle
@@ -64,6 +68,7 @@ class NativeLoopRuntime:
         self.authorize_current = authorize_current
         self.config = json.loads(Path(path).read_text())
         self.subject = configured_subject(self.config)
+        self.service_credential_id = configured_service_credential(self.config)
         if self.subject != PRINCIPAL and authorize_current is None:
             raise ValueError("NATIVE_LOOP_EXACT_AUTHORITY_REQUIRED")
         if (
@@ -131,7 +136,11 @@ class NativeLoopRuntime:
         command = COMMAND.get()
         if command is None:
             raise ValueError("NATIVE_LOOP_OWNER_COMMAND_REQUIRED")
-        require_original_subject(self.subject, command)
+        require_original_subject(
+            self.subject,
+            command,
+            service_credential_id=getattr(self, "service_credential_id", None),
+        )
         scope = command.scope
         context = TrustedRequestContext(
             command.principal_id,

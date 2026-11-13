@@ -1,0 +1,27 @@
+G1 服务正常模型准入与周期实例化（0070，默认关闭）
+基线83bc485，依赖冻结0067目录与0069候选；独立f3-fixed-work-service-admission，不改真实库、配置、模型。
+
+第一纵向范围：已有真实确认Problem/Criteria＋固定配置的精确工作定义，由真实SERVICE_CREDENTIAL每个明确事件进入原PlanningSuggestionService，产生新的真实invocation-backed proposal；经原Plan确认/资源准备/独立Run准入后接原START。不伪造理解、不要求每周期重新复制同Problem，不把旧Plan重复START当新Run。源/标准变更需原owner新修订，不自动取latest。
+
+新增受限ServicePlanningAdmission适配现exact_admission.prepare/dispatch_guard；0070附属schema保存scope/真实service credential/固定work ref/event/request digest/实际invocation record及policy摘要、原ledger、expiry。无account_id、无local_accounts写入。记录是当前独立既有grant的校验回执，不是新签grant/HUMAN_REVIEWED。正式主体/credential由原认证authorizer验证；现PLAN PREPARE、MODEL INVOKE、Problem/Criteria READ仍各owner要求。policy只是进一步收紧，不作为这些grant替代。
+
+同c require_current_context+has_current_grants固定当前generation/epoch/revoke；锁scope/service/work后去重event；同event请求内容不同拒绝，同event只返回已存精确record。不明旧实例（未终态、UNKNOWN、未结算）阻断新event，不换key绕过。准备后崩溃没有claim也保留待核对，不自动清掉占位。
+
+budget仍用PostgresProviderCallBudget原policies/reservations/settlements。新增opt-in service guard仅对本对象正式绑定的service admission生效，其他路径原样；service guard在原reserve/dispatch事务中校验实际invocation/actor/profile/record、policy/credential/grants/expiry、原ledger与quote边界，再返回原cap账本计算。绝不重置/抬高累计cap、不结算UNKNOWN。原human授权/guard保持。新记录的scope/subject与旧human不混；旧预留仍累计进同ledger。模型授权仍原ModelUseSubject/resolve_authorized_model_binding，无新可信Plan来源。
+
+分层接口：内部composition接policy reader、真实当前authorizer、原repository、原budget；默认不装配API/定时器、不自动注册schema。显式migration only。每轮request key由work revision+可信事件identity稳定派生；源和target精确绑定policy。外部可信事件/时间产生器下一步接内部事件，不新增持久infra。
+
+正常模型产物继续原proposal/confirmation。无自动APPROVE，无新origin enum；同原provider/mock隔离证明invocation→proposal→owner-confirmation。服务执行门只有实际service准备/模型准入/资源满足后才可解锁0069 EXPLICIT_SERVICE；本包不能直接去掉硬门后用假proof。
+
+验证：真实隔离PG持久admission＋原规划owner＋原预算reservations/settlements（provider受控替身明确标示）＋原grantreader服务credential/currentgeneration、同event幂等、unknown/expiry/revoke/错credential/错source/跨work拒绝；旧human不注册service guard行为不变。授权或准备不足无调用，不用真实model做调试。
+
+第二纵向：时间槽产生器只计算timezone→UTC唯一slot，不自行执行provider；稳定event入本owner，无被遗漏时间自动补跑。固定配置修订及资源变更需显式绑定新policy；暂停阻止未来事件、不取消现Run。所有真实启用由root。
+
+实施收敛（以本段覆盖早期直接准备桥的设想）：
+1. 真实模型 owner 必须保持 planning-only；其拒绝模型自称 EXECUTION_ONLY 的规则不动。0070 ServiceCycleContinuation 复用实际 ReadonlyContinuation，同 caller connection/原Plan锁中完成其已存在的资源审批、PolicyResourcePreparationOrigin 后继、确认/准备/START，再追加0069事件回执。没有在0070创造新执行来源或第二执行owner。0069原EXPLICIT_SERVICE仍不可单独启用；原4文件冻结不改。
+2. 每事件有独立明确UTC生效窗口，只在窗口内允许新模型派发；已开始并成功的模型在总policy期限内可续接审批/执行，不用延长模型窗口。纯scheduled_event按已保存时区计算work revision+UTC槽稳定ID，DST歧义/不存在时刻明确拒绝；due_events不补错过的槽。tick只是显式内部宿主回调，没有安装/启动定时器或网络worker。
+3. 上一模型SUCCEEDED未有对应执行回执也阻断下一事件：不能把规划完成冒充整轮固定工作完成。上一Run若无进度/未终态/UNKNOWN仍阻断。原已完成事件可以读原回执，新的事件需新正常模型调用/原预算；旧UNKNOWN不改、预留不结算。
+4. schema0070仅独立准备事实，0069仅真实原START回执；迁移显式执行。运行装配只读核对0070结构/checksum再挂原PlanningBudget.owner，禁止挂wrapper而漏掉真实ledger guard，不替换其他exact admission。default-off不查询policy/DB、不挂budget。
+5. 模型正常authorizer要求真实当前decision，不仅StaticGrant布尔可见性。隔离管线实际经过GrantAdministrationService独立主体决策、PlanningCurrentAuthority及ModelUseAuthorizationAdapter；目标模型resolver/provider受控，绝不称真实OpenAI验收。真实部署仍需root为精确service授原PLAN/MODEL/来源/资源权限，原resource policy issuer须与service不同，不冒用Human账户。
+6. 当前只支持已确认Problem/Criteria作为精确固定工作定义，正常模型直接proposal为源。若resource维护先另有人工/策略选择修订，需精确沿已有lineage回到本次模型；当前未支持则拒绝，禁止任意latest/复制plan。源/Criteria或配置改变不自动套旧权限。
+7. 生产周期完整闭环仍待：受控宿主时钟回调装配、团队固定工作执行记录UI、每轮正常Plan审批/资源standing策略真实授权、Native worker真实service身份装配、完成/取消后下一周期实证。现实现没有跳过这些审批，第一包界面保存仍不能宣称已开启周期。可恢复的未claim准备占位需另由owner明确检查/取消，不自动释放。
