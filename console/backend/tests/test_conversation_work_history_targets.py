@@ -20,6 +20,7 @@ from test_execution_preparation import preparation
         "source_revision",
         "problem_revision",
         "context_subject",
+        "context_domain",
         "revoked",
         "malformed_problem",
     ],
@@ -91,7 +92,9 @@ def test_prepared_targets_are_exact_read_only_and_source_bound(mutation):
                 one = {
                     "context_id": "original",
                     "tenant_id": scope[0],
-                    "security_domain": scope[1],
+                    "security_domain": "other"
+                    if mutation == "context_domain"
+                    else scope[1],
                     "subject_id": "other"
                     if mutation == "context_subject"
                     else "ordinary",
@@ -129,6 +132,8 @@ def test_prepared_targets_are_exact_read_only_and_source_bound(mutation):
                 }
             elif "SELECT record FROM execution_authority.prepared_candidates" in sql:
                 one = {"record": p.model_dump(mode="json")}
+            elif "execution_authority.run_preparations" in sql:
+                one = None
             elif "pg_advisory_xact_lock" not in sql:
                 pytest.fail(sql)
             return NS(fetchone=lambda: one, fetchall=lambda: many)

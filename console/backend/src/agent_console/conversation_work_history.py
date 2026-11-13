@@ -202,5 +202,44 @@ def targets(service, records, c, context, conversation):
                 ("BUSINESS_ONTOLOGY", "READ"),
             }
         )
+    grants.update(result_read_targets(c, p))
     # BUSINESS_ONTOLOGY/USE is an existing separate gate; never renew it here.
+    return grants
+
+
+def result_read_targets(c, p):
+    """Saved run only; prospective future attempt targets are never renewed."""
+    from .business_problem_authorization import (
+        criteria_resource,
+        criterion_revision_resource,
+    )
+    from .execution_preparation_postgres import PreparedExecutionStore
+    from .prepared_skill_invocation import planned_outputs
+
+    key = (p.namespace, p.security_domain, p.run_id)
+    if not c.execute(
+        "SELECT 1 FROM execution_authority.run_preparations WHERE namespace=%s "
+        "AND security_domain=%s AND workflow_run_id=%s",
+        key,
+    ).fetchone():
+        return set()
+    stored, progress = PreparedExecutionStore(c).read(*key)
+    if stored != p:
+        raise AuthorityError("CONVERSATION_HISTORY_WORK_SOURCE_MISMATCH")
+    target = p.semantics.target
+    grants = {
+        ExactGrant("EVALUATION", "READ", "evaluation:prepared:" + p.digest),
+        ExactGrant(
+            "SUCCESS_CRITERIA_SET",
+            "READ",
+            criteria_resource(target.problem.resource_id),
+        ),
+        *(
+            ExactGrant("SUCCESS_CRITERION", "READ", criterion_revision_resource(r))
+            for r in target.criterion_revision_ids
+        ),
+    }
+    for output in planned_outputs(p, progress):
+        grants.add(ExactGrant("EVIDENCE", "READ_REFERENCE", output["evidenceGrant"]))
+        grants.add(ExactGrant("RESOURCE_USE", "READ", output["resourceGrant"]))
     return grants
