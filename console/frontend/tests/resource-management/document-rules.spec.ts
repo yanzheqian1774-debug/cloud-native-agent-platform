@@ -23,7 +23,7 @@ for (const kind of ['document','sales'] as const) {
    await expect(page.getByRole('button',{name:'修改定义',exact:true})).toBeVisible();
    await expect(page.getByRole('button',{name:'独立审核',exact:true})).toHaveCount(0);
    await expect(page.getByRole('region',{name:'文档规则验证结果'})).toContainText('1 项满足 · 1 项缺失 · 1 项待确认 · 1 项冲突');
-   await page.getByRole('button',{name:'修改定义',exact:true}).click();
+   await page.getByRole('button',{name:'修改定义',exact:true}).click();await page.getByText('已有规则字段',{exact:true}).click();
    await page.getByLabel('核对章节 · 交接负责人').fill('接收信息');
    await expect(page.getByText('正在编辑后继草稿，已保存修订保持不变。')).toBeVisible();
    await expect(page.getByRole('button',{name:'运行样本',exact:true})).toHaveCount(0);

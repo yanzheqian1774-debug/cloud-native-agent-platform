@@ -107,3 +107,17 @@ layout used by other resource kinds. Current saved-version graph shows object
 identity, attributes/unit and synonyms with explicit missing values, relation-source
 navigation, raw fixed-version definition and folded professional reference. These
 specialized read-detail tabs are the next outer-layout boundary, not a new design.
+
+## Frozen outer editor follow-up
+
+Restore one guarded detail return, exact base revision subtitle, white modification
+information card and definition card; move existing quick rule fields below the
+main structured editor. Existing typed owner names remain real fields. The owner
+has no purpose/use-boundary property, so no fake persisted input is introduced.
+Dirty return stays in the editor until explicit cancellation or save.
+No new relationship graph visual is authorized here: node-link redesign must first
+receive design/user review, then prototype approval. Current graph stays unchanged.
+Ten controlled browser tests passed, production build and full lint passed.
+Same 1440 top-of-page structural-tab screenshot is retained in
+ontology-p3-outer-followup-r1; frozen reference in ontology-p3-top-visual-r1.
+This is outer alignment, not complete pixel-parity or actual permission acceptance.
