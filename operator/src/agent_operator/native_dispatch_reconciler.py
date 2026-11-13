@@ -340,10 +340,19 @@ class NativeDispatchWorker:
                     NativeTerminalKind.UNKNOWN,
                     exc.reason,
                 )
+            # The frozen Task CRD accepts a bounded reason enum. Preserve the
+            # managed owner classification in diagnostics, not an invalid enum
+            # value that would leave the Task stuck Running after a failed PATCH.
+            managed_failure = exc.reason in {
+                "ManagedSkillFailed",
+                "PreparedCancellationStopped",
+            }
             status = {
                 "phase": "Failed",
-                "reason": exc.reason,
-                "message": exc.message,
+                "reason": "InternalError" if managed_failure else exc.reason,
+                "message": f"[{exc.reason}] {exc.message}"
+                if managed_failure
+                else exc.message,
                 "retryable": False,
                 "attempts": 1,
                 "completedAt": datetime.now(UTC).isoformat(),

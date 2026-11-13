@@ -223,3 +223,64 @@ def test_task_correlation_covers_identity_generation_and_fencing() -> None:
     assert KubernetesNativeTaskPort._matches(claim, body)
     body["metadata"]["annotations"]["agentos.io/claim-generation"] = "2"
     assert not KubernetesNativeTaskPort._matches(claim, body)
+
+
+@pytest.mark.parametrize("failure", ["skill", "cancel-before-skill"])
+def test_managed_failure_status_matches_frozen_crd_without_reinvocation(failure):
+    from dataclasses import replace
+    from pathlib import Path
+
+    import yaml
+    from agent_console.execution_preparation import ExecutionPreparationError
+    from agent_operator.native_dispatch_reconciler import ManagedSkillNativeTransport
+
+    schema = yaml.safe_load(
+        (Path(__file__).parents[2] / "manifests/crd/tasks.agentos.io.yaml").read_text()
+    )["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["status"]
+
+    class SchemaKubernetes(Kubernetes):
+        def patch_status(self, command, task_name, status):
+            properties = schema["properties"]
+            assert status["phase"] in properties["phase"]["enum"]
+            if "reason" in status:
+                assert status["reason"] in properties["reason"]["enum"]
+            super().patch_status(command, task_name, status)
+
+    class Caller:
+        calls = 0
+
+        def invoke(self, command):
+            self.calls += 1
+            if failure == "cancel-before-skill":
+                raise ExecutionPreparationError(
+                    "PREPARED_CANCEL_REQUESTED_BEFORE_SKILL"
+                )
+            return "FAILED", None
+
+    repository = Repository()
+    repository.claim = replace(
+        repository.claim,
+        command=replace(
+            repository.claim.command,
+            authorization_resource="governed-execution:prepared:" + "a" * 64,
+        ),
+    )
+    repository.original_claim = repository.claim
+    caller = Caller()
+    kubernetes = SchemaKubernetes()
+    completions = []
+    driver = worker(
+        repository, kubernetes, ManagedSkillNativeTransport(caller), completions
+    )
+    assert driver.run_once().state == "FAILED"
+    assert kubernetes.body["status"]["reason"] == "InternalError"
+    classification = (
+        "ManagedSkillFailed" if failure == "skill" else "PreparedCancellationStopped"
+    )
+    assert classification in kubernetes.body["status"]["message"]
+    assert kubernetes.body["status"]["retryable"] is False
+    assert completions[0][1].kind.value == "FAILED"
+    assert repository.uncertain == []
+    # Observe-only resume cannot call the managed Skill again.
+    driver.run_once()
+    assert caller.calls == 1
