@@ -86,3 +86,35 @@ the same synthetic title/purpose in the candidate fixture at 1440x900. The desig
 preview toolbar and product navigation shell have different framing; this is a
 review comparison, not a claim of pixel-identical whole-platform acceptance.
 Actual ordinary-account deployment and lifecycle writes remain integration gates.
+
+## Read-only ordinary-account follow-up
+
+Installed acceptance identified that DirectoryResourceWorkspace retained a second
+professional frame and omitted history. This bounded correction reuses its existing
+authorized DirectoryPage (same kind and identity only), carries revision and digest
+into the existing validated reader, and supplies the same three tabs plus independent
+history entry. The list explicitly reports its current filter/loading boundary; it
+is not a claim to enumerate all historical versions. No endpoint or permission change.
+Old professional URLs resolve to content with expanded technical records. Historical
+versions never mount successor preparation. Original conversation links remain intact.
+Validation covers same-name isolation, exact historical content/reload, revoked access,
+no writes, legacy route compatibility, and 1440px evidence; installed acceptance remains
+with the coordinator after integration.
+
+The follow-up also restores business-readable input/output fields, operation descriptions,
+dependency and execution boundaries, and explicitly distinguishes missing test receipts
+from passed tests. Overview reports current publication, viewed revision, source and
+readable draft separately without inferring absence. It removes the extra white outer
+shell, keeps one primary source return plus directory fallback, and moves scan limitations
+to the existing reference reading-scope disclosure. Reference short labels retain both
+prefix and distinguishing suffix, with complete identities still available in evidence.
+
+Local follow-up verification: 30 tests passed across ui01-resource-detail,
+prepared-skill-maintenance and f3-resource-detail; frontend build/lint passed. This includes
+readonly denial/version mismatch, exact historical reload, history without writes,
+original conversation draft return, and authorized preparation/test/publication at
+1280 and 390 widths. The extra saved-source-return suite failed before entering resource
+code because its unchanged savedSourceFixture.open could not find the old conversation
+button. Its subsequent test was interrupted; this is disclosed, not counted as passed,
+and that test file/helper are not modified in this follow-up. Installed acceptance and
+full pixel comparison remain coordinator gates.

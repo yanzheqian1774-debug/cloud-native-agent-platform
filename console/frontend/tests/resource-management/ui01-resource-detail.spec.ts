@@ -4,6 +4,7 @@ const scope={tenantId:principal.tenantId,securityDomain:principal.securityDomain
 const items=['skill','mcp'].map(kind=>({kind,identity:kind+':ui01',revisionId:'revision:1',digest:'a'.repeat(64),name:kind==='skill'?'准确销售技能':'准确连接配置',state:'PUBLISHED',enabled:true,isCurrentPublished:true,isCurrentDraft:false,createdAt:null,executionReady:false,policyReviewed:false}));
 async function fixture(page:Page,mode='normal'){
  const writes:string[]=[];
+ const readable=mode.startsWith('history')?[...items,{...items[0],revisionId:'revision:old',digest:'c'.repeat(64),isCurrentPublished:false},{...items[0],identity:'skill:unrelated',revisionId:'revision:unrelated'}]:items;
  await page.route('**/api/workbench/v1/**',async route=>{
   const r=route.request(),u=new URL(r.url());if(r.method()!=='GET'){writes.push(r.method()+u.pathname);return route.abort()}
   if(u.pathname.endsWith('/session'))return route.fulfill({json:session});
@@ -12,11 +13,13 @@ async function fixture(page:Page,mode='normal'){
   if(u.pathname.endsWith('/conversations'))return route.fulfill({json:{result:{items:[{conversation_id:conversation,title:'原会话',created_at:'2026-11-06'}]}}});
   if(u.pathname.endsWith('/business-problems'))return route.fulfill({json:{problems:[]}});
   if(/resource-management\/(skill|mcp)$/.test(u.pathname))return route.fulfill({json:{result:{subject:principal.principalId,scope,items:[]}}});
-  if(u.pathname.endsWith('/resource-directory'))return route.fulfill({json:{result:{subject:principal.principalId,scope,items:items.filter(i=>!u.searchParams.get('kind')||i.kind===u.searchParams.get('kind')),nextCursor:null,executionAuthority:'NONE'}}});
+  if(u.pathname.endsWith('/resource-directory'))return route.fulfill({json:{result:{subject:principal.principalId,scope,items:readable.filter(i=>!u.searchParams.get('kind')||i.kind===u.searchParams.get('kind')),nextCursor:null,executionAuthority:'NONE'}}});
   if(u.pathname.includes('/resource-directory/')){
-   const item=items.find(i=>u.pathname.includes('/'+i.kind+'/'))!;
+   const item=readable.find(i=>u.pathname.endsWith('/'+[i.kind,i.identity,i.revisionId].map(encodeURIComponent).join('/')))!;
+   if(!item)return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
+   if(mode==='history-denied'&&item.revisionId==='revision:old')return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
    if(mode==='denied')return route.fulfill({status:403,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});
-   return route.fulfill({json:{result:{...item,subject:mode==='identity'?'human:other':principal.principalId,scope,revision:{revisionId:item.revisionId,digest:mode==='version'?'b'.repeat(64):item.digest,state:'PUBLISHED',content:{description:'来自当前准确版本',instructions:'隔离长规则\n'.repeat(75),capabilities:['READ_DATA'],inputSchema:{type:'object'},outputSchema:{type:'object'},endpoint:'http://127.0.0.1:8765/mcp',sideEffect:'READ',idempotency:'IDEMPOTENT',timeoutSeconds:5}},usage:[]}}});
+   return route.fulfill({json:{result:{...item,subject:mode==='identity'?'human:other':principal.principalId,scope,revision:{revisionId:item.revisionId,digest:mode==='version'?'b'.repeat(64):item.digest,state:'PUBLISHED',content:{description:'来自当前准确版本',instructions:(item.revisionId==='revision:old'?'历史独立规则':mode.startsWith('history')?'按已确认期间核对资料，返回摘要并保留异常。':'隔离长规则\n'.repeat(75)),capabilities:['READ_DATA'],inputSchema:{type:'object',properties:{period:{type:'string',description:'需要核对的期间'}},required:['period']},outputSchema:{type:'object',properties:{summary:{type:'string',description:'核对摘要'}}},endpoint:'http://127.0.0.1:8765/mcp',sideEffect:'READ',idempotency:'IDEMPOTENT',timeoutSeconds:5}},usage:[]}}});
   }
   return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
  });return writes;
@@ -65,16 +68,42 @@ test('F3 readonly business tabs keep exact identity behind evidence and never gr
  await page.getByRole('tab',{name:'概览',exact:true}).focus();await page.keyboard.press('ArrowRight');
  await expect(page.getByRole('tab',{name:'内容与定义',exact:true})).toBeFocused();
  await expect(page.getByRole('heading',{name:'办理规则与能力',exact:true})).toBeVisible();
- await expect(page.getByText('revision:1',{exact:true})).toBeHidden();
+ await expect(page.getByRole('tabpanel',{name:'内容与定义'}).getByText('revision:1',{exact:true})).toBeHidden();
  await page.getByText('本版本完整定义与准确依据',{exact:true}).click();
- await expect(page.getByText('revision:1',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'查看专业详情',exact:true}).click();
+ await expect(page.getByRole('tabpanel',{name:'内容与定义'}).getByText('revision:1',{exact:true})).toBeVisible();
+ await page.getByText('版本技术记录',{exact:true}).click();
  await expect(page.getByRole('heading',{name:'固定版本',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'返回资源详情',exact:true}).click();
+ await page.getByText('版本技术记录',{exact:true}).click();
  await expect(page.getByRole('tab',{name:'内容与定义',exact:true})).toHaveAttribute('aria-selected','true');
  await page.getByRole('tab',{name:'引用与影响',exact:true}).click();
  await expect(page.getByRole('heading',{name:'关联任务中的保存引用',exact:true})).toBeVisible();
  await page.reload();await expect(page.getByRole('tab',{name:'引用与影响',exact:true})).toHaveAttribute('aria-selected','true');
  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
  await page.screenshot({path:info.outputPath('f3-readonly-impact-mobile.png')});expect(writes).toEqual([]);
+});
+
+for(const mode of ['history','history-denied'])test('F3 reader exact authorized history '+mode,async({page},info)=>{
+ const writes=await fixture(page,mode);await page.setViewportSize({width:1440,height:900});await page.goto(path());
+ await expect(page.getByRole('tab')).toHaveText(['概览','内容与定义','引用与影响']);
+ await expect(page.getByRole('button',{name:'查看专业详情'})).toHaveCount(0);
+ await expect(page.getByRole('tabpanel',{name:'概览'})).toContainText('修订 1');await expect(page.getByRole('tabpanel',{name:'概览'})).toContainText('当前读取范围未返回，不代表不存在');
+ await page.screenshot({path:info.outputPath('readonly-overview-1440.png')});
+ await page.getByRole('tab',{name:'内容与定义'}).click();await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('需要核对的期间');await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('未返回本版本测试与发布校验回执');await page.screenshot({path:info.outputPath('readonly-content-1440.png')});
+ await page.getByRole('tab',{name:'引用与影响'}).click();await expect(page.getByRole('tabpanel',{name:'引用与影响'})).toContainText('当前未读回关联任务的保存引用');await page.screenshot({path:info.outputPath('readonly-impact-1440.png')});
+ await page.getByRole('button',{name:'历史记录',exact:true}).click();
+ const history=page.getByRole('region',{name:'历史记录',exact:true});
+ await expect(history.getByRole('listitem')).toHaveCount(2);
+ await expect(history).not.toContainText('revision:unrelated');
+ await expect(history).toContainText('仅列出当前目录已加载');
+ await expect(page.getByRole('button',{name:/修改|发布|准备技能后继/})).toHaveCount(0);
+ await page.screenshot({path:info.outputPath('readonly-history-1440.png')});
+ await history.getByRole('listitem').filter({hasText:'revision:old'}).getByRole('link',{name:'查看内容'}).click();
+ await expect(page).toHaveURL(/resourceDigest=cccc/);
+ if(mode==='history-denied'){await expect(page.getByRole('alert')).toContainText('当前版本详情未读回');await expect(page.getByText('历史独立规则',{exact:true})).toHaveCount(0)}else{
+  await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('历史独立规则');
+  await page.reload();await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('历史独立规则');
+  await page.getByText('版本技术记录',{exact:true}).click();await expect(page.getByRole('button',{name:/修改|发布|准备技能后继/})).toHaveCount(0);
+  await page.getByRole('button',{name:'历史记录',exact:true}).click();await page.getByRole('button',{name:'返回内容',exact:true}).click();await expect(page.getByRole('tabpanel',{name:'内容与定义'})).toContainText('历史独立规则');
+ }
+ await expect(page.getByRole('link',{name:'返回原会话',exact:true})).toHaveAttribute('href','/work?conversation='+conversation);expect(writes).toEqual([]);
 });
