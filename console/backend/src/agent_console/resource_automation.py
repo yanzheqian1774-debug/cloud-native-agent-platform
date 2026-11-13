@@ -803,6 +803,7 @@ class ResourceAutomation:
         self.proof_grants(call, actions)
         actual_check = None
         if kind == "skill":
+            from .automatic_document_inputs import resolve as document_inputs
             from .automatic_skill_testing import verify_skill
 
             if source_ref is None or source_revision is None:
@@ -814,6 +815,9 @@ class ResourceAutomation:
                 source_ref,
                 source_revision,
                 proof,
+                document_inputs=lambda: document_inputs(
+                    self, call, work, issuer, key, source_ref, source_revision
+                ),
                 persist=not existing,
                 sales_v2_candidate=self.sales_v2_candidate,
             )

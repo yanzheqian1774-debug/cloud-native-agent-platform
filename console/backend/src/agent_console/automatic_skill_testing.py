@@ -76,6 +76,7 @@ def verify_skill(
     *,
     persist,
     sales_v2_candidate=False,
+    document_inputs=None,
 ):
     raw = source_revision["content"]["documents"][0]["chunks"][0]["content"]
     source = json.loads(raw)
@@ -115,6 +116,26 @@ def verify_skill(
     )
     if sales_v2:
         require_source(source)
+    from .native_document_skill import NativeRuleDocumentSkillExecutor
+
+    rule_revision = NativeRuleDocumentSkillExecutor.revision
+    rule_bound = any(
+        (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
+        == (
+            rule_revision.executor_id,
+            rule_revision.executor_revision,
+            rule_revision.configuration_digest,
+        )
+        for op in revision["content"].get("operations", [])
+    )
+    extra_inputs, rule_evidence = {}, {}
+    if rule_bound:
+        from .automatic_document_inputs import validate as validate_rule_inputs
+
+        if document_inputs is None:
+            raise AuthorityError("RESOURCE_DOCUMENT_RULE_POLICY_REQUIRED")
+        extra_inputs, rule_evidence = document_inputs()
+        validate_rule_inputs(extra_inputs, source, source_ref)
     suffix = ".v2" if sales_v2 else ".v1"
     names = [x["name"] for x in revision["content"].get("operations", [])]
     from .synthetic_delivery_skill_v2 import (
@@ -158,6 +179,7 @@ def verify_skill(
             "sourceSnapshot": reference,
             "source": source,
             "dependencies": dependencies,
+            **extra_inputs,
         }
         result = run(
             service,
@@ -190,6 +212,7 @@ def verify_skill(
                 "source": reference,
                 "sourceContentDigest": canonical_digest(source),
                 "policyDecisionId": proof.decision_id,
+                **rule_evidence,
             },
         )["testResult"]
         tests.append(
