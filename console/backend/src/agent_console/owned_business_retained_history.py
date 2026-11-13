@@ -28,23 +28,51 @@ def perimeter(policy):
     return policy.model_dump(exclude={"policyVersion", "expiresAt", "enabled"})
 
 
+def successor_perimeter(policy):
+    value = perimeter(policy)
+    for key in ("schemaVersion", "retainedReadPolicyDigests", "adoptionPolicyDigest"):
+        value.pop(key, None)
+    for scope in value["scopes"]:
+        scope.pop("skills")
+        scope.pop("employees")
+    return value
+
+
 def retained_readers(current, paths):
     from .owned_business_work_reader import OwnedBusinessWorkReader
 
     paths = configured_paths(json.dumps([str(p) for p in paths]))
+    from .owned_business_policy import OwnedBusinessPolicyV2
+
+    pins = (
+        set(current.policy.retainedReadPolicyDigests)
+        if isinstance(current.policy, OwnedBusinessPolicyV2)
+        else None
+    )
     readers = {}
     for path in paths:
         old = OwnedBusinessWorkReader(
-            path, current.authorization, current.generation, current.recovery_epoch
+            path,
+            current.authorization,
+            current.generation,
+            current.recovery_epoch,
+            _retained_read_only=True,
         )
         require(
             old.policy.enabled
-            and perimeter(old.policy) == perimeter(current.policy)
+            and (
+                perimeter(old.policy) == perimeter(current.policy)
+                if pins is None
+                else old.policy.digest in pins
+                and successor_perimeter(old.policy)
+                == successor_perimeter(current.policy)
+            )
             and old.policy.expiresAt <= current.policy.expiresAt
             and old.policy.digest != current.policy.digest
             and old.policy.digest not in readers
         )
         readers[old.policy.digest] = old
+    require(pins is None or set(readers) == pins)
     return readers
 
 

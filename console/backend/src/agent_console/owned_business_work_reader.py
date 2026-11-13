@@ -51,14 +51,20 @@ class OwnedBusinessWorkReader:
         recovery_epoch,
         *,
         retained_history_paths=(),
+        _retained_read_only=False,
     ):
+        self.retained_read_only = _retained_read_only
         self.path = path
         self.policy = OwnedBusinessPolicy.load(path)
         self.authorization = authorization
         self.generation, self.recovery_epoch = generation, recovery_epoch
         from .owned_business_retained_history import retained_readers
 
-        self.retained_history = retained_readers(self, retained_history_paths)
+        self.retained_history = (
+            {}
+            if _retained_read_only
+            else retained_readers(self, retained_history_paths)
+        )
 
     def _reads(self, c, context, grants, now, *, history=False):
         states = self.authorization.has_current_grants(
@@ -131,6 +137,7 @@ class OwnedBusinessWorkReader:
         This is not an identity/admission API. The dispatch owner separately
         validates the current trusted principal and exact READ/INVOKE grants.
         """
+        require(not self.retained_read_only, "HISTORY_ONLY")
         p = self.policy
         require(p.enabled and OwnedBusinessPolicy.load(self.path) == p, "DISABLED")
         proof = planning["record"].get("owned_business") or {}
@@ -182,6 +189,7 @@ class OwnedBusinessWorkReader:
         )
 
     def work(self, c, context, problem, *, source_digest=None, history=False):
+        require(not self.retained_read_only or history, "HISTORY_ONLY")
         p, now = self.policy, datetime.now(UTC)
         require(isinstance(problem, ExactReference), "EXACT_PROBLEM_REQUIRED")
         require(p.enabled and OwnedBusinessPolicy.load(self.path) == p, "DISABLED")

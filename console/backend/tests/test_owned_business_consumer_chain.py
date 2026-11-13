@@ -307,8 +307,9 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
         native.pool.close()
 
 
+@pytest.mark.parametrize("typed_successor", [False, True])
 def test_successor_retains_old_policy_history_without_execution(
-    owned_created, tmp_path, monkeypatch
+    owned_created, tmp_path, monkeypatch, typed_successor
 ):
     import json
     from datetime import datetime, timedelta
@@ -323,6 +324,15 @@ def test_successor_retains_old_policy_history_without_execution(
         policyVersion="history-window-successor",
         expiresAt=(prior.policy.expiresAt + timedelta(hours=1)).isoformat(),
     )
+    if typed_successor:
+        value.update(
+            schemaVersion="owned-business-admission.v2",
+            retainedReadPolicyDigests=[prior.policy.digest],
+            adoptionPolicyDigest="f" * 64,
+        )
+        for field in ("employees", "skills"):
+            for item in value["scopes"][0][field]:
+                item["revision_id"] += ":typed"
     path = tmp_path / "successor.json"
     path.write_text(json.dumps(value))
     path.chmod(0o600)
@@ -353,11 +363,14 @@ def test_successor_retains_old_policy_history_without_execution(
         assert history.history_only
         assert history.policy_digest == prior.policy.digest
         assert history.expires_at <= prior.policy.expiresAt < after_expiry
+        projected = derive_work(successor, c, current_context, problem, history=True)
+        assert projected.historyRead
+        assert projected.businessScope == prior.policy.scopes[0]
     with (
         e.repo.connection_scope() as c,
         pytest.raises(AuthorityError, match="POLICY_BINDING_CHANGED"),
     ):
-        successor.work(c, current_context, problem)
+        derive_work(successor, c, current_context, problem)
     with e.repo.connection_scope() as c:
         c.execute(
             "INSERT INTO authorization_admin.owned_business_revocations"

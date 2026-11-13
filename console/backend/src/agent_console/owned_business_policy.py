@@ -1,5 +1,6 @@
 """Separate standing business scope; owned chat and READ are not execution authority."""
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -86,7 +87,15 @@ class OwnedBusinessPolicy(BaseModel):
         try:
             if not path.is_absolute() or path.stat().st_mode & 0o077:
                 raise AuthorityError("OWNED_BUSINESS_POLICY_INVALID")
-            return cls.model_validate_json(path.read_text())
+            raw = json.loads(path.read_text())
+            if not isinstance(raw, dict):
+                raise AuthorityError("OWNED_BUSINESS_POLICY_INVALID")
+            policy_type = (
+                OwnedBusinessPolicyV2
+                if raw.get("schemaVersion") == "owned-business-admission.v2"
+                else cls
+            )
+            return policy_type.model_validate(raw)
         except (OSError, ValueError) as exc:
             raise AuthorityError("OWNED_BUSINESS_POLICY_INVALID") from exc
 
@@ -124,3 +133,21 @@ class OwnedBusinessPolicy(BaseModel):
         ):
             raise AuthorityError("OWNED_BUSINESS_SOURCE_NOT_AUTHORIZED")
         return selected
+
+
+class OwnedBusinessPolicyV2(OwnedBusinessPolicy):
+    """Explicit read-only inheritance; v1 serialization remains unchanged."""
+
+    schemaVersion: Literal["owned-business-admission.v2"]
+    retainedReadPolicyDigests: tuple[str, ...] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def exact_retained(self):
+        import re
+
+        pins = self.retainedReadPolicyDigests
+        if len(set(pins)) != len(pins) or any(
+            re.fullmatch(r"[a-f0-9]{64}", pin) is None for pin in pins
+        ):
+            raise ValueError("OWNED_BUSINESS_RETAINED_HISTORY_INVALID")
+        return self
