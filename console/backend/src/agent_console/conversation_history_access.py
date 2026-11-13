@@ -4,7 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 from .authority_contracts import AuthorityError, ExactGrant, GrantDecision, GrantId
-from .context_call_admission import lock
+from .context_call_admission import lock, request_row
 from .grant_administration_application import GrantRequestCommand
 from .read_access_recovery import current
 from .resource_automation import bound_grants
@@ -12,7 +12,7 @@ from .task_delegation import digest
 from .test_resource_read_access import was_denied
 
 
-def source_grant(c, context, source):
+def source_grant(c, context, source, *, policy=None, conversation=None):
     """Only canonical original-owner invocation records can establish a target."""
     if source.get("kind") != "DRAFT":
         return None
@@ -35,6 +35,17 @@ def source_grant(c, context, source):
         )
     ):
         raise AuthorityError("CONVERSATION_HISTORY_SOURCE_MISMATCH")
+    if policy is not None:
+        admitted = request_row(c, source["contextId"])
+        if (
+            not admitted
+            or admitted["subject_id"] != context.principal_id
+            or admitted["record"].get("conversation_id") != conversation
+            or admitted["record"].get("owned_understanding_policy_digest")
+            != policy.understanding_policy_digest
+        ):
+            raise AuthorityError("CONVERSATION_HISTORY_SOURCE_MISMATCH")
+        policy.require_record(c, context, admitted)
     return ExactGrant(
         "DRAFT_ASSISTANCE",
         "READ_DRAFT_ASSISTANCE_INVOCATION",
@@ -48,7 +59,8 @@ def prepare(service, records, context, conversation, c):
         return {"available": False, "items": []}
     # This is the current business eligibility window, not the old 8h call lease.
     _, now, lifetime = policy._require(service, c, context)
-    if conversation not in policy.document.conversations:
+    general = conversation not in policy.document.conversations
+    if general and not policy.document.ownedConversationUnderstanding:
         return {"available": False, "items": []}
     owned = records.owned(c, context, conversation, lock=True)
     if owned["owner_id"] != context.principal_id:
@@ -62,7 +74,15 @@ def prepare(service, records, context, conversation, c):
     for fact in facts:
         for key in ("source", "authorizationSource"):
             source = fact["facts"].get(key)
-            if source and (grant := source_grant(c, context, source)):
+            if source and (
+                grant := source_grant(
+                    c,
+                    context,
+                    source,
+                    policy=policy if general else None,
+                    conversation=conversation,
+                )
+            ):
                 targets.add(grant)
     grants = service.delegation.grants
     bound = bound_grants(grants, c)

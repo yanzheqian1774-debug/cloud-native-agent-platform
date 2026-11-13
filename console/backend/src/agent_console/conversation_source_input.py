@@ -115,6 +115,41 @@ def source_reader(automation, authorizer, records):
             return read_selected(automation, call, state["source"])
 
         try:
+            # Absence of a selected resource is a private-conversation fact.
+            # Prove ownership and the exact original user message before checking
+            # it; ordinary questions do not enter the business resource directory.
+            with records.connect() as c:
+                owned = records.owned(c, context, conversation)
+                if owned["archived_at"]:
+                    raise ConversationError("CONVERSATION_ARCHIVED", 409)
+                original = c.execute(
+                    "SELECT 1 FROM private_conversation.messages m WHERE "
+                    "m.tenant_id=%s AND m.security_domain=%s "
+                    "AND m.conversation_id=%s AND m.message_id=%s AND m.author_id=%s "
+                    "AND NOT EXISTS (SELECT 1 FROM "
+                    "private_conversation.message_facts f "
+                    "WHERE f.tenant_id=m.tenant_id "
+                    "AND f.security_domain=m.security_domain "
+                    "AND f.conversation_id=m.conversation_id "
+                    "AND f.message_id=m.message_id)",
+                    (
+                        *records.scope(context),
+                        conversation,
+                        message_id,
+                        context.principal_id,
+                    ),
+                ).fetchone()
+                if not original:
+                    raise ConversationError(
+                        "CONVERSATION_REQUEST_MESSAGE_MISMATCH", 409
+                    )
+                selected = c.execute(
+                    "SELECT state FROM private_conversation.journeys WHERE "
+                    "tenant_id=%s AND security_domain=%s AND conversation_id=%s",
+                    (*records.scope(context), conversation),
+                ).fetchone()
+                if not selected or not selected["state"].get("source"):
+                    return None
             return authorizer.execute(
                 context,
                 (

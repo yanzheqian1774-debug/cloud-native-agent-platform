@@ -1,6 +1,7 @@
 """Source attachment boundaries; actual owner integration is tested separately."""
 
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -132,7 +133,7 @@ def test_invocation_keeps_exact_metadata_without_original_content(monkeypatch):
         ),
     ],
 )
-def test_no_source_still_checks_list_without_claiming_source_stale(
+def test_selected_source_keeps_list_without_claiming_source_stale(
     failure, code, status
 ):
     observed = []
@@ -141,9 +142,11 @@ def test_no_source_still_checks_list_without_claiming_source_stale(
         observed.extend(grants)
         raise failure
 
-    reader = source.source_reader(None, SimpleNamespace(execute=execute), None)
+    ctx = SimpleNamespace(principal_id="human:test")
+    records = input_records({"source": {"selected": True}})
+    reader = source.source_reader(None, SimpleNamespace(execute=execute), records)
     with pytest.raises(ConversationError) as error:
-        reader(object(), "conversation", "message")
+        reader(ctx, "conversation", "message")
     assert error.value.reason == code
     assert error.value.status == status
     assert len(observed) == 1
@@ -169,7 +172,8 @@ def test_source_reader_distinguishes_storage_failure_from_exact_digest_stale(
         )
 
     call.connection = SimpleNamespace(execute=execute_sql)
-    records = SimpleNamespace(owned=lambda *args: None, scope=lambda ctx: ("t", "s"))
+    records = input_records({"source": selected, "userMessageId": "message"})
+    records.connect = lambda: nullcontext(call.connection)
     authorizer = SimpleNamespace(
         execute=lambda *args, **kwargs: kwargs["handler"](call)
     )
@@ -184,3 +188,41 @@ def test_source_reader_distinguishes_storage_failure_from_exact_digest_stale(
     assert error.value.status == (503 if storage_failure else 409)
     assert "private storage" not in str(error.value)
     assert source.current_attachment() is None
+
+
+def input_records(state, *, message=True, archived=False):
+    connection = SimpleNamespace(
+        execute=lambda sql, args: SimpleNamespace(
+            fetchone=lambda: (
+                ({"ok": 1} if message else None)
+                if "SELECT 1 FROM private_conversation.messages" in sql
+                else {"state": state}
+            )
+        )
+    )
+    return SimpleNamespace(
+        connect=lambda: nullcontext(connection),
+        owned=lambda *args: {"archived_at": archived},
+        scope=lambda ctx: ("t", "s"),
+    )
+
+
+def test_owned_no_source_never_enters_business_authorization():
+    def unexpected(*args, **kwargs):
+        pytest.fail("ordinary question entered business authorization")
+
+    reader = source.source_reader(
+        None, SimpleNamespace(execute=unexpected), input_records({})
+    )
+    assert reader(SimpleNamespace(principal_id="human:test"), "c", "m") is None
+
+
+@pytest.mark.parametrize("archived,message", [(True, True), (False, False)])
+def test_no_source_requires_current_conversation_and_original_message(
+    archived, message
+):
+    reader = source.source_reader(
+        None, None, input_records({}, archived=archived, message=message)
+    )
+    with pytest.raises(ConversationError):
+        reader(SimpleNamespace(principal_id="human:test"), "c", "m")

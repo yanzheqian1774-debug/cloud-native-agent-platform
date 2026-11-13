@@ -411,3 +411,14 @@ test('conversation admission refusal retains first cause across refresh without 
  expect(JSON.stringify(state.journal)).toBe(original);
  await expect(page.getByText('DRAFT_ASSISTANCE_NOT_FOUND',{exact:false})).toHaveCount(0);
 });
+
+for(const reason of ['CONVERSATION_INPUT_ACCESS_DENIED','CONVERSATION_INPUT_SERVICE_UNAVAILABLE','CONVERSATION_SOURCE_STALE_OR_UNREADABLE'])test('known input refusal remains stopped after absent invocation read '+reason,async({page})=>{
+ const state=await directFixture(page);state.notDispatched=true;
+ state.journal.state={...state.journal.state,understandingProtocol:3,pending:'understanding',error:'Error: '+reason};
+ const original=JSON.stringify(state.journal);
+ await page.goto('/work?conversation=direct');
+ await expect(page.getByRole('alert')).toContainText('原提问已保留');
+ await expect.poll(()=>state.recoveries).toBeGreaterThan(0);
+ await page.reload();await expect(page.getByRole('alert')).toContainText('原提问已保留');
+ expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);expect(JSON.stringify(state.journal)).toBe(original);
+});
