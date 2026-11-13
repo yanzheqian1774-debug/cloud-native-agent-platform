@@ -9,6 +9,17 @@ from .resource_automation_validation import validate
 from .workbench_business_problem import OwnerPrincipal
 
 
+class _ObservationReadUnavailable(Exception):
+    """Only an actual metadata READ denial, not content validation failure."""
+
+
+def _require_observation_read(authority, principal, kind, ref):
+    try:
+        require_read(authority, principal, kind, ref)
+    except AuthorityError as exc:
+        raise _ObservationReadUnavailable from exc
+
+
 def observe(
     automation,
     call,
@@ -79,7 +90,7 @@ def observe(
                 revision_id=row["revision"],
                 digest=row["digest"].removeprefix("sha256:"),
             )
-            require_read(call.authority, principal, "EMPLOYEE", employee)
+            _require_observation_read(call.authority, principal, "EMPLOYEE", employee)
             definition, _ = read_published(call.connection, scope, "EMPLOYEE", employee)
             if fixed_bindings is not None:
                 declared = {
@@ -120,7 +131,7 @@ def observe(
                     revision_id=member["revision_id"],
                     digest=member["digest"].removeprefix("sha256:"),
                 )
-                require_read(call.authority, principal, kind, ref)
+                _require_observation_read(call.authority, principal, kind, ref)
                 content, _ = read_published(call.connection, scope, kind, ref)
                 contents.setdefault(kind, []).append(content)
                 if kind == "KNOWLEDGE":
@@ -151,19 +162,20 @@ def observe(
                             if op["name"] in OUTPUTS
                         )
             operations.update(declared)
-        except AuthorityError:
+        except _ObservationReadUnavailable:
             read_unavailable = True
             continue  # No hidden names, references or counts.
-        except (PlanningError, ValueError, KeyError, TypeError):
+        except (AuthorityError, PlanningError, ValueError, KeyError, TypeError):
             unverified = True
             continue
     if bound is not None:
         operations.intersection_update(bound.operations)
+    complete = {"READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"} <= operations
     return {
         "state": "READ_UNAVAILABLE"
-        if read_unavailable and (fixed_bindings is not None or not operations)
+        if read_unavailable and (fixed_bindings is not None or not complete)
         else "UNVERIFIED"
-        if unverified and (fixed_bindings is not None or not operations)
+        if unverified and (fixed_bindings is not None or not complete)
         else "AUTHORIZED_MEMBER_DECLARATIONS_OBSERVED"
         if operations
         else "NO_COMPATIBLE_VISIBLE_DECLARATIONS",
