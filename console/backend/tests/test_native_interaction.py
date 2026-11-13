@@ -19,10 +19,9 @@ from test_prepared_native_pipeline import (
 
 
 def test_persisted_question_original_conversation_and_exact_answer(
-    repository, tmp_path, monkeypatch
+    repository, tmp_path
 ):
     seed_pipeline(repository, tmp_path, "cost")
-    monkeypatch.setattr(interaction, "for_call", lambda call: True)
     with repository.pool.connection() as c, c.transaction():
         for filename in ["0046_private_conversation.sql", "0050_native_loop.sql"]:
             c.execute((Path(__file__).parents[1] / "migrations" / filename).read_text())
@@ -46,10 +45,19 @@ def test_persisted_question_original_conversation_and_exact_answer(
     p = NS(
         **vars(scope),
         run_id=row["workflow_run_id"],
+        digest="a" * 64,
         participants=[],
         semantics=NS(target=NS(problem=NS(resource_id="problem"))),
     )
-    app = NS(principal="actor", validate=lambda prepared: None)
+    principal = NS(
+        principal_id="actor",
+        tenant_id=scope.namespace,
+        security_domain=scope.security_domain,
+    )
+    app = NS(principal=principal, validate=lambda prepared: None)
+    authority = NS(
+        require=lambda *args: None
+    )  # Controlled grants, no admin read bypass.
     journal = NativeLoopJournal(repository.pool, scope, row["skill_invocation_id"])
     with ThreadPoolExecutor() as pool:
         waiting = pool.submit(
@@ -65,7 +73,9 @@ def test_persisted_question_original_conversation_and_exact_answer(
         )
         for _ in range(100):
             with repository.pool.connection() as c:
-                call = NS(connection=c, context=NS(principal_id="actor"))
+                call = NS(
+                    connection=c, authority=authority, context=NS(principal_id="actor")
+                )
                 view = interaction.progress(call, app, p)
             if view["questions"]:
                 break
@@ -73,20 +83,52 @@ def test_persisted_question_original_conversation_and_exact_answer(
         q = view["questions"][0]
         payload = {k: q[k] for k in ["invocationId", "questionKey", "questionDigest"]}
         payload.update(conversationId="conversation", answer="production")
+
+        def revoked(*args):
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+
+        authority.require = revoked
+        with repository.pool.connection() as c, c.transaction():
+            denied = NS(
+                connection=c,
+                authority=authority,
+                context=NS(principal_id="actor"),
+                payload=payload,
+            )
+            with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+                interaction.progress(denied, app, p)
+            with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+                interaction.answer(denied, app, p)
+            assert (
+                c.execute(
+                    "SELECT count(*) AS n FROM skill_invocation.native_loop_records WHERE namespace=%s AND security_domain=%s AND skill_invocation_id=%s AND record_key='input:answer'",
+                    (*identity, row["skill_invocation_id"]),
+                ).fetchone()["n"]
+                == 0
+            )
+        authority.require = lambda *args: None
         for changed, reason in [
             ({"conversationId": "wrong"}, "CONVERSATION_MISMATCH"),
             ({"questionDigest": "b" * 64}, "QUESTION_NOT_FOUND"),
+            ({"invocationId": "another-invocation"}, "QUESTION_NOT_FOUND"),
+            ({"questionKey": "another-question"}, "QUESTION_NOT_FOUND"),
         ]:
             with repository.pool.connection() as c, c.transaction():
                 call = NS(
                     connection=c,
+                    authority=authority,
                     context=NS(principal_id="actor"),
                     payload={**payload, **changed},
                 )
                 with pytest.raises(AuthorityError, match=reason):
                     interaction.answer(call, app, p)
         with repository.pool.connection() as c, c.transaction():
-            call = NS(connection=c, context=NS(principal_id="other"), payload=payload)
+            call = NS(
+                connection=c,
+                authority=authority,
+                context=NS(principal_id="other"),
+                payload=payload,
+            )
             with pytest.raises(AuthorityError, match="PRINCIPAL_MISMATCH"):
                 interaction.answer(call, app, p)
             call.context.principal_id = "actor"
@@ -96,7 +138,12 @@ def test_persisted_question_original_conversation_and_exact_answer(
             }
         assert waiting.result(timeout=3)["answer"] == "production"
     with repository.pool.connection() as c, c.transaction():
-        call = NS(connection=c, context=NS(principal_id="actor"), payload=payload)
+        call = NS(
+            connection=c,
+            authority=authority,
+            context=NS(principal_id="actor"),
+            payload=payload,
+        )
         assert interaction.answer(call, app, p)["replayed"]
         call.payload = {**payload, "answer": "staging"}
         with pytest.raises(AuthorityError, match="ANSWER_CONFLICT"):
@@ -128,3 +175,206 @@ def test_first_model_progress_and_terminal_unknown_are_not_conflated(
     assert (
         rows[1]["result"] is None
     )  # Unknown reservation/claim is not resolved or replayed.
+
+
+@pytest.mark.parametrize(
+    "denial", [None, "subject", "scope", "execution", "resource", "revoked"]
+)
+def test_progress_exact_reader_without_administrator_and_fail_closed(
+    monkeypatch, denial
+):
+    from agent_console.authority_contracts import ExactGrant
+
+    principal = NS(principal_id="human:ordinary", tenant_id="t", security_domain="d")
+    p = NS(
+        namespace="other" if denial == "scope" else "t",
+        security_domain="d",
+        run_id="run-exact",
+        digest="a" * 64,
+        participants=["participant"],
+    )
+    expected = (
+        "human:ordinary",
+        "EXECUTION",
+        "READ",
+        "governed-execution:prepared:" + p.digest,
+    )
+    granted_resource = ExactGrant(
+        "KNOWLEDGE", "READ_RESOURCE", "knowledge:prepared-resource:source:r1"
+    )
+    monkeypatch.setattr(
+        interaction, "resource_read_grants", lambda *args: (granted_resource,)
+    )
+    reads, checks = [], []
+
+    class Authority:
+        def require(self, actor, owner, action, target):
+            value = (actor.principal_id, owner, action, target)
+            checks.append(value)
+            if (
+                owner == "EXECUTION"
+                and (value != expected or denial in {"execution", "revoked"})
+            ) or (owner == "KNOWLEDGE" and denial == "resource"):
+                raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+
+    class Connection:
+        def execute(self, sql, params=None):
+            assert sql.startswith("SELECT")
+            reads.append((sql, params))
+            return NS(fetchone=lambda: {"present": True}, fetchall=lambda: [])
+
+    if denial == "subject":
+        principal.principal_id = "human:other"
+    call = NS(
+        connection=Connection(),
+        authority=Authority(),
+        context=NS(principal_id=principal.principal_id),
+    )
+    app = NS(principal=principal)
+    if denial:
+        with pytest.raises(AuthorityError):
+            interaction.progress(call, app, p)
+        assert reads == []
+    else:
+        assert interaction.progress(call, app, p) == {
+            "runId": "run-exact",
+            "steps": [],
+            "questions": [],
+            "modelInFlight": False,
+        }
+        assert reads[-1][1] == ("t", "d", "run-exact")
+        assert checks[0] == expected
+        assert interaction.progress(call, app, p)["steps"] == []
+        assert len(reads) == 4
+    # READ does not substitute for START: answer must validate before any read.
+    before = len(reads)
+
+    def denied_start(prepared):
+        raise AuthorityError("START_REVOKED")
+
+    app.validate = denied_start
+    with pytest.raises(AuthorityError, match="START_REVOKED"):
+        interaction.answer(call, app, p)
+    assert len(reads) == before
+
+
+def test_ordinary_answer_requires_real_application_start_admission_before_query():
+    from agent_console.prepared_execution_application import (
+        PreparedExecutionApplication,
+    )
+    from agent_console.workbench_business_problem import OwnerPrincipal
+
+    principal = OwnerPrincipal("human:ordinary", "t", "d")
+    checks = []
+
+    class Authority:
+        def require(self, actor, owner, action, resource):
+            checks.append((actor, owner, action, resource))
+            raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+
+    class Connection:
+        def execute(self, *args):
+            pytest.fail("Denied answer must not query or write journal")
+
+    call = NS(
+        connection=Connection(),
+        authority=Authority(),
+        context=NS(principal_id=principal.principal_id),
+    )
+    app = PreparedExecutionApplication(call.connection, principal, call.authority)
+    p = NS(namespace="t", security_domain="d", digest="a" * 64)
+    with pytest.raises(AuthorityError, match="AUTHORIZATION_NOT_FOUND"):
+        interaction.answer(call, app, p)
+    assert checks == [
+        (principal, "EXECUTION", "START", "governed-execution:prepared:" + p.digest)
+    ]
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["exact", "other-subject", "other-conversation", "ambiguous", "partial-tables"],
+)
+def test_answer_pins_existing_problem_context_origin(monkeypatch, origin):
+    p = NS(
+        namespace="t",
+        security_domain="d",
+        run_id="run",
+        semantics=NS(target=NS(problem=NS(resource_id="problem"))),
+    )
+    body = {
+        "invocationId": "inv",
+        "questionKey": "q",
+        "questionDigest": "a" * 64,
+        "conversationId": "original",
+        "answer": "production",
+    }
+    question = {
+        "skill_invocation_id": "inv",
+        "record_key": "q:question",
+        "request_digest": body["questionDigest"],
+        "result": {
+            "principal": "human:ordinary",
+            "workflowRunId": "run",
+            "expiresAt": (datetime.now(UTC) + timedelta(minutes=1)).isoformat(),
+        },
+    }
+    monkeypatch.setattr(interaction, "records", lambda *args: [question])
+    original = {"subject_id": "human:ordinary", "conversation_id": "original"}
+    origins = [
+        {
+            **original,
+            **(
+                {"subject_id": "human:other"}
+                if origin == "other-subject"
+                else {"conversation_id": "other"}
+                if origin == "other-conversation"
+                else {}
+            ),
+        }
+    ]
+    if origin == "ambiguous":
+        origins.append(original)
+    prior = {
+        "request_digest": body["questionDigest"],
+        "result": {
+            "kind": "NATIVE_ANSWER",
+            "answer": "production",
+            "conversationId": "original",
+            "principal": "human:ordinary",
+            "questionDigest": body["questionDigest"],
+        },
+    }
+
+    class Connection:
+        def execute(self, sql, params=None):
+            assert sql.startswith("SELECT")
+            if "private_conversation.links" in sql:
+                return NS(
+                    fetchall=lambda: [
+                        {"conversation_id": "original"},
+                        {"conversation_id": "other"},
+                    ]
+                )
+            if "to_regclass" in sql:
+                return NS(
+                    fetchone=lambda: {
+                        "objects": True,
+                        "requests": origin != "partial-tables",
+                    }
+                )
+            if "context_call_objects" in sql:
+                assert params == ("t", "d", "problem")
+                return NS(fetchall=lambda: origins)
+            if "native_loop_records" in sql:
+                return NS(fetchone=lambda: prior)
+            pytest.fail("Unexpected answer query")
+
+    call = NS(
+        connection=Connection(), context=NS(principal_id="human:ordinary"), payload=body
+    )
+    app = NS(validate=lambda p: None)
+    if origin == "exact":
+        assert interaction.answer(call, app, p) == {"accepted": True, "replayed": True}
+    else:
+        with pytest.raises(AuthorityError, match="CONVERSATION_MISMATCH"):
+            interaction.answer(call, app, p)

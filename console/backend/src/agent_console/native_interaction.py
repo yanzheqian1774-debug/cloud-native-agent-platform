@@ -9,7 +9,6 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
 
 from .authority_contracts import AuthorityError
-from .development_administrator import for_call
 from .prepared_execution_resources import resource_read_grants
 
 
@@ -73,8 +72,14 @@ def await_answer(
 
 
 def records(call, app, p):
-    if not for_call(call):
+    if (p.namespace, p.security_domain) != (
+        app.principal.tenant_id,
+        app.principal.security_domain,
+    ):
         raise AuthorityError("NATIVE_PROGRESS_NOT_AUTHORIZED")
+    call.authority.require(
+        app.principal, "EXECUTION", "READ", "governed-execution:prepared:" + p.digest
+    )
     for participant in p.participants:
         for grant in resource_read_grants(p, participant):
             call.authority.require(
@@ -174,16 +179,41 @@ def answer(call, app, p):
     ):
         raise AuthorityError("NATIVE_QUESTION_PRINCIPAL_MISMATCH")
     linked = call.connection.execute(
-        "SELECT 1 FROM private_conversation.links l JOIN private_conversation.conversations c USING(tenant_id,security_domain,conversation_id) WHERE l.tenant_id=%s AND l.security_domain=%s AND l.conversation_id=%s AND c.owner_id=%s AND l.target->>'problemId'=%s",
+        "SELECT DISTINCT l.conversation_id FROM private_conversation.links l JOIN private_conversation.conversations c USING(tenant_id,security_domain,conversation_id) WHERE l.tenant_id=%s AND l.security_domain=%s AND c.owner_id=%s AND l.target->>'problemId'=%s",
         (
             p.namespace,
             p.security_domain,
-            body["conversationId"],
             call.context.principal_id,
             p.semantics.target.problem.resource_id,
         ),
+    ).fetchall()
+    tables = call.connection.execute(
+        "SELECT to_regclass('authorization_admin.context_call_objects') AS objects, to_regclass('authorization_admin.context_call_requests') AS requests"
     ).fetchone()
-    if not linked:
+    if bool(tables["objects"]) != bool(tables["requests"]):
+        raise AuthorityError("NATIVE_QUESTION_CONVERSATION_MISMATCH")
+    origins = (
+        call.connection.execute(
+            "SELECT r.subject_id,r.record->>'conversation_id' AS conversation_id FROM authorization_admin.context_call_objects o JOIN authorization_admin.context_call_requests r USING(tenant_id,security_domain,context_id) WHERE o.tenant_id=%s AND o.security_domain=%s AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s LIMIT 2",
+            (p.namespace, p.security_domain, p.semantics.target.problem.resource_id),
+        ).fetchall()
+        if tables["objects"]
+        else []
+    )
+    if origins:
+        allowed = (
+            len(origins) == 1
+            and origins[0]
+            == {
+                "subject_id": call.context.principal_id,
+                "conversation_id": body["conversationId"],
+            }
+            and {"conversation_id": body["conversationId"]} in linked
+        )
+    else:
+        # Legacy work without context objects must have one unambiguous origin.
+        allowed = linked == [{"conversation_id": body["conversationId"]}]
+    if not allowed:
         raise AuthorityError("NATIVE_QUESTION_CONVERSATION_MISMATCH")
     value = {
         "kind": "NATIVE_ANSWER",
