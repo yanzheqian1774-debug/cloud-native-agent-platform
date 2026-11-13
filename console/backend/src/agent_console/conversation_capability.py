@@ -4,7 +4,16 @@
 
 def describe(source, observed):
     operations = {op["operation"] for op in observed.get("operations", [])}
-    missing = sorted({"READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"} - operations)
+    uncertain = observed.get("state") in {
+        "READ_UNAVAILABLE",
+        "UNVERIFIED",
+        "NOT_CONFIGURED",
+    }
+    missing = (
+        []
+        if uncertain
+        else sorted({"READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"} - operations)
+    )
     schema = source["schemaVersion"]
     if schema == "document-review-source.v1":
         label = source.get("title", "文档检查资料")
@@ -40,7 +49,15 @@ def describe(source, observed):
     return {
         "label": label,
         "assessment": {
-            "state": "MISSING_TOOLS" if missing else "BOUNDED_ANALYSIS_AVAILABLE",
+            "state": (
+                "READ_UNAVAILABLE"
+                if observed.get("state") == "READ_UNAVAILABLE"
+                else "UNVERIFIED"
+            )
+            if uncertain
+            else "MISSING_TOOLS"
+            if missing
+            else "BOUNDED_ANALYSIS_AVAILABLE",
             "missingOperations": missing,
             "basis": "AUTHORIZED_PUBLISHED_SOURCE_AND_OBSERVED_MEMBER_CONTRACTS",
             "executionReady": False,

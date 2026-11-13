@@ -74,7 +74,7 @@ test('new-domain criteria stay in the conversation and unavailable tools remain 
  const s=await fixture(page),source={source:{resource_id:'energy',revision_id:'1',digest:'d'.repeat(64)},name:'能源记录',label:'能耗测试资料',periods:[],sourceSchema:'tabular-diagnostic-source.v1',synthetic:true,completionCriteria:['按计量点和单位分别统计超限记录','缺失数据单列'],assessment:{state:'MISSING_TOOLS',missingOperations:['ANALYZE_DATA'],limitations:['只读分析']}};
  s.journal={version:2,state:{key:'energy',question:'看看能耗哪里异常',phase:'CLARIFY',messages:[{id:'user:q',text:'看看能耗哪里异常'}],sources:[source],log:[]}};
  await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'使用现有能耗测试资料'})).toBeDisabled();await expect(page.getByText('“能耗测试资料”可读取，但缺少兼容的执行工具，暂不能自动分析。')).toBeVisible();expect(s.modelCalls).toBe(0);
- s.journal={version:3,state:{...s.journal.state,source,phase:'RUNNING'}};await page.reload();await expect(page.getByText('按计量点和单位分别统计超限记录')).toBeVisible();await expect(page.getByText('缺失数据单列',{exact:true})).toBeVisible();expect(s.modelCalls).toBe(0);
+ s.journal={version:3,state:{...s.journal.state,source,phase:'RUNNING'}};await page.reload();await page.getByText('本次能做什么与完成标准',{exact:true}).click();await expect(page.getByText('按计量点和单位分别统计超限记录')).toBeVisible();await expect(page.getByText('缺失数据单列',{exact:true})).toBeVisible();expect(s.modelCalls).toBe(0);
 });
 
 
@@ -481,4 +481,11 @@ test('initial question cites the server saved message identity and refresh never
  await page.route('**/conversations/new/messages',async route=>{const body=route.request().postDataJSON();s.messages.push({message_id:savedId,author_id:'human:development-admin',content:body.content,disposition:'GOAL_RECORDED'});return route.fulfill({json:{result:{identity:savedId}}})});
  await page.route('**/draft-assistance/invocations',async route=>{calls++;const body=route.request().postDataJSON(),content=JSON.parse(body.content);expect(body.conversationMessageId).toBe(savedId);expect(content.messages[0]).toEqual({id:'user:'+savedId,text:prompt});return route.fulfill({json:{result:{invocationId:'actual-primary',contextId:'actual-context',turnId:'actual-turn',turnVersion:1,state:'SUCCEEDED',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'请确认检查范围',draft:null,conversationDelivery:{state:'SAVED',messageId:'answer'}}}})});
  await page.goto('/work');await page.locator('#private-input').fill(prompt);await page.getByRole('button',{name:'发送',exact:true}).click();await expect.poll(()=>s.journal.state?.phase).toBe('CLARIFY');expect(s.journal.state?.userMessageId).toBe(savedId);expect(s.journal.state?.messages).toEqual([{id:'user:'+savedId,text:prompt}]);expect(calls).toBe(1);await page.reload();await expect(page.getByText('请确认检查范围',{exact:true})).toBeVisible();expect(calls).toBe(1);expect(s.journal.state?.messages).toEqual([{id:'user:'+savedId,text:prompt}]);
+});
+
+for(const observation of ['READ_UNAVAILABLE','UNVERIFIED'])test(`source ${observation} remains unverified rather than missing tools`,async({page})=>{
+ const s=await fixture(page),source={source:{resource_id:'document',revision_id:'7',digest:'d'.repeat(64)},name:'生产交接测试资料',periods:[],sourceSchema:'document-review-source.v1',synthetic:true,businessEligibility:{state:'SOURCE_SCOPE_MATCHED',executionReady:false},assessment:{state:observation,missingOperations:[],limitations:['只读分析']}};
+ s.journal={version:2,state:{key:'document',question:'检查交接资料',phase:'CLARIFY',messages:[{id:'user:q',text:'检查交接资料'}],sources:[source],log:[]}};
+ await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'使用生产交接测试资料'})).toBeDisabled();await expect(page.getByText(/缺少兼容的执行工具/)).toHaveCount(0);await expect(page.getByText(observation==='READ_UNAVAILABLE'?'资料可读取，但当前无法读取所需能力，暂不能核实自动处理条件。':'资料可读取，自动处理能力尚未核实。',{exact:false})).toBeVisible();expect(s.modelCalls).toBe(0);
+ await page.reload();await expect(page.getByRole('button',{name:'使用生产交接测试资料'})).toBeDisabled();expect(s.modelCalls).toBe(0);
 });

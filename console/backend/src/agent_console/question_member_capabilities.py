@@ -18,11 +18,14 @@ def observe(
     *,
     fixed_bindings=None,
     ontology_binding=None,
+    observation_scope=None,
 ):
     from .owned_business_resource_adapter import OwnedResourceWork
 
-    if isinstance(work, OwnedResourceWork) and fixed_bindings is None:
-        bound = work.businessScope
+    bound = (
+        work.businessScope if isinstance(work, OwnedResourceWork) else observation_scope
+    )
+    if bound is not None and fixed_bindings is None:
         fixed_bindings = [
             {"kind": kind, "reference": ref.model_dump(mode="json")}
             for kind, refs in (
@@ -54,6 +57,8 @@ def observe(
         call.context.principal_id, scope.namespace, scope.security_domain
     )
     operations = set()
+    read_unavailable = False
+    unverified = False
     rows = (
         identities(call.connection, scope, "EMPLOYEE", limit=201)
         if fixed_bindings is None
@@ -96,7 +101,7 @@ def observe(
                     )
                     for m in definition["members"]
                 }
-                if isinstance(work, OwnedResourceWork):
+                if bound is not None:
                     if not actual <= declared:
                         continue
                 elif not declared <= actual or any(
@@ -146,12 +151,20 @@ def observe(
                             if op["name"] in OUTPUTS
                         )
             operations.update(declared)
-        except (AuthorityError, PlanningError, ValueError, KeyError):
-            continue  # No hidden names, references, counts or readiness inference.
-    if isinstance(work, OwnedResourceWork):
-        operations.intersection_update(work.businessScope.operations)
+        except AuthorityError:
+            read_unavailable = True
+            continue  # No hidden names, references or counts.
+        except (PlanningError, ValueError, KeyError, TypeError):
+            unverified = True
+            continue
+    if bound is not None:
+        operations.intersection_update(bound.operations)
     return {
-        "state": "AUTHORIZED_MEMBER_DECLARATIONS_OBSERVED"
+        "state": "READ_UNAVAILABLE"
+        if read_unavailable and (fixed_bindings is not None or not operations)
+        else "UNVERIFIED"
+        if unverified and (fixed_bindings is not None or not operations)
+        else "AUTHORIZED_MEMBER_DECLARATIONS_OBSERVED"
         if operations
         else "NO_COMPATIBLE_VISIBLE_DECLARATIONS",
         "operations": [

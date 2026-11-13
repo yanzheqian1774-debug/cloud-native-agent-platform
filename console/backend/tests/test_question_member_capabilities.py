@@ -49,6 +49,7 @@ def test_only_readable_exact_source_members_supply_registered_capability_facts(
             a.policy.workScopes[0],
         )
         assert hidden["operations"] == []
+        assert hidden["state"] == "READ_UNAVAILABLE"
         assert "employee-definition" not in str(hidden)
 
 

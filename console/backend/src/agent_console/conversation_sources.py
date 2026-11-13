@@ -77,12 +77,9 @@ def sources(automation, call, root=None):
             from .conversation_capability import describe
             from .question_member_capabilities import observe
 
-            offer = describe(
-                raw, observe(automation, call, ref, check["sourceSchema"], work)
-            )
-            eligibility = None
+            eligibility, observation_scope = None, None
             if getattr(call, "operation", None) == "READ_OWNED_CONVERSATION_SOURCES":
-                eligibility = source_eligibility(
+                eligibility, observation_scope = source_scope_observation(
                     automation,
                     call,
                     {
@@ -92,6 +89,17 @@ def sources(automation, call, root=None):
                     },
                     content,
                 )
+            offer = describe(
+                raw,
+                observe(
+                    automation,
+                    call,
+                    ref,
+                    check["sourceSchema"],
+                    work,
+                    observation_scope=observation_scope,
+                ),
+            )
             result.append(
                 {
                     **offer,
@@ -122,19 +130,19 @@ class ConversationSources:
         return {"items": sources(self.automation, call), "executionStarted": False}
 
 
-def source_eligibility(automation, call, metadata, content):
+def source_scope_observation(automation, call, metadata, content):
     """Current source scope only, never admission or execution permission."""
     owner = getattr(automation, "owned_business", None)
     if owner is None:
-        return {"state": "UNVERIFIED", "executionReady": False}
+        return {"state": "UNVERIFIED", "executionReady": False}, None
     try:
         owner._policy(call.connection, call.context)
-        owner.policy.validate_source(metadata, content)
+        selected = owner.policy.validate_source(metadata, content)
     except AuthorityError as exc:
         state = (
             "READ_ONLY"
             if exc.reason_code == "OWNED_BUSINESS_SOURCE_NOT_AUTHORIZED"
             else "UNVERIFIED"
         )
-        return {"state": state, "executionReady": False}
-    return {"state": "SOURCE_SCOPE_MATCHED", "executionReady": False}
+        return {"state": state, "executionReady": False}, None
+    return {"state": "SOURCE_SCOPE_MATCHED", "executionReady": False}, selected
