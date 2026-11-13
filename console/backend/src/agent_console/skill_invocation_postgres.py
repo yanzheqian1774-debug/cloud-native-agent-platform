@@ -602,6 +602,7 @@ class PostgresSkillInvocationRepository:
                 provider_observation_id,
                 evidence["evidenceDigest"],
                 observed_at,
+                already_running=current is InvocationState.RUNNING,
             )
             self._insert_invocation_facts(connection, request, facts, row["high_water"])
             connection.execute(
@@ -618,7 +619,12 @@ class PostgresSkillInvocationRepository:
                 ),
             )
             resource_facts = self._terminal_resource_facts(
-                request, state, provider_observation_id, evidence, observed_at
+                request,
+                state,
+                provider_observation_id,
+                evidence,
+                observed_at,
+                already_running=current is InvocationState.RUNNING,
             )
             resource_snapshot = self._commit_resource_terminal(
                 connection, request, resource_facts, evidence, started_at, observed_at
@@ -652,9 +658,11 @@ class PostgresSkillInvocationRepository:
                 self.terminal_hook(connection)
             return snapshot
 
-    def _terminal_facts(self, request, state, observation_id, digest, now):
+    def _terminal_facts(
+        self, request, state, observation_id, digest, now, *, already_running=False
+    ):
         kinds = []
-        if state is InvocationState.SUCCEEDED:
+        if state is InvocationState.SUCCEEDED and not already_running:
             kinds.extend(
                 (
                     InvocationFactKind.INVOCATION_ACCEPTED,
@@ -681,9 +689,11 @@ class PostgresSkillInvocationRepository:
             for kind in kinds
         )
 
-    def _terminal_resource_facts(self, request, state, observation_id, evidence, now):
+    def _terminal_resource_facts(
+        self, request, state, observation_id, evidence, now, *, already_running=False
+    ):
         kinds = []
-        if state is InvocationState.SUCCEEDED:
+        if state is InvocationState.SUCCEEDED and not already_running:
             kinds.extend((ResourceUseFactKind.ACCEPTED, ResourceUseFactKind.RUNNING))
         kinds.append(
             {

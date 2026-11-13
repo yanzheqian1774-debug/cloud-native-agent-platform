@@ -137,6 +137,16 @@ class NativeLoop:
         self.limits, self.clock, self.cancelled = limits or Limits(), clock, cancelled
 
     def run(self, identity: str, goal: str, criteria: list[str], context: dict):
+        return self._run(identity, goal, criteria, context)
+
+    def run_continuation(self, identity, goal, criteria, context, continuation):
+        from .native_loop_wait import ContinuationFrame
+
+        if not isinstance(continuation, ContinuationFrame):
+            raise LoopBoundaryError("OWNER_CONTINUATION_FRAME_REQUIRED")
+        return self._run(identity, goal, criteria, context, continuation=continuation)
+
+    def _run(self, identity, goal, criteria, context, *, continuation=None):
         if (
             not identity
             or not goal
@@ -167,34 +177,69 @@ class NativeLoop:
                 "trace": [],
                 "answer": None,
             }
-        try:
-            previous = self.journal.claim(identity, commitment)
-        except Exception:
-            return {
-                "status": "OUTCOME_UNKNOWN",
-                "reason": "OWNER_RECONCILIATION_REQUIRED",
-                "trace": [],
-                "answer": None,
-            }
-        if previous is not None:
-            if previous.get("requestDigest") != commitment:
-                raise LoopBoundaryError("JOURNAL_IDENTITY_CONFLICT")
-            # An unfinished owner claim is intentionally not resumed or replayed.
-            return snapshot(
-                previous.get("result")
-                or {
+        start_ordinal, active_seconds = 0, self.limits.total_seconds
+        trace, observations, seen = [], [], set()
+        if continuation is None:
+            try:
+                previous = self.journal.claim(identity, commitment)
+            except Exception:
+                return {
                     "status": "OUTCOME_UNKNOWN",
-                    "reason": "UNSETTLED_OWNER_CLAIM",
+                    "reason": "OWNER_RECONCILIATION_REQUIRED",
                     "trace": [],
                     "answer": None,
-                },
-                2_097_152,
-            )
+                }
+            if previous is not None:
+                if previous.get("requestDigest") != commitment:
+                    raise LoopBoundaryError("JOURNAL_IDENTITY_CONFLICT")
+                # An unfinished owner claim is intentionally not resumed or replayed.
+                return snapshot(
+                    previous.get("result")
+                    or {
+                        "status": "OUTCOME_UNKNOWN",
+                        "reason": "UNSETTLED_OWNER_CLAIM",
+                        "trace": [],
+                        "answer": None,
+                    },
+                    2_097_152,
+                )
+        else:
+            from .native_loop_wait import LoopContinuationObservation
+
+            frame = continuation
+            entry = getattr(self.ports, "enter_continuation", None)
+            if (
+                not callable(entry)
+                or frame.root_digest != commitment
+                or type(frame.next_ordinal) is not int
+                or not 1 <= frame.next_ordinal < self.limits.maximum_decisions
+                or isinstance(frame.remaining_active_seconds, bool)
+                or not isfinite(frame.remaining_active_seconds)
+                or not 0 < frame.remaining_active_seconds <= self.limits.total_seconds
+                or len(frame.trace) != frame.next_ordinal
+            ):
+                raise LoopBoundaryError("OWNER_CONTINUATION_FRAME_INVALID")
+            trace = snapshot(list(frame.trace), 2_097_152)
+            observations = snapshot(list(frame.observations), 2_097_152)
+            seen = set(frame.seen)
+            if (
+                trace[-1].get("decision", {}).get("action") != "CLARIFY"
+                or not observations
+                or observations[-1].get("kind") != "USER_ANSWER"
+                or trace[-1].get("clarification")
+                != {k: v for k, v in observations[-1].items() if k != "kind"}
+            ):
+                raise LoopBoundaryError("OWNER_CONTINUATION_ANSWER_REQUIRED")
+            # Owner verifies all references/current authority and wins a durable
+            # entry CAS. Repeated callers only observe; no root receipt is written.
+            if entry(frame, snapshot(root)) is not True:
+                return LoopContinuationObservation(identity, frame.checkpoint_digest)
+            start_ordinal = frame.next_ordinal
+            active_seconds = frame.remaining_active_seconds
         started = self.clock()
-        trace, observations, seen = [], [], set()
 
         def remaining():
-            return self.limits.total_seconds - (self.clock() - started)
+            return active_seconds - (self.clock() - started)
 
         def stop_reason():
             if self.cancelled():
@@ -257,7 +302,7 @@ class NativeLoop:
             return result
 
         try:
-            for ordinal in range(self.limits.maximum_decisions):
+            for ordinal in range(start_ordinal, self.limits.maximum_decisions):
                 assembled = snapshot(
                     {
                         **root,
@@ -285,13 +330,90 @@ class NativeLoop:
                     }
                 )
                 if kind == "CLARIFY":
+                    contract = None
+                    if set(action) == {"action", "question", "questionContractId"}:
+                        validate_contract = getattr(
+                            self.ports, "validate_question_contract", None
+                        )
+                        if not callable(validate_contract):
+                            raise LoopBoundaryError("INVALID_CLARIFICATION")
+                        try:
+                            contract = snapshot(
+                                validate_contract(action["questionContractId"])
+                            )
+                        except Exception:
+                            raise LoopBoundaryError(
+                                "INVALID_QUESTION_CONTRACT"
+                            ) from None
+                        if (
+                            not isinstance(contract, dict)
+                            or contract.get("contractDigest")
+                            != action["questionContractId"]
+                        ):
+                            raise LoopBoundaryError("INVALID_QUESTION_CONTRACT")
                     if (
-                        set(action) != {"action", "question"}
+                        set(action)
+                        != (
+                            {"action", "question", "questionContractId"}
+                            if contract is not None
+                            else {"action", "question"}
+                        )
                         or not isinstance(action["question"], str)
                         or not action["question"].strip()
                         or len(action["question"]) > 1000
                     ):
                         raise LoopBoundaryError("INVALID_CLARIFICATION")
+                    defer_input = getattr(self.ports, "defer_input", None)
+                    if defer_input is not None:
+                        from .native_loop_wait import LoopWaiting
+
+                        if stop_reason():
+                            raise LoopBoundaryError(stop_reason())
+                        try:
+                            allowed = self.ports.authorize("INPUT", snapshot(action))
+                        except Exception:
+                            raise LoopBoundaryError(
+                                "AUTHORIZATION_UNAVAILABLE"
+                            ) from None
+                        if allowed is not True:
+                            raise LoopBoundaryError("AUTHORIZATION_DENIED")
+                        if stop_reason():
+                            raise LoopBoundaryError(stop_reason())
+                        # Opt-in owner commits INPUT+question+checkpoint together.
+                        # Never claim/finish INPUT through the synchronous wrapper,
+                        # and never serialize WAIT as a terminal result or error.
+                        receipt = defer_input(
+                            action["question"],
+                            key=f"{identity}:{ordinal}:INPUT",
+                            remaining_seconds=remaining(),
+                            frame=snapshot(
+                                {
+                                    "root": root,
+                                    "rootDigest": commitment,
+                                    "ordinal": ordinal,
+                                    "trace": trace,
+                                    "observations": observations,
+                                    "seen": sorted(seen),
+                                    **(
+                                        {"answerContract": contract}
+                                        if contract is not None
+                                        else {}
+                                    ),
+                                },
+                                2_097_152,
+                            ),
+                        )
+                        if (
+                            not isinstance(receipt, LoopWaiting)
+                            or receipt.invocation_id != identity
+                        ):
+                            # Owner may have committed; do not finish the root.
+                            raise RuntimeError("INVALID_DURABLE_WAIT_RECEIPT")
+                        return receipt
+                    if contract is not None:
+                        # Typed questions are only supported by the explicit
+                        # durable owner, never the legacy synchronous path.
+                        raise LoopBoundaryError("TYPED_QUESTION_DURABLE_OWNER_REQUIRED")
                     clarify = getattr(self.ports, "clarify", None)
                     if clarify is None:
                         return finish("NEEDS_INPUT", "CLARIFICATION_REQUIRED", action)
@@ -320,6 +442,20 @@ class NativeLoop:
                         )
                     except Exception:
                         raise LoopBoundaryError("VERIFICATION_UNAVAILABLE") from None
+                    if (
+                        continuation is not None
+                        or getattr(self.ports, "defer_input", None) is not None
+                    ):
+                        # New durable successor only: retain the actual verifier
+                        # feedback needed to reconstruct a later wait checkpoint.
+                        # This records a pure result, never invokes another tool.
+                        verify_key = f"{identity}:{ordinal}:VERIFY"
+                        verify_hash = digest(
+                            {"context": assembled, "answer": action["answer"]}
+                        )
+                        if self.journal.claim(verify_key, verify_hash) is not None:
+                            raise LoopBoundaryError("UNSETTLED_OR_DUPLICATE_EFFECT")
+                        self.journal.finish(verify_key, verify_hash, verification)
                     trace[-1]["verification"] = verification
                     if stop_reason():
                         return finish("STOPPED", stop_reason())

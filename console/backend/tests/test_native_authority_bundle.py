@@ -12,7 +12,9 @@ from agent_console.development_administrator import GRANT, PRINCIPAL, SCOPE
 def build(monkeypatch, bundle, subject=PRINCIPAL):
     captured = {}
     monkeypatch.setattr(
-        module, "compose_governed_skill_invocation", lambda *args: NS(closeables=())
+        module,
+        "compose_governed_skill_invocation",
+        lambda *args: NS(closeables=(), invocation_repository=object()),
     )
     monkeypatch.setattr(
         module,

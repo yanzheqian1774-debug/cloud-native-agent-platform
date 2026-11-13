@@ -43,6 +43,7 @@ def compose(
     *,
     mode="synthetic-cost-v1",
     native_loop_path=None,
+    durable_wait_path=None,
     authorization_bundle_check=None,
 ):
     if mode == "ontology-sales-v1":
@@ -111,6 +112,34 @@ def compose(
                 NativeLoopSkillExecutor,
                 NativeValidatedLoopSkillExecutor,
             )
+        )
+    if durable_wait_path:
+        if not native_loop_path:
+            raise ValueError("NATIVE_WAIT_LOOP_REQUIRED")
+        import json
+        from pathlib import Path
+
+        from agent_runtime.native_loop import digest
+
+        from .native_document_skill import NativeDurableDocumentSkillExecutor
+        from .native_wait_configuration import DurableWaitConfiguration
+
+        wait_config = DurableWaitConfiguration.load(
+            durable_wait_path, digest(json.loads(Path(native_loop_path).read_text()))
+        )
+        wait_executor = NativeDurableDocumentSkillExecutor
+        if getattr(wait_config, "typedQuestions", False):
+            from .native_typed_document_skill import (
+                NativeTypedQuestionDocumentSkillExecutor,
+            )
+
+            wait_executor = NativeTypedQuestionDocumentSkillExecutor
+        executors += (
+            wait_executor(
+                lambda identity, output, timeout: native_runtime[0].run(
+                    identity, output, timeout
+                )
+            ),
         )
     composition = compose_governed_skill_invocation(
         database_url,
@@ -207,6 +236,8 @@ def compose(
                 reader,
                 generation,
                 authorize,
+                durable_wait_path=durable_wait_path,
+                skill_repository=composition.invocation_repository,
                 authorize_current=authorize_native
                 if authorization_bundle_check
                 else None,
@@ -214,12 +245,14 @@ def compose(
         )
         composition.closeables = tuple(native_runtime)
 
-    return PreparedNativeSkillCaller(
+    caller = PreparedNativeSkillCaller(
         pool,
         composition,
         authorize,
         sales_v2_candidate=mode == "sales-gross-profit-v2-candidate",
-    ), composition
+    )
+    caller.runtime = native_runtime[0] if native_runtime else None
+    return caller, composition
 
 
 def owner_authority_factory(reader, generation, authorization_check):

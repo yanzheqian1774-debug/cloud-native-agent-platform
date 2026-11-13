@@ -116,6 +116,7 @@ class PreparedNativeCoordinator:
             from .native_document_skill import (
                 NativeDefinitionQuerySkillExecutor,
                 NativeDocumentSkillExecutor,
+                NativeDurableDocumentSkillExecutor,
                 NativeEmployeeDocumentSkillExecutor,
                 NativeRuleDocumentSkillExecutor,
                 NativeUserScopeDocumentSkillExecutor,
@@ -124,6 +125,9 @@ class PreparedNativeCoordinator:
                 NativeLoopSkillExecutor,
                 NativeValidatedLoopSkillExecutor,
             )
+            from .native_typed_document_skill import (
+                NativeTypedQuestionDocumentSkillExecutor,
+            )
 
             loop_revisions = (
                 NativeDocumentSkillExecutor.revision,
@@ -131,6 +135,8 @@ class PreparedNativeCoordinator:
                 NativeUserScopeDocumentSkillExecutor.revision,
                 NativeRuleDocumentSkillExecutor.revision,
                 NativeDefinitionQuerySkillExecutor.revision,
+                NativeDurableDocumentSkillExecutor.revision,
+                NativeTypedQuestionDocumentSkillExecutor.revision,
                 NativeLoopSkillExecutor.revision,
                 NativeValidatedLoopSkillExecutor.revision,
             )

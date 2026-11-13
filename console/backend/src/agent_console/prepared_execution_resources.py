@@ -50,7 +50,7 @@ def validate_resources(connection, scope, preparation, participant):
 
     if (
         participant.executor_id == "native-document-review"
-        and participant.executor_revision in {"4", "5"}
+        and participant.executor_revision in {"4", "5", "6", "7"}
     ):
         from .ontology_execution import DocumentSemanticsBinding
 

@@ -8,10 +8,13 @@ class Discovery:
         self.work = assembly.worker.repository.work
         if self.work.owned_business is None or not self.work.policy.enabled:
             raise ValueError("HOST_SERVICE_OWNED_CONTINUATION_REQUIRED")
+        caller = getattr(getattr(assembly.worker, "transport", None), "caller", None)
+        self.wait_access = getattr(caller, "wait_access", None)
         self.repository = assembly.execution_repository
         self.scope = scope
         self.fingerprint = fingerprint
         self.cursor = ""
+        self.observe_stopped = None
 
     def page(self, limit=32):
         ns, domain, principal = self.scope
@@ -25,9 +28,13 @@ class Discovery:
                 (ns, domain, principal, self.cursor, limit),
             ).fetchall()
         self.cursor = rows[-1]["command_key"] if len(rows) == limit else ""
-        return [item for row in rows if (item := self.inspect(row)) is not None]
+        return [
+            item
+            for row in rows
+            if (item := self.inspect(row, observe_stopped=True)) is not None
+        ]
 
-    def inspect(self, row):
+    def inspect(self, row, active_process=None, *, observe_stopped=False):
         receipt = row["result"]
         if receipt.get("executionAuthorizationDigest") != self.work.policy.digest:
             return None
@@ -70,7 +77,7 @@ class Discovery:
             command["state"] in {"UNKNOWN", "RECOVERY_REQUIRED"} for command in commands
         ):
             return None
-        return {
+        candidate = {
             "namespace": ns,
             "securityDomain": domain,
             "principalId": principal,
@@ -82,8 +89,54 @@ class Discovery:
                 {r["worker_id"] for r in commands if r["worker_id"]}
             ),
         }
+        if self.wait_access is not None:
+            with self.repository.pool.connection() as c:
+                waiting = self.wait_access.inspect(c, candidate)
+            if (
+                waiting is not None
+                and observe_stopped
+                and self.observe_stopped is not None
+            ):
+                if self.observe_stopped(candidate) is False:
+                    return None
+                with self.repository.pool.connection() as c:
+                    waiting = self.wait_access.inspect(c, candidate)
+            if waiting is not None:
+                if active_process is not None and waiting["state"] in {
+                    "CONTINUATION_CLAIMED",
+                    "ADVANCING",
+                }:
+                    if (
+                        waiting["activeWorkerId"] != active_process.get("workerId")
+                        or waiting["startupRecordDigest"]
+                        != active_process.get("startupDigest")
+                        or active_process.get("released") is not True
+                    ):
+                        return None
+                elif (
+                    waiting["state"] != "ANSWER_SAVED"
+                    or waiting["resumable"] is not True
+                ):
+                    return None
+        return candidate
 
     def current(self, candidate):
+        return self._current(candidate)
+
+    def maintain(self, candidate, process_record):
+        return self._current(candidate, active_process=process_record)
+
+    def stopped(
+        self, candidate, process_record, startup_record, exit_receipt, verify_exit
+    ):
+        if self.wait_access is None:
+            return None
+        with self.repository.pool.connection() as c, c.transaction():
+            return self.wait_access.stopped(
+                c, candidate, process_record, startup_record, exit_receipt, verify_exit
+            )
+
+    def _current(self, candidate, active_process=None):
         ns, domain, principal = self.scope
         with self.repository.pool.connection() as c:
             row = c.execute(
@@ -92,4 +145,4 @@ class Discovery:
                 "AND security_domain=%s AND actor_id=%s AND command_key=%s",
                 (ns, domain, principal, candidate["commandKey"]),
             ).fetchone()
-        return None if row is None else self.inspect(row)
+        return None if row is None else self.inspect(row, active_process=active_process)

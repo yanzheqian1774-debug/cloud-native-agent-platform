@@ -275,16 +275,20 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
         )
         assert worker.dispatches() == expected
         assert ContinuationWork(native, policy, authority).dispatches() == ()
+        e.consumer_preparation_context = (
+            automation,
+            adapter,
+            handler,
+            generation,
+            version,
+        )
         observer = getattr(e, "consumer_execution_observer", None)
         if observer is not None:
             observer(worker, native, value["receipt"], ready)
         with e.repo.connection_scope() as c:
-            assert (
-                c.execute(
-                    "SELECT count(*) n FROM execution_authority.workflow_runs"
-                ).fetchone()["n"]
-                == 1
-            )
+            assert c.execute(
+                "SELECT count(*) n FROM execution_authority.workflow_runs"
+            ).fetchone()["n"] == getattr(e, "consumer_expected_run_count", 1)
             c.execute(
                 "INSERT INTO authorization_admin.owned_business_revocations"
                 "(admission_id,actor_id,reason_code) VALUES(%s,%s,%s)",

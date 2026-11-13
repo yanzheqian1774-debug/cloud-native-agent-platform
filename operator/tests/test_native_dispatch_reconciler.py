@@ -308,3 +308,35 @@ def test_restarted_source_observer_replay_has_zero_new_effects():
     assert transport.calls == kubernetes.created == 0
     assert receipts == [repository.original_claim]
     assert len(completions) == 1
+
+
+@pytest.mark.parametrize("state", ["SUCCEEDED", "FAILED", "OUTCOME_UNKNOWN"])
+def test_wait_continuation_projects_only_known_original_terminal(state):
+    repository, kubernetes, transport = Repository(), Kubernetes(), Transport()
+    repository.effect_started = True
+    kubernetes.body = {
+        "metadata": {"name": "original", "uid": "original-task-uid"},
+        "status": {"phase": "Running"},
+    }
+    resumed = []
+
+    def resume(command):
+        resumed.append(command.command_id)
+        return state, "original-output" if state == "SUCCEEDED" else None
+
+    transport.resume_wait = resume
+    completions = []
+    result = worker(repository, kubernetes, transport, completions).run_once()
+    assert transport.calls == kubernetes.created == 0
+    assert len(resumed) == 1
+    assert kubernetes.body["metadata"]["uid"] == "original-task-uid"
+    if state == "OUTCOME_UNKNOWN":
+        assert result.state == "WAIT_OBSERVATION_UNAVAILABLE"
+        assert kubernetes.body["status"] == {"phase": "Running"}
+        assert not completions and not repository.uncertain
+    else:
+        assert result.state == state
+        assert len(completions) == 1
+        if state == "FAILED":
+            assert kubernetes.body["status"]["reason"] == "InternalError"
+            assert kubernetes.body["status"]["retryable"] is False

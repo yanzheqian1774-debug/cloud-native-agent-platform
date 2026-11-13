@@ -12,6 +12,12 @@ from .authority_contracts import AuthorityError
 from .native_progress_projection import projection_read_grants as resource_read_grants
 
 
+class NativeInterpretationReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    messageId: str = Field(min_length=1, max_length=200)
+    requestKey: str = Field(min_length=1, max_length=128)
+
+
 class NativeAnswer(BaseModel):
     model_config = ConfigDict(extra="forbid")
     invocationId: str = Field(min_length=1, max_length=250)
@@ -19,6 +25,7 @@ class NativeAnswer(BaseModel):
     questionDigest: str = Field(pattern="^[0-9a-f]{64}$")
     conversationId: str = Field(min_length=1, max_length=200)
     answer: str = Field(min_length=1, max_length=1800)
+    interpretationReference: NativeInterpretationReference | None = None
 
 
 def await_answer(
@@ -136,6 +143,11 @@ def progress(call, app, p):
                     "questionDigest": r["request_digest"],
                     "question": value["question"],
                     "expiresAt": value["expiresAt"],
+                    **(
+                        {"answerContract": value["answerContract"]}
+                        if value.get("answerContract")
+                        else {}
+                    ),
                     "answer": answer["result"]["answer"]
                     if answer and answer["result"]
                     else None,
@@ -146,7 +158,11 @@ def progress(call, app, p):
     from .native_host_process_projection import process_projection
 
     host = process_projection(call, p)
+    from .native_wait_projection import read_waits
+
+    waits = read_waits(call.connection, p)
     return {
+        **({"durableWaits": waits} if waits is not None else {}),
         **({"hostDispatch": host} if host is not None else {}),
         "runId": p.run_id,
         "steps": steps,
@@ -160,7 +176,7 @@ def progress(call, app, p):
     }
 
 
-def answer(call, app, p):
+def answer(call, app, p, *, typed_settlement_reader=None):
     app.validate(p)
     rows = records(call, app, p)
     body = call.payload
@@ -219,8 +235,14 @@ def answer(call, app, p):
         allowed = linked == [{"conversation_id": body["conversationId"]}]
     if not allowed:
         raise AuthorityError("NATIVE_QUESTION_CONVERSATION_MISMATCH")
+    from .native_typed_answer import verified_interpretation
+
+    interpreted = verified_interpretation(
+        call, app, p, q, body, settlement_reader=typed_settlement_reader
+    )
     value = {
         "kind": "NATIVE_ANSWER",
+        **({"verifiedInterpretation": interpreted} if interpreted is not None else {}),
         "answer": body["answer"].strip(),
         "conversationId": body["conversationId"],
         "principal": call.context.principal_id,
@@ -228,6 +250,11 @@ def answer(call, app, p):
     }
     if not value["answer"]:
         raise AuthorityError("NATIVE_ANSWER_EMPTY")
+    from .native_wait_answer import accept_if_waiting
+
+    waiting = accept_if_waiting(call, app, p, value)
+    if waiting is not None:
+        return waiting
     identity = (
         p.namespace,
         p.security_domain,

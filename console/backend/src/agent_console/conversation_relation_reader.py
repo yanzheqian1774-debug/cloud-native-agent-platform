@@ -186,6 +186,13 @@ def reader(application, authorizer, business_problems, actions):
                 if questions:
                     q = questions[0]
                     current["currentQuestion"] = q["question"]
+                    if q.get("answerContract") is not None:
+                        current["currentQuestionType"] = "NATIVE"
+                        from .native_question_contracts import validate_contract
+
+                        current["answerContract"] = validate_contract(
+                            q["answerContract"]
+                        )
                     target = {
                         **base,
                         "kind": "NATIVE",

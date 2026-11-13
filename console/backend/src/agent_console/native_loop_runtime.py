@@ -3,6 +3,7 @@
 
 import json
 import time
+from contextlib import nullcontext
 from contextvars import ContextVar
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -31,6 +32,7 @@ from .native_confirmed_scope import read_confirmed_scope
 from .native_diagnostic_tools import NativeDiagnosticTools
 from .native_document_skill import (
     NativeDefinitionQuerySkillExecutor,
+    NativeDurableDocumentSkillExecutor,
     NativeEmployeeDocumentSkillExecutor,
     NativeRuleDocumentSkillExecutor,
     NativeUserScopeDocumentSkillExecutor,
@@ -64,6 +66,8 @@ class NativeLoopRuntime:
         authorize,
         *,
         authorize_current=None,
+        durable_wait_path=None,
+        skill_repository=None,
     ):
         self.authorize_current = authorize_current
         self.config = json.loads(Path(path).read_text())
@@ -87,6 +91,16 @@ class NativeLoopRuntime:
         ):
             raise ValueError("NATIVE_LOOP_MODEL_CONFIGURATION_MISMATCH")
         self.policy_digest = digest(self.config)
+        self.skill_repository, self.owned_business = skill_repository, None
+        self.durable_wait = None
+        if durable_wait_path:
+            from .native_wait_configuration import DurableWaitConfiguration
+
+            if skill_repository is None:
+                raise ValueError("NATIVE_WAIT_SKILL_OWNER_REQUIRED")
+            self.durable_wait = DurableWaitConfiguration.load(
+                durable_wait_path, self.policy_digest
+            )
         self.pool, self.reader, self.generation, self.authorize_skill = (
             pool,
             reader,
@@ -128,6 +142,12 @@ class NativeLoopRuntime:
                     "VALUES(50,%s,%s)",
                     (checksum, expected["adapter"]),
                 )
+
+        if self.durable_wait is not None:
+            from .native_wait_store import NativeWaitStore
+
+            with pool.connection() as c, c.transaction():
+                NativeWaitStore.migrate(c)
 
     def close(self):
         self.model.close()
@@ -185,6 +205,8 @@ class NativeLoopRuntime:
                     ("native-document-review", "3"),
                     ("native-document-review", "4"),
                     ("native-document-review", "5"),
+                    ("native-document-review", "6"),
+                    ("native-document-review", "7"),
                 }
             ):
                 raise ValueError("NATIVE_LOOP_INVOCATION_REQUIRED")
@@ -196,15 +218,33 @@ class NativeLoopRuntime:
             ("native-document-review", "3"),
             ("native-document-review", "4"),
             ("native-document-review", "5"),
+            ("native-document-review", "6"),
+            ("native-document-review", "7"),
         }
-        rule_mode = employee_mode and invocation["executor_revision"] in {"4", "5"}
+        rule_mode = employee_mode and invocation["executor_revision"] in {
+            "4",
+            "5",
+            "6",
+            "7",
+        }
         user_scope_mode = employee_mode and invocation["executor_revision"] in {
             "3",
             "4",
             "5",
+            "6",
+            "7",
         }
+        typed_mode = employee_mode and invocation["executor_revision"] == "7"
+        if typed_mode:
+            from .native_typed_document_skill import (
+                NativeTypedQuestionDocumentSkillExecutor,
+            )
         document_revision = (
-            NativeDefinitionQuerySkillExecutor
+            NativeTypedQuestionDocumentSkillExecutor
+            if typed_mode
+            else NativeDurableDocumentSkillExecutor
+            if invocation["executor_revision"] == "6"
+            else NativeDefinitionQuerySkillExecutor
             if invocation["executor_revision"] == "5"
             else NativeRuleDocumentSkillExecutor
             if rule_mode
@@ -338,14 +378,18 @@ class NativeLoopRuntime:
             finally:
                 authority_timing["seconds"] += time.monotonic() - before
 
-        def current_authority():
+        def current_authority(connection=None):
             if (
                 command.principal_id != manager.subject
                 or datetime.now(UTC) >= manager.expiry
                 or (scope.namespace, scope.security_domain) != SCOPE
             ):
                 return False
-            with manager.pool.connection() as c:
+            with (
+                nullcontext(connection)
+                if connection is not None
+                else manager.pool.connection()
+            ) as c:
                 if manager.authorize_current is not None:
                     if not manager.authorize_current(c, command):
                         return False
@@ -504,6 +548,42 @@ class NativeLoopRuntime:
                 return library.verify(assembled, answer)
 
         ports = Ports()
+        wait_session = None
+        if invocation["executor_revision"] in {"6", "7"}:
+            if self.durable_wait is None:
+                raise ValueError("NATIVE_WAIT_NOT_ENABLED")
+            if (
+                self.durable_wait.executorId,
+                self.durable_wait.executorRevision,
+                self.durable_wait.executorConfigurationDigest,
+            ) != (
+                document_revision.executor_id,
+                document_revision.executor_revision,
+                document_revision.configuration_digest,
+            ) or typed_mode != bool(
+                getattr(self.durable_wait, "typedQuestions", False)
+            ):
+                raise ValueError("NATIVE_WAIT_EXECUTOR_BINDING_CHANGED")
+            from .native_wait_runtime import NativeWaitRuntimeSession
+
+            wait_session = NativeWaitRuntimeSession(
+                runtime=self,
+                command=command,
+                context=context,
+                preparation=p,
+                task_id=row["task_id"],
+                invocation_id=invocation_id,
+                executor=document_revision,
+                scope_evidence=scope_evidence,
+                current_authority=current_authority,
+            )
+            ports.defer_input = wait_session.defer_input
+            if typed_mode:
+                from .native_question_contracts import resolve_contract, scope_contracts
+
+                ports.validate_question_contract = lambda identity: resolve_contract(
+                    library, identity
+                )
         if document_mode:
             from .native_interaction import await_answer
 
@@ -524,6 +604,18 @@ class NativeLoopRuntime:
                 return reply
 
             ports.clarify = clarify
+        if wait_session is not None and wait_session.continuation is not None:
+            from .native_wait_runtime import ContinuationJournal
+
+            journal = ContinuationJournal(wait_session)
+
+            def enter_continuation(frame, root):
+                won = wait_session.enter(frame, root)
+                if won:
+                    wait_session.restore_library(library, frame)
+                return won
+
+            ports.enter_continuation = enter_continuation
         loop = NativeLoop(
             library.tools,
             ports,
@@ -534,7 +626,7 @@ class NativeLoopRuntime:
             ),
             cancelled=Cancellation().is_set,
         )
-        result = loop.run(
+        arguments = (
             invocation_id,
             problem["title"] + "\n" + problem["description"],
             [
@@ -562,6 +654,11 @@ class NativeLoopRuntime:
                     if user_scope_mode
                     else {}
                 ),
+                **(
+                    {"questionContracts": scope_contracts(library)}
+                    if typed_mode
+                    else {}
+                ),
                 "sourceSnapshot": output["sourceSnapshot"],
                 "model": asdict(profile.binding),
                 "policyDigest": self.policy_digest,
@@ -570,6 +667,41 @@ class NativeLoopRuntime:
                 "workflowRunId": p.run_id,
             },
         )
+        if wait_session is not None and wait_session.continuation is not None:
+            root = {
+                "identity": arguments[0],
+                "goal": arguments[1],
+                "criteria": arguments[2],
+                "context": arguments[3],
+                "tools": [t.descriptor() for t in loop.tools.values()],
+                "limits": vars(loop.limits),
+            }
+            result = wait_session.terminal(root)
+            if result is None:
+                frame = wait_session.frame(root)
+                if not wait_session.acquire():
+                    from agent_runtime.native_loop_wait import (
+                        LoopContinuationObservation,
+                    )
+
+                    return LoopContinuationObservation(
+                        invocation_id, frame.checkpoint_digest
+                    )
+                result = loop.run_continuation(*arguments, continuation=frame)
+        else:
+            result = loop.run(*arguments)
+        from agent_runtime.native_loop_wait import (
+            LoopContinuationObservation,
+            LoopWaiting,
+        )
+
+        if isinstance(result, LoopContinuationObservation):
+            return result
+
+        if isinstance(result, LoopWaiting):
+            if wait_session is None or not hasattr(wait_session, "waiting"):
+                raise ValueError("NATIVE_WAIT_OWNER_RECEIPT_REQUIRED")
+            return wait_session.waiting
         return {
             **result,
             "performance": {

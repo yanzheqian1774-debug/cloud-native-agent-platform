@@ -202,6 +202,11 @@ class OwnedBusinessWorkReader:
             == (p.tenantId, p.securityDomain, p.subjectId),
             "SCOPE_DENIED",
         )
+        # Current-grant reads below acquire the governance lock. Take it before
+        # admission/revocation locks, matching effect-time authorization callers.
+        from .task_identity_continuity import lock_owner_generation
+
+        lock_owner_generation(c)
         generation = c.execute(
             "SELECT generation,recovery_epoch FROM "
             "authorization_admin.active_generation "

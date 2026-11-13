@@ -1902,6 +1902,7 @@ _draft_assistance_composition = None
 _conversation_routing_composition = None
 _understanding_adoption_composition = None
 _understanding_source_adoption_composition = None
+_typed_question_answer_composition = None
 workbench_app = None
 _workbench_startup_error = "WORKBENCH_DISABLED"
 
@@ -1912,7 +1913,8 @@ def _configure_workbench() -> None:
         _workbench_composition, \
         _conversation_routing_composition, \
         _understanding_adoption_composition, \
-        _understanding_source_adoption_composition
+        _understanding_source_adoption_composition, \
+        _typed_question_answer_composition
     global workbench_app, _workbench_startup_error
     from agent_console.draft_assistance_bootstrap import (
         build_draft_assistance_composition,
@@ -1925,6 +1927,7 @@ def _configure_workbench() -> None:
     _workbench_composition = None
     _draft_assistance_composition = None
     _understanding_source_adoption_composition = None
+    _typed_question_answer_composition = None
     workbench_app = None
     if not runtime_path or not allowed_host or not allowed_origin:
         _workbench_startup_error = "WORKBENCH_DISABLED"
@@ -2004,6 +2007,15 @@ def _configure_workbench() -> None:
                     migrations_path=_MIGRATIONS,
                 )
             )
+        typed_answer_path = os.environ.get("TYPED_QUESTION_ANSWER_RUNTIME_FILE", "")
+        if typed_answer_path:
+            if _understanding_source_adoption_composition is None:
+                raise ValueError("TYPED_QUESTION_REQUIRES_RETAINED_SOURCE_ADOPTION")
+            _typed_question_answer_composition = build_draft_assistance_composition(
+                database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+                runtime_configuration_path=Path(typed_answer_path),
+                migrations_path=_MIGRATIONS,
+            )
         prepared_coordinator = None
         prepared_resource_services = None
         if os.environ.get("PREPARED_EXECUTION_ENABLED") == "true":
@@ -2082,6 +2094,11 @@ def _configure_workbench() -> None:
                 if _understanding_source_adoption_composition is not None
                 else None
             ),
+            conversation_typed_answers=(
+                _typed_question_answer_composition.service
+                if _typed_question_answer_composition is not None
+                else None
+            ),
             managed_closeables=(
                 (_draft_assistance_composition,)
                 if _draft_assistance_composition is not None
@@ -2102,6 +2119,11 @@ def _configure_workbench() -> None:
                 if _understanding_source_adoption_composition is not None
                 else ()
             )
+            + (
+                (_typed_question_answer_composition,)
+                if _typed_question_answer_composition is not None
+                else ()
+            )
             + ((planning_runtime,) if planning_runtime is not None else ())
             + ((prepared_knowledge_pool,) if prepared_knowledge_pool else ()),
         )
@@ -2112,6 +2134,9 @@ def _configure_workbench() -> None:
             prepared_knowledge_pool.close()
         if planning_runtime is not None:
             planning_runtime.close()
+        if _typed_question_answer_composition is not None:
+            _typed_question_answer_composition.close()
+            _typed_question_answer_composition = None
         if _understanding_source_adoption_composition is not None:
             _understanding_source_adoption_composition.close()
             _understanding_source_adoption_composition = None

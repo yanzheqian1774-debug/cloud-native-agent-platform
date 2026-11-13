@@ -210,6 +210,10 @@ class DraftPolicy:
     @property
     def schema(self) -> dict:
         # Return a fresh copy; callers cannot mutate the policy for later requests.
+        if self.revision == "v3-relation-adoption-source-answers":
+            from .conversation_typed_answer_policy import SCHEMA
+
+            return json.loads(json.dumps(SCHEMA))
         if self.revision in {"v3-relation-adoption", "v3-relation-adoption-source"}:
             from .understanding_adoption_policy import SCHEMA
 
@@ -246,6 +250,7 @@ class DraftPolicy:
                         "v3-relation",
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
+                        "v3-relation-adoption-source-answers",
                     }
                     else CONTEXT_VERSION,
                 },
@@ -300,6 +305,13 @@ def policy_for(adapter_revision: str, schema_version: str) -> DraftPolicy:
         and schema_version == "conversation-understanding-output.v3-relation-adoption"
     ):
         from .understanding_adoption_policy import INSTRUCTIONS
+
+        return DraftPolicy(adapter_revision, schema_version, INSTRUCTIONS)
+    if (adapter_revision, schema_version) == (
+        "v3-relation-adoption-source-answers",
+        "conversation-understanding-output.v3-relation-adoption-answers",
+    ):
+        from .conversation_typed_answer_policy import INSTRUCTIONS
 
         return DraftPolicy(adapter_revision, schema_version, INSTRUCTIONS)
     raise PolicyValidationError("DRAFT_POLICY_MISMATCH")
@@ -423,6 +435,10 @@ def validate_result(
 ) -> list[dict] | None:
     if not isinstance(result, dict) or set(result) != set(policy.schema["required"]):
         raise PolicyValidationError("OUTPUT_SCHEMA_INVALID", diagnostic="RESULT_SHAPE")
+    if policy.revision == "v3-relation-adoption-source-answers":
+        from .conversation_typed_answer_policy import validate
+
+        return validate(result, refs)
     if policy.revision in {"v3-relation-adoption", "v3-relation-adoption-source"}:
         from .understanding_adoption_policy import validate
 

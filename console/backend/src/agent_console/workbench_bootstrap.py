@@ -92,6 +92,7 @@ def build_workbench_composition(
     conversation_routing: DraftAssistanceService | None = None,
     conversation_adoption: DraftAssistanceService | None = None,
     conversation_source_adoption: DraftAssistanceService | None = None,
+    conversation_typed_answers: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
     model_repository=None,
     planning_v2_enabled: bool = False,
@@ -600,6 +601,21 @@ def build_workbench_composition(
                         authorizer,
                         os.environ.get("F3_UNDERSTANDING_SOURCE_ADOPTION_POLICY", ""),
                     )
+                if conversation_typed_answers is not None:
+                    if (
+                        conversation_source_adoption is None
+                        or conversation_typed_answers.profile.adapter_revision
+                        != "v3-relation-adoption-source-answers"
+                    ):
+                        raise ValueError("TYPED_QUESTION_PREDECESSOR_REQUIRED")
+                    configure_adoption(
+                        conversation_typed_answers,
+                        admission,
+                        conversation_source_adoption.authorization.context_admission,
+                        foundation.grants,
+                        authorizer,
+                        os.environ.get("F3_TYPED_QUESTION_ANSWER_POLICY", ""),
+                    )
                 owned_business_path = os.environ.get("OWNED_BUSINESS_ADMISSION_POLICY")
                 if owned_business_path:
                     from .owned_business_admission import (
@@ -983,6 +999,11 @@ def build_workbench_composition(
                     prepared_execution_operations(
                         prepared_execution_coordinator,
                         sales_v2_candidate=sales_v2_candidate,
+                        typed_settlement_reader=(
+                            conversation_typed_answers.budget.read_invocation_settlement
+                            if conversation_typed_answers is not None
+                            else None
+                        ),
                     )
                     if prepared_execution_coordinator is not None
                     else ()
@@ -1085,10 +1106,17 @@ def build_workbench_composition(
                             (
                                 install_draft_assistance_routes(
                                     draft_assistance,
-                                    conversation_source_adoption
+                                    conversation_typed_answers
+                                    or conversation_source_adoption
                                     or conversation_adoption
                                     or conversation_routing,
                                     retained_routing_services=(
+                                        conversation_source_adoption,
+                                        conversation_adoption,
+                                        conversation_routing,
+                                    )
+                                    if conversation_typed_answers is not None
+                                    else (
                                         conversation_adoption,
                                         conversation_routing,
                                     )
@@ -1180,8 +1208,12 @@ def build_workbench_composition(
                     application.state.conversation_relation_reader,
                     application.state.conversation_actions.records,
                     draft_assistance,
-                    conversation_source_adoption or conversation_adoption,
-                    retained=(conversation_adoption,)
+                    conversation_typed_answers
+                    or conversation_source_adoption
+                    or conversation_adoption,
+                    retained=(conversation_source_adoption, conversation_adoption)
+                    if conversation_typed_answers is not None
+                    else (conversation_adoption,)
                     if conversation_source_adoption is not None
                     else (),
                 )
@@ -1212,13 +1244,17 @@ def build_workbench_composition(
                 adoption_owner = UnderstandingAdoptionApplication(
                     application.state.conversation_actions,
                     draft_assistance,
-                    conversation_source_adoption or conversation_adoption,
+                    conversation_typed_answers
+                    or conversation_source_adoption
+                    or conversation_adoption,
                     application.state.conversation_draft_service_for,
                     application.state.conversation_relation_reader,
                     source_metadata,
                     _payload,
                     source_transaction=owned_source_access.authorizer.controller.protected_request,
-                    retained=(conversation_adoption,)
+                    retained=(conversation_source_adoption, conversation_adoption)
+                    if conversation_typed_answers is not None
+                    else (conversation_adoption,)
                     if conversation_source_adoption is not None
                     else (),
                 )

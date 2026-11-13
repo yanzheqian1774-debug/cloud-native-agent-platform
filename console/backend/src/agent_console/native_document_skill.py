@@ -95,6 +95,13 @@ class NativeDocumentSkillExecutor(DocumentComputationExecutor):
                     "DOCUMENT_MODEL_NOT_CONFIGURED", outcome_unknown=False
                 )
             loop = self.runner(invocation_id, output, timeout_ms)
+            if getattr(self, "accepts_durable_wait", False):
+                from agent_runtime.native_loop_wait import LoopContinuationObservation
+
+                from .native_wait_types import SkillJobWaiting
+
+                if isinstance(loop, (SkillJobWaiting, LoopContinuationObservation)):
+                    return loop
             if loop["status"] != "SUCCEEDED":
                 raise SkillExecutorFailure(
                     "DOCUMENT_" + loop["reason"],
@@ -177,6 +184,13 @@ class NativeRuleDocumentSkillExecutor(NativeUserScopeDocumentSkillExecutor):
                 "DOCUMENT_RULE_INPUT_INVALID", outcome_unknown=False
             ) from exc
         result = super().invoke(invocation_id, operation, inputs, timeout_ms)
+        if getattr(self, "accepts_durable_wait", False):
+            from agent_runtime.native_loop_wait import LoopContinuationObservation
+
+            from .native_wait_types import SkillJobWaiting
+
+            if isinstance(result, (SkillJobWaiting, LoopContinuationObservation)):
+                return result
         if operation in {"ANALYZE_DATA", "RENDER_REPORT"}:
             from .document_rule_evaluation import evaluate_document_rules
 
@@ -209,6 +223,8 @@ class NativeDefinitionQuerySkillExecutor(NativeRuleDocumentSkillExecutor):
 
 
 def document_executor_revision(operations):
+    from .native_typed_document_skill import NativeTypedQuestionDocumentSkillExecutor
+
     revisions = {
         (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
         for op in operations
@@ -219,6 +235,8 @@ def document_executor_revision(operations):
         NativeUserScopeDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
         NativeDefinitionQuerySkillExecutor,
+        NativeDurableDocumentSkillExecutor,
+        NativeTypedQuestionDocumentSkillExecutor,
     ):
         ref = executor.revision
         if revisions == {
@@ -226,3 +244,27 @@ def document_executor_revision(operations):
         }:
             return ref
     raise ValueError("DOCUMENT_EXECUTOR_REVISION_MISMATCH")
+
+
+DURABLE_WAIT_CONFIGURATION = {
+    **RULE_BOUND_CONFIGURATION,
+    "schemaVersion": "native-document-review.v6",
+    "interaction": "DURABLE_OWNER_HUMAN_WAIT_V1",
+    "continuation": "SAME_ACCEPTED_SKILL_JOB_NEXT_ORDINAL",
+}
+
+
+class NativeDurableDocumentSkillExecutor(NativeRuleDocumentSkillExecutor):
+    """Explicit successor; only this adapter accepts positive durable waiting."""
+
+    accepts_durable_wait = True
+    revision = ExecutorRevision(
+        "native-document-review", "6", digest(DURABLE_WAIT_CONFIGURATION)
+    )
+
+    def continue_job(self, invocation_id, operation, inputs, timeout_ms):
+        # Reuse local document assembly/validation, NOT the Skill application
+        # invoke/prepare_dispatch port. The runner is continuation-context bound.
+        return NativeRuleDocumentSkillExecutor.invoke(
+            self, invocation_id, operation, inputs, timeout_ms
+        )

@@ -105,7 +105,9 @@ class GovernedAttemptSkillInvocationService:
             request, inputs, payload_digest=payload_digest, now=started_at
         )
         if not created:
-            return snapshot
+            from .native_wait_skill import waiting_receipt
+
+            return waiting_receipt(self.repository, request, executor) or snapshot
         try:
             result = executor.invoke(
                 request.invocation_id,
@@ -113,6 +115,16 @@ class GovernedAttemptSkillInvocationService:
                 inputs,
                 request.io_limits.timeout_ms,
             )
+            from .native_wait_types import SkillJobWaiting
+
+            if isinstance(result, SkillJobWaiting):
+                from .native_wait_skill import waiting_receipt
+
+                if waiting_receipt(self.repository, request, executor) != result:
+                    raise SkillExecutorFailure(
+                        "NATIVE_WAIT_RECEIPT_UNCONFIRMED", outcome_unknown=True
+                    )
+                return result
             encoded_output = canonical_json_bytes(result.output)
             if len(encoded_output) > request.io_limits.max_output_bytes:
                 raise SkillExecutorFailure(
@@ -137,6 +149,14 @@ class GovernedAttemptSkillInvocationService:
             )
 
         except SkillExecutorFailure as exc:
+            if exc.outcome_unknown and getattr(executor, "accepts_durable_wait", False):
+                from .native_wait_skill import waiting_receipt
+
+                known = waiting_receipt(
+                    self.repository, request, executor, pause_only=True
+                )
+                if known is not None:
+                    return known
             return self.repository.commit_terminal(
                 request,
                 state=(
@@ -150,6 +170,84 @@ class GovernedAttemptSkillInvocationService:
                 started_at=started_at,
                 observed_at=self.clock(),
             )
+
+    def continue_accepted_job(self, request, inputs):
+        """Advance an exact durable wait; never create or redispatch a Skill job.
+
+        The executor runtime must win the original checkpoint's owner fence before
+        any next effect. A duplicate entry produces an observation, not failure.
+        """
+        from agent_runtime.native_loop_wait import LoopContinuationObservation
+
+        from .native_wait_skill import accepted_job, waiting_receipt
+        from .native_wait_types import SkillJobWaiting
+
+        decision = self._authorize(request.scope, "INVOKE_SKILL", request.attempt_id)
+        if decision != request.authorization_decision_id:
+            raise SkillInvocationError("SKILL_AUTHORIZATION_DECISION_MISMATCH")
+        if self.policy_authority.evaluate(request) != request.policy:
+            raise SkillInvocationError("SKILL_SIDE_EFFECT_POLICY_MISMATCH")
+        executor = self.executors.resolve(request.executor)
+        if not getattr(executor, "accepts_durable_wait", False):
+            raise SkillInvocationError("NATIVE_WAIT_EXECUTOR_REQUIRED")
+        snapshot, started_at = accepted_job(self.repository, request, inputs)
+        if snapshot.state in TERMINAL_STATES:
+            return snapshot
+        waiting = waiting_receipt(self.repository, request, executor)
+        if snapshot.state is not InvocationState.RUNNING or waiting is None:
+            raise SkillInvocationError("NATIVE_WAIT_POSITIVE_RECEIPT_REQUIRED")
+        try:
+            result = executor.continue_job(
+                request.invocation_id,
+                request.operation,
+                inputs,
+                request.io_limits.timeout_ms,
+            )
+        except SkillExecutorFailure as exc:
+            if exc.outcome_unknown and getattr(executor, "accepts_durable_wait", False):
+                from .native_wait_skill import waiting_receipt
+
+                known = waiting_receipt(
+                    self.repository, request, executor, pause_only=True
+                )
+                if known is not None:
+                    return known
+            return self.repository.commit_terminal(
+                request,
+                state=(
+                    InvocationState.OUTCOME_UNKNOWN
+                    if exc.outcome_unknown
+                    else InvocationState.FAILED
+                ),
+                output=None,
+                provider_observation_id=f"executor-error:{request.invocation_id}",
+                error_code=str(exc),
+                started_at=started_at,
+                observed_at=self.clock(),
+            )
+        if isinstance(result, LoopContinuationObservation):
+            return waiting
+        if isinstance(result, SkillJobWaiting):
+            if waiting_receipt(self.repository, request, executor) != result:
+                raise SkillInvocationError("NATIVE_WAIT_RECEIPT_UNCONFIRMED")
+            return result
+        encoded_output = canonical_json_bytes(result.output)
+        if len(encoded_output) > request.io_limits.max_output_bytes:
+            raise SkillInvocationError("SKILL_OUTPUT_TOO_LARGE")
+        _validate_shape(
+            result.output,
+            request.io_limits.max_object_depth,
+            request.io_limits.max_properties,
+        )
+        return self.repository.commit_terminal(
+            request,
+            state=InvocationState.SUCCEEDED,
+            output=result.output,
+            provider_observation_id=result.provider_observation_id,
+            error_code=None,
+            started_at=started_at,
+            observed_at=self.clock(),
+        )
 
     def recover(
         self, request: SkillInvocationRequest, inputs: dict[str, Any]
@@ -170,6 +268,11 @@ class GovernedAttemptSkillInvocationService:
         if created:
             raise SkillInvocationError("SKILL_RECOVERY_REQUIRES_DURABLE_DISPATCH")
         if snapshot.state in TERMINAL_STATES:
+            return snapshot
+        from .native_wait_skill import waiting_receipt
+
+        executor = self.executors.resolve(request.executor)
+        if waiting_receipt(self.repository, request, executor) is not None:
             return snapshot
         return self.repository.commit_terminal(
             request,

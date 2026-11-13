@@ -248,7 +248,11 @@ def install_draft_assistance_routes(
                     "initialUnderstandingAdoption": (
                         routing_service is not None
                         and routing_service.profile.adapter_revision
-                        in {"v3-relation-adoption", "v3-relation-adoption-source"}
+                        in {
+                            "v3-relation-adoption",
+                            "v3-relation-adoption-source",
+                            "v3-relation-adoption-source-answers",
+                        }
                         and getattr(app.state, "understanding_adoption", None)
                         is not None
                         and available(routing_service, context)
@@ -375,6 +379,7 @@ def install_draft_assistance_routes(
                         "v3-relation",
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
+                        "v3-relation-adoption-source-answers",
                     }
                     or not conversation
                     or body.parentContextId
@@ -397,6 +402,7 @@ def install_draft_assistance_routes(
                         "v3-relation",
                         "v3-relation-adoption",
                         "v3-relation-adoption-source",
+                        "v3-relation-adoption-source-answers",
                     }:
                         raise DraftAssistanceError(
                             "CONVERSATION_UNDERSTANDING_UNAVAILABLE"
@@ -440,7 +446,11 @@ def install_draft_assistance_routes(
                     adoption = (
                         body.conversationRouting
                         and active_service.profile.adapter_revision
-                        in {"v3-relation-adoption", "v3-relation-adoption-source"}
+                        in {
+                            "v3-relation-adoption",
+                            "v3-relation-adoption-source",
+                            "v3-relation-adoption-source-answers",
+                        }
                     )
                     reader = getattr(
                         request.app.state,

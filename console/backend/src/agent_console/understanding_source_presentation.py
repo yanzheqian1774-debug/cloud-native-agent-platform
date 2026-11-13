@@ -30,7 +30,10 @@ def source_input_observation(response):
     ):
         if snapshot.adapter_revision == "v3-relation-adoption":
             state = "METADATA_ONLY"
-        elif snapshot.adapter_revision == "v3-relation-adoption-source":
+        elif snapshot.adapter_revision in {
+            "v3-relation-adoption-source",
+            "v3-relation-adoption-source-answers",
+        }:
             # Match provider_attachment's body branch, not merely its adapter.
             # Old minimal metadata omits input; absence is not body evidence.
             current = metadata.get("sourceInputBranch")
@@ -59,4 +62,5 @@ def current_source_capability(service, available):
     return {
         "v3-relation-adoption": "METADATA_ONLY",
         "v3-relation-adoption-source": "BODY_SUPPORTED",
+        "v3-relation-adoption-source-answers": "BODY_SUPPORTED",
     }.get(service.profile.adapter_revision, "UNAVAILABLE")

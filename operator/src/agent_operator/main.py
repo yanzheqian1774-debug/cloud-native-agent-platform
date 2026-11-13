@@ -40,6 +40,8 @@ def run_native_worker(assembly, stop, logger: Any, interval: float) -> None:
             after_tick = getattr(assembly, "after_tick", None)
             if after_tick is not None:
                 after_tick()
+            if result.state == "DRAIN_FOR_INPUT":
+                stop.set()
             if result.state != "IDLE":
                 logger.info(
                     "Native dispatch reconciliation: state=%s command=%s",

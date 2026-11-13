@@ -46,7 +46,11 @@ class AdoptionOrigin:
         require(
             self.enabled is True
             and self.profile.adapter_revision
-            in {"v3-relation-adoption", "v3-relation-adoption-source"}
+            in {
+                "v3-relation-adoption",
+                "v3-relation-adoption-source",
+                "v3-relation-adoption-source-answers",
+            }
             and self.routing.experience.root is self.root
             and self.routing.experience.routing_document.scopeMode
             == "EXISTING_WORK_AND_INITIAL_UNDERSTANDING",

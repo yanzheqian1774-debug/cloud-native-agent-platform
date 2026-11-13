@@ -118,12 +118,16 @@ def verify_skill(
         require_source(source)
     from .native_document_skill import (
         NativeDefinitionQuerySkillExecutor,
+        NativeDurableDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
     )
+    from .native_typed_document_skill import NativeTypedQuestionDocumentSkillExecutor
 
     rule_revisions = (
         NativeRuleDocumentSkillExecutor.revision,
         NativeDefinitionQuerySkillExecutor.revision,
+        NativeDurableDocumentSkillExecutor.revision,
+        NativeTypedQuestionDocumentSkillExecutor.revision,
     )
     rule_bound = any(
         (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])

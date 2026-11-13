@@ -13,6 +13,7 @@ import sys
 import time
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 
@@ -54,6 +55,8 @@ class HostService:
         self.children = {}
         self.last_error = None
         self.service_lock_fd = service_lock_fd
+        if hasattr(discovery, "observe_stopped"):
+            discovery.observe_stopped = self.recover_wait_exit
 
     def identity(self, item):
         return worker_id(
@@ -291,6 +294,153 @@ class HostService:
                 if descriptor >= 0:
                     os.close(descriptor)
 
+    def _confirm_wait_exit(self, child):
+        if getattr(self.discovery, "wait_access", None) is None:
+            return
+        if child.process.poll() is None:
+            raise ValueError("HOST_SERVICE_WAIT_EXIT_NOT_OBSERVED")
+        if "exitProof" not in child.status:
+            state = dict(child.status)
+            identity = {
+                k: state.get(k)
+                for k in ("pid", "processBirth", "boot", "startupDigest", "workerId")
+            }
+            receipt = {
+                "state": "EXIT_CONFIRMED",
+                "returnCode": child.process.returncode,
+                "stoppedAt": datetime.fromtimestamp(self.clock(), UTC).isoformat(),
+                "processIdentityDigest": digest(identity),
+                "startupRecordDigest": state.get("startupDigest"),
+            }
+            proof = {"processRecord": state, "exitReceipt": receipt}
+            # Written only after this actual Popen instance yielded a terminal code.
+            child.status = self._status(
+                child.status_path,
+                state,
+                exitProof={"record": proof, "digest": digest(proof)},
+            )
+        self._submit_wait_exit(child.candidate, child.status, child.process)
+
+    def _submit_wait_exit(self, candidate, status, process=None):
+        envelope = status.get("exitProof") or {}
+        proof = envelope.get("record") or {}
+        if envelope.get("digest") != digest(proof):
+            raise ValueError("HOST_SERVICE_WAIT_EXIT_PROOF_INVALID")
+        state, receipt = proof["processRecord"], proof["exitReceipt"]
+        keys = (
+            "namespace",
+            "securityDomain",
+            "principalId",
+            "preparationDigest",
+            "runId",
+        )
+        if (
+            state.get("state") != "EXIT_CONFIRMED"
+            or status.get("state") != "EXIT_CONFIRMED"
+            or any(
+                state.get(k) != candidate[k] or status.get(k) != candidate[k]
+                for k in keys
+            )
+            or any(
+                state.get(k) != status.get(k)
+                for k in (
+                    "workerId",
+                    "pid",
+                    "processBirth",
+                    "boot",
+                    "startupDigest",
+                    "recordPath",
+                )
+            )
+            or state.get("workerId") != self.identity(candidate)
+            or state.get("released") is not True
+            or type(receipt.get("returnCode")) is not int
+            or receipt["returnCode"] != state.get("returnCode")
+        ):
+            raise ValueError("HOST_SERVICE_WAIT_EXIT_BINDING_INVALID")
+        expected_path = (
+            self.config.directory / f"{state['workerId']}-startup-{state['boot']}.json"
+        )
+        if Path(state["recordPath"]) != expected_path:
+            raise ValueError("HOST_SERVICE_WAIT_EXIT_PATH_INVALID")
+        startup = read(expected_path)
+        record = startup.get("observation")
+        if (
+            not isinstance(record, dict)
+            or startup.get("digest") != digest(record)
+            or startup["digest"] != state.get("startupDigest")
+            or any(
+                record.get(k) != state.get(k)
+                for k in (
+                    "workerId",
+                    "pid",
+                    "processBirth",
+                    "namespace",
+                    "securityDomain",
+                    "principalId",
+                )
+            )
+            or record.get("authorizationResources") != [candidate["resource"]]
+        ):
+            raise ValueError("HOST_SERVICE_WAIT_EXIT_STARTUP_INVALID")
+        identity = {
+            k: state.get(k)
+            for k in ("pid", "processBirth", "boot", "startupDigest", "workerId")
+        }
+        if (
+            receipt.get("state") != "EXIT_CONFIRMED"
+            or receipt.get("processIdentityDigest") != digest(identity)
+            or receipt.get("startupRecordDigest") != startup["digest"]
+        ):
+            raise ValueError("HOST_SERVICE_WAIT_EXIT_RECEIPT_CHANGED")
+
+        def verify_exit(_connection, cp, observation):
+            if (
+                (
+                    process is not None
+                    and (
+                        process.poll() is None
+                        or process.pid != state["pid"]
+                        or process.returncode != receipt["returnCode"]
+                    )
+                )
+                or read(expected_path) != startup
+                or cp.worker_id != state["workerId"]
+                or cp.startup_record_digest != startup["digest"]
+                or observation.process_identity_digest != digest(identity)
+                or observation.exit_receipt_digest != digest(receipt)
+                or observation.stopped_at
+                != datetime.fromisoformat(receipt["stoppedAt"])
+            ):
+                raise ValueError("HOST_SERVICE_WAIT_EXIT_NOT_VERIFIED")
+
+        self.discovery.stopped(candidate, state, startup, receipt, verify_exit)
+
+    def recover_wait_exit(self, candidate):
+        """Redeliver a prior trusted exit fact, never infer exit from a missing PID."""
+        identity = self.identity(candidate)
+        if (
+            identity in self.children
+            or getattr(self.discovery, "wait_access", None) is None
+        ):
+            return
+        path = self.config.directory / (identity + ".json")
+        if not path.exists():
+            return
+        fd = lock(self.config.directory / (identity + ".lock"))
+        try:
+            state = read(path)
+            if state.get("state") != "EXIT_CONFIRMED" or "exitProof" not in state:
+                return
+            self._submit_wait_exit(candidate, state)
+            return True
+        except Exception:
+            self.last_error = "WAIT_STOP_UNCONFIRMED"
+            self.view(candidate, "UNKNOWN", "OBSERVATION_UNAVAILABLE")
+            return False
+        finally:
+            os.close(fd)
+
     def poll_children(self):
         for identity, child in list(self.children.items()):
             if child.process.poll() is not None:
@@ -302,6 +452,20 @@ class HostService:
                     retryAfter=self.clock()
                     + min(300, 2 ** min(child.status["boot"], 8)),
                 )
+                try:
+                    self._confirm_wait_exit(child)
+                except Exception:
+                    # Physical exit is distinct from owner confirmation. A durable
+                    # proof permits releasing OS capacity, never starting this wait.
+                    self.last_error = "WAIT_STOP_UNCONFIRMED"
+                    self.view(child.candidate, "UNKNOWN", "OBSERVATION_UNAVAILABLE")
+                    proof = child.status.get("exitProof")
+                    if proof and read(child.status_path).get("exitProof") == proof:
+                        os.close(child.lock_fd)
+                        if child.control_fd >= 0:
+                            os.close(child.control_fd)
+                        del self.children[identity]
+                    continue
                 os.close(child.lock_fd)
                 if child.control_fd >= 0:
                     os.close(child.control_fd)
@@ -310,7 +474,12 @@ class HostService:
                 continue
             read_failed = False
             try:
-                eligible = self.discovery.current(child.candidate)
+                maintain = getattr(self.discovery, "maintain", None)
+                eligible = (
+                    maintain(child.candidate, child.status)
+                    if maintain is not None
+                    else self.discovery.current(child.candidate)
+                )
             except Exception:
                 eligible = None
                 read_failed = True
@@ -363,6 +532,7 @@ class HostService:
 
     def close(self):
         unresolved = []
+        pending_wait = []
         for child in self.children.values():
             if child.control_fd >= 0:
                 os.close(child.control_fd)
@@ -372,15 +542,21 @@ class HostService:
             # Child retains its lock until actual exit, even after this timeout.
             with suppress(subprocess.TimeoutExpired):
                 child.process.wait(timeout=max(0, deadline - time.monotonic()))
-            self._status(
+            child.status = self._status(
                 child.status_path,
                 child.status,
                 state="EXIT_CONFIRMED"
                 if child.process.poll() is not None
                 else "EXIT_UNCONFIRMED",
+                returnCode=child.process.returncode,
             )
             if child.process.poll() is None:
                 unresolved.append(child.status["workerId"])
+            else:
+                try:
+                    self._confirm_wait_exit(child)
+                except Exception:
+                    pending_wait.append(child.status["workerId"])
             os.close(child.lock_fd)
         self.children.clear()
         write(
@@ -392,6 +568,7 @@ class HostService:
                 "observedAt": self.clock(),
                 "state": "EXIT_UNCONFIRMED" if unresolved else "DRAINED",
                 "children": unresolved,
+                "pendingWaitObservations": pending_wait,
             },
         )
 

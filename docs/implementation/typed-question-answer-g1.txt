@@ -1,0 +1,33 @@
+G1 — bound short answers inside the existing single relation-model call
+Base8802add. Root owns registration, private policy, budget, activation and actual calls.
+
+No public CRD/Task/Skill lifecycle/permission contract changes. New private successor schemas/profile only, disabled unless explicitly registered and selected. Existing relation/adoption-source/Native validators retain old behavior.
+
+First-question coverage: build finite question contracts from actual authorized, loaded document POLICY resources and source snapshot, not from question regex or prior tool error. Each contract identifies one proposed scope candidate and the complete legitimate alternative candidate set. A successor Native CLARIFY decision references the exact contract ID in its existing model decision; legacy CLARIFY remains unchanged. Contract is saved with the question and included in questionDigest. No second classification/model call.
+
+C1 successor inherits current adoption-source capability, including initial understanding, and adds optional questionAnswer {decision CONFIRM|REJECT|CHANGE|UNCLEAR,candidateId,questionContractDigest}. CONFIRM must select the contract's proposed ID; CHANGE selects a different legal ID; REJECT/UNCLEAR have no selected ID. No arbitrary scope/resource strings. Missing structured contract uses original path. Output is interpretation, never execution permission.
+
+Native answer request supplies only interpretationReference {messageId,requestKey}. Server re-reads actual persisted successful C1 result and original user message, checks original subject/chat/message content, current exact question/invocation/preparation/run/source/contract digest, settlement and current owner checks. Client cannot supply CONFIRM directly. Owner records original answer + validated interpretation in the same existing answer transaction; duplicate claims use immutable receipts. Native durable wait owner remains sole writer for waiting/resumption.
+
+Library consumes only owner-validated typed interpretation. REJECT clears proposed scope, CHANGE uses exact legal candidate, UNCLEAR remains unconfirmed. It never gains tool/data/START rights. Old regex helper remains legacy fallback; new profile is not a regex extension.
+
+Ownership: resource agent owns new typed question policy/contract/verification modules, relation policy registration/adapter successor hunks, native_document_tools typed helper, NativeAnswer optional ref and projection hunks. Durable agent owns NativeLoop CLARIFY gating/transport and native_wait owner/runtime; minimal stable callback agreed before editing shared code.
+
+Verification: frozen-schema regression; question binding/source/actor/version mismatch rejection; different document/scopes and confirm/negate/change/uncertain/quoted/mixed constraint controlled outputs; actual isolated C1 invocation→retention→Native answer owner with exactly one model dispatch; same question duplicate and stale question; readonly refresh. Controlled tests are not model semantic accuracy acceptance. Actual root scenario/new questions remain final gate.
+
+Controlled implementation checkpoint
+- Existing Responses adapter successor parses CONFIRM/REJECT/CHANGE/UNCLEAR in one response; no second classifier call. First Native scope question receives legal contracts from loaded POLICY resources before any tool call.
+- Optional PreparedExecutionOwner typed_settlement_reader is injected only from the configured successor's original budget owner. Same-connection read checks exact profile/scope/reservation invocation and original price binding, then authoritative settlement. Missing/retained settlement rejects; no accounting mutation. Original questions without answerContract keep their exact old path.
+- Current fixed successor profile only: later profile replacement cannot read arbitrary prior typed budgets via this callback. No claim of cross-profile receipt authority.
+- v7 runtime port and schema-v2 durable configuration are owned by the durable agent and remain a joint dependency; current v6 is unchanged. Contract presence alone never enables execution or installs a service.
+- Controlled tests are transport/contract evidence, not evidence that a real model semantically handles all short answers. Registered actual model activation and real conversation verification remain root-only.
+
+Native v7 activation and compatibility evidence
+- C1 model governance/profile revision and Skill executor revision 7 are independent namespaces. C1 successor registration does not activate Native v7.
+- Native requires a newly explicit native-durable-wait.v2 file with typedQuestions=true, exact native-document-review/7/configuration digest539a25c7826368e377a53993fbe22a1b9ff61c30f24ff3525dc0c80a0b020ebf and the actual immutable native runtime JSON digest. Existing v1 config remains exact executor6; v7 resource successors must be separately validated/published/bound under existing authority.
+- NativeLoopRuntime enables questionContracts/validate_question_contract only when executor tuple and v2 agree. Actual contracts are regenerated from the loaded exact source and intersected with the current DocumentSemanticsBinding.scope; other readable policy documents are not offered as executable scope.
+- NativeDecisionJob retains its same configured model runtime/profile object, model ID, original token ceilings, credentials resolver and budget quote. The explicit v7 context adds only a CLARIFY alternative containing questionContractId from the finite actual contracts and scoped instructions. Original CLARIFY/output schema stays unchanged without this context. Per-request contract IDs mean schema has no universal static digest independent of the source; the executor/config/runtime digests plus exact persisted contract bind that schema.
+- Controlled tests: test_native_v7_schema_keeps_exact_runtime_profile_and_budget captures the actual provider request with original quote function; test_formal_composition_selects_only_configured_successor exercises actual prepared_native_composition registry selection before the DB composition boundary. These are compatibility checks, not evidence of actual model publication/network invocation.
+- Current typed settlement reader is pinned to the explicitly installed typed C1 profile. It does not claim arbitrary future/retired typed profile continuity; such profile upgrades need retained exact historical settlement readers separately.
+
+Native successor prompt field mapping is explicit: choose the contract by its proposedCandidateId, then copy that contract.contractDigest into decision.questionContractId. No nonexistent input questionContractId is implied. Dynamic schema enum already contains exactly these contract digests. C1 policy digest is unchanged.

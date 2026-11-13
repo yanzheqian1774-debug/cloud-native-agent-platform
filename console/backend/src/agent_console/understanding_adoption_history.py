@@ -16,7 +16,11 @@ def source(resolver, c, context, invocation_id, conversation):
         resolver is not None
         and resolver.enabled is True
         and resolver.profile.adapter_revision
-        in {"v3-relation-adoption", "v3-relation-adoption-source"}
+        in {
+            "v3-relation-adoption",
+            "v3-relation-adoption-source",
+            "v3-relation-adoption-source-answers",
+        }
         and resolver.routing.experience.root is resolver.root
         and resolver.routing.experience.routing_document.scopeMode
         == "EXISTING_WORK_AND_INITIAL_UNDERSTANDING",

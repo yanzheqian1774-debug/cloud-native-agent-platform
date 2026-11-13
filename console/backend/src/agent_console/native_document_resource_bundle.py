@@ -7,11 +7,13 @@ from .native_document_skill import (
     OPERATIONS,
     NativeDefinitionQuerySkillExecutor,
     NativeDocumentSkillExecutor,
+    NativeDurableDocumentSkillExecutor,
     NativeEmployeeDocumentSkillExecutor,
     NativeRuleDocumentSkillExecutor,
     NativeUserScopeDocumentSkillExecutor,
 )
 from .native_document_tools import validate_source
+from .native_typed_document_skill import NativeTypedQuestionDocumentSkillExecutor
 from .prepared_resource_bundle import resource_content as base_content
 from .skill_mcp_schemas import ResourceContent
 
@@ -23,10 +25,16 @@ def resource_content(
     confirmed_user_scope=False,
     rule_bound=False,
     definition_query=False,
+    durable_wait=False,
+    typed_questions=False,
 ):
     if definition_query and not rule_bound:
         raise ValueError("DOCUMENT_RULE_BINDING_REQUIRED")
     validate_source(source)
+    if typed_questions and not durable_wait:
+        raise ValueError("NATIVE_TYPED_QUESTION_DURABLE_WAIT_REQUIRED")
+    if durable_wait and (not rule_bound or definition_query):
+        raise ValueError("NATIVE_WAIT_RULE_BOUND_EXECUTOR_REQUIRED")
     bundle = base_content()
     skill = bundle["skill"]
     skill.update(
@@ -36,7 +44,11 @@ def resource_content(
     )
     skill["operations"] = [op for op in skill["operations"] if op["name"] in OPERATIONS]
     revision = (
-        NativeDefinitionQuerySkillExecutor
+        NativeTypedQuestionDocumentSkillExecutor
+        if typed_questions
+        else NativeDurableDocumentSkillExecutor
+        if durable_wait
+        else NativeDefinitionQuerySkillExecutor
         if definition_query
         else NativeRuleDocumentSkillExecutor
         if rule_bound

@@ -232,6 +232,21 @@ class NativeDocumentTools:
             raise ValueError("DOCUMENT_CONFIRMED_SCOPE_UNAVAILABLE")
         self.confirmed_scope = scope
 
+    def question_contracts(self):
+        from .native_question_contracts import scope_contracts
+
+        return scope_contracts(self)
+
+    def resolve_question_contract(self, contract_id):
+        from .native_question_contracts import resolve_contract
+
+        return resolve_contract(self, contract_id)
+
+    def record_typed_answer(self, contract, verified_interpretation):
+        from .native_question_contracts import consume_interpretation
+
+        consume_interpretation(self, contract, verified_interpretation)
+
     def record_answer(self, answer, *, question=None):
         from .native_scope_answer import confirmed_answer_scope
 

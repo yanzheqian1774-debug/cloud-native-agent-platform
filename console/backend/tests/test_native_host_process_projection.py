@@ -22,7 +22,10 @@ def projection(tmp_path, monkeypatch):
         def transaction(self):
             return nullcontext()
 
-        def execute(self, query, params):
+        def execute(self, query, params=()):
+            if "to_regclass" in query:
+                assert "native_wait_heads" in query and params == ()
+                return SimpleNamespace(fetchone=lambda: {"present": None})
             assert "JOIN execution_authority.attempts" in query
             assert "JOIN execution_authority.prepared_task_bindings" in query
             assert "DISTINCT n.principal_id" in query and "LIMIT 2" in query

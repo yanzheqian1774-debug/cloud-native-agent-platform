@@ -2,8 +2,8 @@ import {routedUnderstandingFailure} from '../../src/problems/sourceInputFeedback
 import {routingReceiptNotice} from '../../src/problems/conversationRoutingReceipt';
 import {test,expect,type Page} from '@playwright/test';
 const digest='a'.repeat(64),problem={business_problem_id:'problem',revision_id:'revision',digest:'b'.repeat(64)},ref={resource_id:problem.business_problem_id,revision_id:problem.revision_id,digest:problem.digest};
-async function fixture(page:Page,phase='PLAN',enabled=true){
- const question={invocationId:'native-one',questionKey:'question-one',questionDigest:'c'.repeat(64),question:'请确认采用内部交接规范还是外部规范？',expiresAt:'2099-01-01T00:00:00Z',answer:null as string|null,expired:false};
+async function fixture(page:Page,phase='PLAN',enabled=true,typed=false){
+ const question={invocationId:'native-one',questionKey:'question-one',questionDigest:'c'.repeat(64),question:'请确认采用内部交接规范还是外部规范？',expiresAt:'2099-01-01T00:00:00Z',answer:null as string|null,expired:false,...(typed?{answerContract:{contractDigest:'7'.repeat(64)}}:{})};
  const state={question,phase,longRail:false,streamFailure:false,streamUnknown:false,executionState:'RUNNING',failureReason:null as string|null,modelCalls:[] as Record<string,unknown>[],ownerPosts:[] as Record<string,unknown>[],writes:[] as string[],reads:0,relation:'INDEPENDENT',directCurrentWork:false,stale:false,dropStream:false,rejectBefore:false,readUnavailable:false,ownerReceipt:'accepted',hold:null as Promise<void>|null,
   messages:[{message_id:'original',content:'帮我检查交接材料',author_id:'human:alice',disposition:'GOAL_RECORDED',request_key:'original'}] as Record<string,unknown>[],version:1,last:null as Record<string,unknown>|null,
   journal:{version:7,state:{key:'original-work',phase,pending:phase==='PLAN'?'planning':phase==='EXECUTE'?'execute':undefined,error:phase==='EXECUTE'?'上次执行结果尚待核实':undefined,question:'帮我检查交接材料',problem,messages:[{id:'user:original',text:'帮我检查交接材料'}],log:['原工作已保存'],...(phase==='RUNNING'?{execution:digest}:{})}}};
@@ -181,6 +181,34 @@ test('pre-update REVIEW receipt reload reads exact failure without a new model r
  const s=await fixture(page,'RUNNING');s.streamFailure=true;await page.goto('/work?conversation=routing');await send(page,'核对原资料');await expect(page.getByLabel('本条回复未被采纳',{exact:true})).toBeVisible();
  await page.evaluate(()=>{const key=Object.keys(sessionStorage).find(k=>k.startsWith('conversation-routing.v1:'))!;const v=JSON.parse(sessionStorage.getItem(key)!);delete v.lastResult;delete v.observedOwner;delete v.unacceptedPreview;sessionStorage.setItem(key,JSON.stringify(v))});await page.reload();
  await expect(page.getByText('本次补充的回复格式校验未通过，生成文字未被采纳。原问题、输入与原任务均保留，不会自动重试。',{exact:true})).toBeVisible();expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);
+});
+
+for(const text of ['对，只核对这份材料，不执行上线。','不，不按当前范围检查。','改用另一项已提供的规范。','我还不确定。'])test(`typed question forwards only saved reference: ${text}`,async({page},info)=>{
+ const s=await fixture(page,'RUNNING',true,true);s.relation='CURRENT_QUESTION';
+ const before=JSON.stringify(s.journal);await page.goto('/work?conversation=routing');
+ await send(page,text);await expect.poll(()=>s.ownerPosts.length).toBe(1);
+ const request=s.modelCalls[0];expect(s.ownerPosts[0]).toEqual({invocationId:s.question.invocationId,questionKey:s.question.questionKey,questionDigest:s.question.questionDigest,conversationId:'routing',answer:text,interpretationReference:{messageId:request.conversationMessageId,requestKey:request.idempotencyKey}});
+ expect(s.modelCalls).toHaveLength(1);expect(JSON.stringify(s.journal)).toBe(before);
+ await page.setViewportSize({width:1440,height:1000});await page.getByText(text,{exact:true}).first().scrollIntoViewIfNeeded();await expect(page.getByText(text,{exact:true}).first()).toBeInViewport();await page.screenshot({path:info.outputPath('typed-question-reference.png'),fullPage:true});
+ await page.reload();await expect(input(page)).toBeVisible();expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);
+});
+
+test('legacy question sends no semantic reference field',async({page})=>{
+ const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';await page.goto('/work?conversation=routing');await send(page,'生产环境');await expect.poll(()=>s.ownerPosts.length).toBe(1);expect(s.ownerPosts[0]).not.toHaveProperty('interpretationReference');expect(s.modelCalls).toHaveLength(1);
+});
+
+test('typed stale question cannot consume a saved interpretation',async({page})=>{
+ const s=await fixture(page,'RUNNING',true,true);s.relation='CURRENT_QUESTION';s.stale=true;
+ await page.goto('/work?conversation=routing');await send(page,'对，只核对材料。');
+ await expect(page.getByText(/原工作已变化，这条回答未提交/)).toBeVisible();
+ expect(s.modelCalls).toHaveLength(1);expect(s.ownerPosts).toHaveLength(0);await expect(input(page)).toHaveValue('对，只核对材料。');
+});
+test('typed saved interpretation resumes explicitly without another model call',async({page})=>{
+ const s=await fixture(page,'RUNNING',true,true);s.relation='CURRENT_QUESTION';s.dropStream=true;
+ await page.goto('/work?conversation=routing');await send(page,'对，只核对材料。');await expect(page.getByText(/暂未确认这条回复的处理结果/)).toBeVisible();
+ await page.reload();await expect(page.getByRole('button',{name:'继续提交这条回答'})).toBeVisible();expect(s.ownerPosts).toHaveLength(0);
+ await page.getByRole('button',{name:'继续提交这条回答'}).click();await expect.poll(()=>s.ownerPosts.length).toBe(1);
+ expect(s.ownerPosts[0]).toHaveProperty('interpretationReference',{messageId:s.modelCalls[0].conversationMessageId,requestKey:s.modelCalls[0].idempotencyKey});expect(s.modelCalls).toHaveLength(1);
 });
 
 test('unsent text returns for the same account after a new login without submission',async({page})=>{

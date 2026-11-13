@@ -47,9 +47,12 @@ def prepare(manifest_path, state_directory, output, *, enabled=False, max_hosts=
     names = (
         *required,
         *(
-            ("NATIVE_LOOP_RUNTIME_FILE",)
-            if os.environ.get("NATIVE_LOOP_RUNTIME_FILE")
-            else ()
+            name
+            for name in (
+                "NATIVE_LOOP_RUNTIME_FILE",
+                "NATIVE_DURABLE_WAIT_CONFIGURATION",
+            )
+            if os.environ.get(name)
         ),
     )
     files = {

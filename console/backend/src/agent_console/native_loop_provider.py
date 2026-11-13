@@ -25,7 +25,7 @@ UNDETERMINED. No private chain of thought; output only the structured action.
 """
 
 
-def action_schema(tools, answer_schema=None):
+def action_schema(tools, answer_schema=None, *, question_contracts=None):
     def supported(value):
         if isinstance(value, dict):
             return {k: supported(v) for k, v in value.items() if k != "uniqueItems"}
@@ -86,6 +86,29 @@ def action_schema(tools, answer_schema=None):
     )
     if answer_schema is not None:
         choices[-2]["properties"]["answer"] = supported(answer_schema)
+    if question_contracts is not None:
+        from .native_question_contracts import validate_contract
+
+        if (
+            not isinstance(question_contracts, list)
+            or not 1 <= len(question_contracts) <= 12
+        ):
+            raise ValueError("NATIVE_QUESTION_CONTRACTS_INVALID")
+        ids = [validate_contract(c)["contractDigest"] for c in question_contracts]
+        if len(set(ids)) != len(ids):
+            raise ValueError("NATIVE_QUESTION_CONTRACTS_INVALID")
+        choices.append(
+            {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["CLARIFY"]},
+                    "question": {"type": "string"},
+                    "questionContractId": {"type": "string", "enum": ids},
+                },
+                "required": ["action", "question", "questionContractId"],
+                "additionalProperties": False,
+            }
+        )
     return {
         "type": "object",
         "properties": {"decision": {"anyOf": choices}},
@@ -139,10 +162,30 @@ class NativeDecisionJob:
                     "schema": action_schema(
                         self.context["tools"],
                         self.context["context"].get("answerSchema"),
+                        question_contracts=self.context["context"].get(
+                            "questionContracts"
+                        ),
                     ),
                 }
             },
         }
+        if self.context["context"].get("questionContracts") is not None:
+            document["instructions"] += (
+                " context.questionContracts are finite question definitions from the "
+                "already authorized source version. When asking the user to confirm a "
+                "policy scope, including the FIRST question before any tool call, "
+                "select the contract whose proposedCandidateId matches that scope, "
+                "then copy the selected contract's contractDigest into "
+                "questionContractId alongside CLARIFY/question. Phrase the question "
+                "as that proposed candidate, not a different or multiple scope. "
+                "Never invent a contract or scope. For other open questions use the "
+                "original CLARIFY form. A USER_ANSWER typed rejection or uncertainty "
+                "does not confirm any scope; a verified change selects only its listed "
+                "candidate. Do not repeat a scope that is already explicitly "
+                "confirmed. "
+                "Question definitions and answer meanings never authorize "
+                "external actions."
+            )
         if self.context["context"].get("confirmedScopeEvidence"):
             document["instructions"] += (
                 " context.confirmedScopeEvidence records an explicit instruction "

@@ -98,10 +98,12 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
     from .native_document_skill import (
         NativeDefinitionQuerySkillExecutor,
         NativeDocumentSkillExecutor,
+        NativeDurableDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
         NativeUserScopeDocumentSkillExecutor,
     )
+    from .native_typed_document_skill import NativeTypedQuestionDocumentSkillExecutor
 
     is_document = (
         participant.executor_id,
@@ -111,6 +113,8 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
         (doc.executor_id, doc.executor_revision, doc.configuration_digest)
         for doc in (
             NativeDocumentSkillExecutor.revision,
+            NativeDurableDocumentSkillExecutor.revision,
+            NativeTypedQuestionDocumentSkillExecutor.revision,
             NativeEmployeeDocumentSkillExecutor.revision,
             NativeUserScopeDocumentSkillExecutor.revision,
             NativeRuleDocumentSkillExecutor.revision,
@@ -172,8 +176,64 @@ class PreparedNativeSkillCaller:
         self.skill = skill_composition
         self.authorize = authorize
         self.sales_v2_candidate = sales_v2_candidate
+        self.runtime = None
 
     def invoke(self, command):
+        return self._call(command, None)
+
+    def read_wait(self, command):
+        if self.runtime is None or self.runtime.durable_wait is None:
+            return None
+        from .native_wait_store import NativeWaitStore
+        from .native_wait_types import WaitIdentity
+
+        with self.pool.connection() as c:
+            rows = c.execute(
+                "SELECT h.state,h.checkpoint_digest,cp.record "
+                "FROM skill_invocation.invocations i "
+                "JOIN skill_invocation.native_wait_heads h "
+                "USING(namespace,security_domain,skill_invocation_id) "
+                "JOIN skill_invocation.native_wait_checkpoints cp "
+                "USING(namespace,security_domain,skill_invocation_id,"
+                "checkpoint_digest) "
+                "WHERE i.namespace=%s AND i.security_domain=%s AND i.attempt_id=%s",
+                (
+                    command.scope.namespace,
+                    command.scope.security_domain,
+                    str(command.attempt_id),
+                ),
+            ).fetchall()
+            if not rows:
+                return None
+            if len(rows) != 1:
+                raise ExecutionPreparationError("NATIVE_WAIT_JOB_AMBIGUOUS")
+            row = rows[0]
+            identity = WaitIdentity.model_validate(row["record"]["identity"])
+            cp = NativeWaitStore(c, identity).checkpoint(row["checkpoint_digest"])
+            if (
+                identity.command_id != str(command.command_id)
+                or identity.principal_id != command.principal_id
+            ):
+                raise ExecutionPreparationError("NATIVE_WAIT_COMMAND_BINDING_CHANGED")
+            return cp, row["state"]
+
+    def resume_wait(self, command):
+        value = self.read_wait(command)
+        if value is None:
+            return None
+        cp, state = value
+        from .native_wait_types import SkillJobWaiting
+
+        if state not in {"ANSWER_SAVED", "COMPLETED"}:
+            # Positive wait is not UNKNOWN or a reason to call the old recovery
+            # port. A missing stop observation also remains non-executable.
+            return SkillJobWaiting(identity=cp.identity, checkpoint_digest=cp.digest)
+        return self.continue_job(command, cp, None)
+
+    def continue_job(self, command, checkpoint, claim):
+        return self._call(command, (checkpoint, claim))
+
+    def _call(self, command, continuation):
         with self.pool.connection() as connection, connection.transaction():
             # Recheck current admission and independent Skill authority before lookup.
             decision_id = self.authorize(connection, command)
@@ -190,12 +250,24 @@ class PreparedNativeSkillCaller:
             decision_id,
         )
         from .native_loop_runtime import COMMAND
+        from .native_wait_runtime import CONTINUATION
 
         token = COMMAND.set(command)
+        continuation_token = CONTINUATION.set(continuation)
         try:
-            snapshot = self.skill.service(authorization).invoke(request, inputs)
+            service = self.skill.service(authorization)
+            snapshot = (
+                service.invoke(request, inputs)
+                if continuation is None
+                else service.continue_accepted_job(request, inputs)
+            )
         finally:
+            CONTINUATION.reset(continuation_token)
             COMMAND.reset(token)
+        from .native_wait_types import SkillJobWaiting
+
+        if isinstance(snapshot, SkillJobWaiting):
+            return snapshot
         if snapshot.state != "SUCCEEDED":
             return snapshot.state.value, None
         with self.pool.connection() as connection:

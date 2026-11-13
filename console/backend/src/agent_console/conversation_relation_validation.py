@@ -95,7 +95,11 @@ def install(app, authenticate, service, service_for, payload, status):
                 value,
                 current,
                 initial_adoption=active_service.profile.adapter_revision
-                in {"v3-relation-adoption", "v3-relation-adoption-source"}
+                in {
+                    "v3-relation-adoption",
+                    "v3-relation-adoption-source",
+                    "v3-relation-adoption-source-answers",
+                }
                 and getattr(app.state, "understanding_adoption", None) is not None,
             )
             with actions.records.connect() as c:

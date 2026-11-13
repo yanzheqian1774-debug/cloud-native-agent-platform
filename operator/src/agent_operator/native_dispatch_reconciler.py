@@ -220,13 +220,21 @@ class ManagedSkillNativeTransport:
         self.caller = caller
         self.legacy = HttpNativeTransport()
 
+    def resume_wait(self, command):
+        return self.caller.resume_wait(command)
+
     def invoke(self, command):
         if not command.authorization_resource.startswith(
             "governed-execution:prepared:"
         ):
             return self.legacy.invoke(command)
         try:
-            state, output = self.caller.invoke(command)
+            from agent_console.native_wait_types import SkillJobWaiting
+
+            result = self.caller.invoke(command)
+            if isinstance(result, SkillJobWaiting):
+                return result
+            state, output = result
         except Exception as exc:
             from agent_console.execution_preparation import ExecutionPreparationError
 
@@ -320,6 +328,54 @@ class NativeDispatchWorker:
             if self.startup_observation is not None:
                 self.startup_observation.observe_only_receipt(claim)
             observed = self.kubernetes.read(claim, task_name)
+            if observed and observed.get("status", {}).get("phase") == "Running":
+                resume = getattr(self.transport, "resume_wait", None)
+                if resume is not None:
+                    from agent_console.native_wait_runtime import HOST_CLAIM
+
+                    token = HOST_CLAIM.set((claim, options.get("startup_observation")))
+                    try:
+                        continued = resume(command)
+                    except Exception:
+                        # A positive-wait read/current admission failure is not
+                        # proof of execution failure and never invokes legacy retry.
+                        return DispatchRunResult(
+                            "WAIT_OBSERVATION_UNAVAILABLE", str(command.command_id)
+                        )
+                    finally:
+                        HOST_CLAIM.reset(token)
+                    if continued is not None:
+                        from agent_console.native_wait_types import SkillJobWaiting
+
+                        if isinstance(continued, SkillJobWaiting):
+                            return DispatchRunResult(
+                                "DRAIN_FOR_INPUT", str(command.command_id)
+                            )
+                        state, output = continued
+                        if state not in {"SUCCEEDED", "FAILED"}:
+                            return DispatchRunResult(
+                                "WAIT_OBSERVATION_UNAVAILABLE", str(command.command_id)
+                            )
+                        status = {
+                            "phase": "Succeeded" if state == "SUCCEEDED" else "Failed",
+                            "attempts": 1,
+                            "completedAt": datetime.now(UTC).isoformat(),
+                        }
+                        if state == "SUCCEEDED":
+                            status["result"] = output
+                        else:
+                            # Only the existing Skill owner's persisted FAILED
+                            # result is terminal. UNKNOWN/read errors stay above.
+                            status.update(
+                                reason="InternalError",
+                                message=(
+                                    "[ManagedSkillFailed] "
+                                    "Original Skill continuation failed"
+                                ),
+                                retryable=False,
+                            )
+                        self.kubernetes.patch_status(command, task_name, status)
+                        observed = self.kubernetes.read(claim, task_name)
             observation = self._terminal_observation(command, task_name, observed)
             return self._finish(claim, observation)
         task = self.kubernetes.create(claim, task_name)
@@ -343,7 +399,13 @@ class NativeDispatchWorker:
             },
         )
         try:
-            output = self.transport.invoke(command)
+            from agent_console.native_wait_runtime import HOST_CLAIM
+
+            token = HOST_CLAIM.set((claim, options.get("startup_observation")))
+            try:
+                output = self.transport.invoke(command)
+            finally:
+                HOST_CLAIM.reset(token)
         except TaskExecutionError as exc:
             if exc.reason in {"ExecutionOutcomeUnknown", "ExecutionTimeout"}:
                 return self._uncertain(
@@ -372,6 +434,20 @@ class NativeDispatchWorker:
             }
             self.kubernetes.patch_status(command, task_name, status)
         else:
+            from agent_console.native_wait_types import SkillJobWaiting
+
+            if isinstance(output, SkillJobWaiting):
+                if (
+                    output.identity.command_id != str(command.command_id)
+                    or output.identity.attempt_id != str(command.attempt_id)
+                    or output.identity.principal_id != command.principal_id
+                    or output.identity.namespace != command.scope.namespace
+                    or output.identity.security_domain != command.scope.security_domain
+                ):
+                    raise NativeDispatchWorkerError(
+                        "NATIVE_WAIT_COMMAND_BINDING_INVALID"
+                    )
+                return DispatchRunResult("DRAIN_FOR_INPUT", str(command.command_id))
             status = {
                 "phase": "Succeeded",
                 "result": output,
@@ -680,6 +756,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 authorization_check,
                 mode=prepared_mode,
                 native_loop_path=os.getenv("NATIVE_LOOP_RUNTIME_FILE"),
+                durable_wait_path=os.getenv("NATIVE_DURABLE_WAIT_CONFIGURATION"),
                 authorization_bundle_check=authorization_bundle_check,
             )
             transport = ManagedSkillNativeTransport(caller)
@@ -723,6 +800,21 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 **({"owned_business": owned_business} if owned_business else {}),
             )
             continuation_work = work
+            if prepared_composition is not None:
+                for runtime in prepared_composition.closeables:
+                    if getattr(runtime, "durable_wait", None) is not None:
+                        if owned_business is None:
+                            raise NativeDispatchWorkerError(
+                                "NATIVE_WAIT_OWNED_BUSINESS_REQUIRED"
+                            )
+                        runtime.owned_business = owned_business
+                        from agent_console.native_wait_command_access import (
+                            NativeWaitCommandAccess,
+                        )
+
+                        caller.wait_access = NativeWaitCommandAccess(
+                            runtime, execution, work
+                        )
             dispatch_repository = ContinuationDispatchRepository(execution, work)
             ready_driver.eligible_dispatches = work.dispatches
             after_tick = work.evaluate_terminal

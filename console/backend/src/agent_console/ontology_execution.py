@@ -162,13 +162,19 @@ def validate_semantics(connection, scope, preparation, participant):
         return
     from .native_document_skill import (
         NativeDefinitionQuerySkillExecutor,
+        NativeDurableDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
     )
+    from .native_typed_document_skill import NativeTypedQuestionDocumentSkillExecutor
     from .sales_ontology_executor import SalesOntologyExecutor
 
     expected = (
         (
-            NativeDefinitionQuerySkillExecutor
+            NativeTypedQuestionDocumentSkillExecutor
+            if participant.executor_revision == "7"
+            else NativeDurableDocumentSkillExecutor
+            if participant.executor_revision == "6"
+            else NativeDefinitionQuerySkillExecutor
             if participant.executor_revision == "5"
             else NativeRuleDocumentSkillExecutor
         ).revision
@@ -223,14 +229,18 @@ def document_mapping_digest(mapping, binding):
     """Commit the policy-selected rules before the execution plan is approved."""
     from .native_document_skill import (
         NativeDefinitionQuerySkillExecutor,
+        NativeDurableDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
     )
+    from .native_typed_document_skill import NativeTypedQuestionDocumentSkillExecutor
 
     if mapping["source_snapshot"] != binding.source.model_dump(mode="json"):
         raise ExecutionPreparationError("ONTOLOGY_PREPARATION_SOURCE_MISMATCH")
     accepted = (
         NativeRuleDocumentSkillExecutor.revision,
         NativeDefinitionQuerySkillExecutor.revision,
+        NativeDurableDocumentSkillExecutor.revision,
+        NativeTypedQuestionDocumentSkillExecutor.revision,
     )
     participants = mapping["participants"]
     if not participants or any(

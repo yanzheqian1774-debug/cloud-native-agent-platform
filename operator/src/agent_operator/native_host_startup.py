@@ -116,6 +116,7 @@ class StartupObservation:
                     "NATIVE_LOOP_RUNTIME_FILE",
                     "NATIVE_DISPATCH_CONTINUATION_POLICY",
                     "OWNED_BUSINESS_ADMISSION_POLICY",
+                    "NATIVE_DURABLE_WAIT_CONFIGURATION",
                 }
             )
             path = os.environ.get(env, "")
@@ -140,6 +141,7 @@ class StartupObservation:
                     "NATIVE_LOOP_RUNTIME_FILE",
                     "NATIVE_DISPATCH_CONTINUATION_POLICY",
                     "OWNED_BUSINESS_ADMISSION_POLICY",
+                    "NATIVE_DURABLE_WAIT_CONFIGURATION",
                 )
             )
         )

@@ -432,6 +432,41 @@ class PostgresProviderCallBudget:
             ).fetchone()
         return self.settlement_projection(row)
 
+    def read_invocation_settlement(self, connection, invocation):
+        """Same-transaction exact receipt check; never reserves or settles a call."""
+        from .provider_profile_pricing import require_reservation
+
+        if (
+            invocation.scope != self.profile.scope
+            or invocation.profile_revision_id != self.profile.profile_revision_id
+            or invocation.snapshot is None
+            or invocation.snapshot.profile_digest != self.profile.profile_digest
+            or not invocation.budget_reservation_id
+        ):
+            raise DraftAssistanceError("PROVIDER_BUDGET_RESERVATION_PROFILE_MISMATCH")
+        identity = (
+            self.profile.scope.namespace,
+            self.profile.scope.security_domain,
+            self.ledger_id,
+            invocation.budget_reservation_id,
+        )
+        reservation = connection.execute(
+            "SELECT invocation_id FROM draft_provider_budget.reservations "
+            "WHERE namespace=%s AND security_domain=%s AND ledger_id=%s "
+            "AND reservation_id=%s",
+            identity,
+        ).fetchone()
+        if not reservation or reservation["invocation_id"] != invocation.invocation_id:
+            raise DraftAssistanceError("PROVIDER_BUDGET_RESERVATION_CONFLICT")
+        require_reservation(connection, self, invocation.budget_reservation_id)
+        row = connection.execute(
+            "SELECT input_tokens,output_tokens,actual_cost_microusd "
+            "FROM draft_provider_budget.settlements WHERE namespace=%s "
+            "AND security_domain=%s AND ledger_id=%s AND reservation_id=%s",
+            identity,
+        ).fetchone()
+        return self.settlement_projection(row)
+
     @staticmethod
     def settlement_projection(row):
         if row is None:

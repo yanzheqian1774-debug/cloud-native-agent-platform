@@ -94,7 +94,10 @@ class Configuration:
             "NATIVE_DISPATCH_CONTINUATION_POLICY",
             "OWNED_BUSINESS_ADMISSION_POLICY",
         }
-        allowed = required | {"NATIVE_LOOP_RUNTIME_FILE"}
+        allowed = required | {
+            "NATIVE_LOOP_RUNTIME_FILE",
+            "NATIVE_DURABLE_WAIT_CONFIGURATION",
+        }
         if (
             not isinstance(value["policyFiles"], dict)
             or not required <= set(value["policyFiles"]) <= allowed

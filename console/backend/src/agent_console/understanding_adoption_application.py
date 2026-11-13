@@ -39,7 +39,11 @@ class UnderstandingAdoptionApplication:
     def result(self, context, conversation, message, key):
         require(
             self.routing.profile.adapter_revision
-            in {"v3-relation-adoption", "v3-relation-adoption-source"},
+            in {
+                "v3-relation-adoption",
+                "v3-relation-adoption-source",
+                "v3-relation-adoption-source-answers",
+            },
             "UNAVAILABLE",
         )
         require(isinstance(key, str) and 0 < len(key) <= 128, "KEY_INVALID")

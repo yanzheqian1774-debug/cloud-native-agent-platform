@@ -169,7 +169,13 @@ def test_first_model_progress_and_terminal_unknown_are_not_conflated(
         {"skill_invocation_id": "inv", "record_key": "inv:0:MODEL", "result": None},
     ]
     monkeypatch.setattr(interaction, "records", lambda *args: rows)
-    view = interaction.progress(None, None, NS(run_id="run"))
+
+    class Connection:
+        def execute(self, sql):
+            assert "to_regclass('skill_invocation.native_wait_heads')" in sql
+            return NS(fetchone=lambda: {"present": None})
+
+    view = interaction.progress(NS(connection=Connection()), None, NS(run_id="run"))
     assert view["steps"] == view["questions"] == []
     assert view["modelInFlight"] is (terminal is None)
     assert (
@@ -221,7 +227,12 @@ def test_progress_exact_reader_without_administrator_and_fail_closed(
         def execute(self, sql, params=None):
             assert sql.startswith("SELECT")
             reads.append((sql, params))
-            return NS(fetchone=lambda: {"present": True}, fetchall=lambda: [])
+            return NS(
+                fetchone=lambda: {
+                    "present": None if "native_wait_heads" in sql else True
+                },
+                fetchall=lambda: [],
+            )
 
     if denial == "subject":
         principal.principal_id = "human:other"
@@ -242,10 +253,11 @@ def test_progress_exact_reader_without_administrator_and_fail_closed(
             "questions": [],
             "modelInFlight": False,
         }
-        assert reads[-1][1] == ("t", "d", "run-exact")
+        assert reads[-2][1] == ("t", "d", "run-exact")
+        assert "native_wait_heads" in reads[-1][0]
         assert checks[0] == expected
         assert interaction.progress(call, app, p)["steps"] == []
-        assert len(reads) == 4
+        assert len(reads) == 6
     # READ does not substitute for START: answer must validate before any read.
     before = len(reads)
 
@@ -355,6 +367,8 @@ def test_answer_pins_existing_problem_context_origin(monkeypatch, origin):
                         {"conversation_id": "other"},
                     ]
                 )
+            if "to_regclass('skill_invocation.native_wait_heads')" in sql:
+                return NS(fetchone=lambda: {"t": None})
             if "to_regclass" in sql:
                 return NS(
                     fetchone=lambda: {

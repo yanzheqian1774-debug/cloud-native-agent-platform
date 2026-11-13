@@ -50,6 +50,7 @@ def configured(tmp_path, monkeypatch):
         policy_files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     for name in (
         "NATIVE_LOOP_RUNTIME_FILE",
+        "NATIVE_DURABLE_WAIT_CONFIGURATION",
         "NATIVE_HOST_SERVICE_LOCK_FD",
         "NATIVE_HOST_SERVICE_READY_FD",
         "NATIVE_HOST_SERVICE_CONTROL_FD",
@@ -118,3 +119,67 @@ def test_ambient_unpinned_runtime_or_nested_launch_rejected(configured, monkeypa
     monkeypatch.setenv("NATIVE_HOST_SERVICE_CONTROL_FD", "9")
     with pytest.raises(ValueError, match="NESTED"):
         Configuration(path)
+
+
+def test_durable_configuration_is_optional_but_must_be_pinned(
+    configured, monkeypatch, tmp_path
+):
+    path, value = configured
+    Configuration(path).verify()
+    wait = tmp_path / "wait.json"
+    write(wait, {"controlled": True})
+    monkeypatch.setenv("NATIVE_DURABLE_WAIT_CONFIGURATION", str(wait))
+    with pytest.raises(ValueError, match="POLICY_BINDING"):
+        Configuration(path)
+    value["policyFiles"]["NATIVE_DURABLE_WAIT_CONFIGURATION"] = hashlib.sha256(
+        wait.read_bytes()
+    ).hexdigest()
+    write(path, value)
+    config = Configuration(path)
+    config.verify()
+    wait.write_text("changed")
+    with pytest.raises(ValueError, match="PINNED_SOURCE_CHANGED"):
+        config.verify()
+
+
+@pytest.mark.parametrize("durable", [False, True])
+def test_preparation_roundtrip_pins_optional_wait_file(
+    configured, monkeypatch, tmp_path, durable
+):
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    from agent_console.owned_business_policy import OwnedBusinessPolicy
+    from agent_operator.native_host_service_prepare import prepare
+
+    _, value = configured
+    monkeypatch.setattr(
+        OwnedBusinessPolicy,
+        "load",
+        lambda _: SimpleNamespace(
+            enabled=True,
+            expiresAt=datetime.now(UTC) + timedelta(hours=1),
+            tenantId="ns",
+            securityDomain="d",
+            subjectId="human:a",
+            digest="a" * 64,
+        ),
+    )
+    wait = tmp_path / "optional-wait.json"
+    if durable:
+        write(wait, {"controlled": True})
+        monkeypatch.setenv("NATIVE_DURABLE_WAIT_CONFIGURATION", str(wait))
+    output = tmp_path / "prepared" / "service.json"
+    prepare(value["manifestPath"], tmp_path / "new-state", output, enabled=True)
+    config = Configuration(output)
+    config.verify()
+    assert (
+        "NATIVE_DURABLE_WAIT_CONFIGURATION" in config.value["policyFiles"]
+    ) is durable
+    if durable:
+        assert config.value["policyFiles"]["NATIVE_DURABLE_WAIT_CONFIGURATION"] == (
+            hashlib.sha256(wait.read_bytes()).hexdigest()
+        )
+        wait.write_text("changed")
+        with pytest.raises(ValueError, match="PINNED_SOURCE_CHANGED"):
+            config.verify()

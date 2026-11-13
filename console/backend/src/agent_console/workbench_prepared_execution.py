@@ -84,8 +84,15 @@ def candidate(connection, scope, digest):
 
 
 class PreparedExecutionOwner:
-    def __init__(self, coordinator=None, *, sales_v2_candidate=False):
+    def __init__(
+        self,
+        coordinator=None,
+        *,
+        sales_v2_candidate=False,
+        typed_settlement_reader=None,
+    ):
         self.coordinator = coordinator
+        self.typed_settlement_reader = typed_settlement_reader
         self.sales_v2_candidate = sales_v2_candidate
 
     def __call__(self, call):
@@ -258,9 +265,14 @@ class PreparedExecutionOwner:
             if call.operation in {"READ_NATIVE_PROGRESS", "ANSWER_NATIVE_QUESTION"}:
                 from .native_interaction import answer, progress
 
-                return (
-                    answer if call.operation == "ANSWER_NATIVE_QUESTION" else progress
-                )(call, app, p)
+                if call.operation == "ANSWER_NATIVE_QUESTION":
+                    return answer(
+                        call,
+                        app,
+                        p,
+                        typed_settlement_reader=self.typed_settlement_reader,
+                    )
+                return progress(call, app, p)
             review = PreparedResultReview(
                 call.connection,
                 principal,
@@ -540,10 +552,16 @@ class PreparedExecutionGrantTargets:
         return False
 
 
-def prepared_execution_operations(coordinator=None, *, sales_v2_candidate=False):
+def prepared_execution_operations(
+    coordinator=None, *, sales_v2_candidate=False, typed_settlement_reader=None
+):
     from .native_interaction import NativeAnswer
 
-    handler = PreparedExecutionOwner(coordinator, sales_v2_candidate=sales_v2_candidate)
+    handler = PreparedExecutionOwner(
+        coordinator,
+        sales_v2_candidate=sales_v2_candidate,
+        typed_settlement_reader=typed_settlement_reader,
+    )
     path = PREFIX + "/prepared-executions/{digest}"
     return (
         WorkbenchOperation(
