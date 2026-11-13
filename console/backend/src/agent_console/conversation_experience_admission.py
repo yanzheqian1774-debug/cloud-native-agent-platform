@@ -67,20 +67,38 @@ class ExperiencePolicy(BaseModel):
         return self
 
 
-def begin_bound(service, context, *, conversation, message_id, **kwargs):
+def begin_bound(
+    service, context, *, conversation, message_id, question_only=False, **kwargs
+):
     """Called only after the API has verified ownership and exact user content."""
     admission = getattr(
         getattr(service, "authorization", None), "context_admission", None
     )
     experience = getattr(admission, "experience", None)
+    if question_only and (
+        not experience
+        or not experience.matches(context)
+        or not experience.document.ownedConversationUnderstanding
+        or any(
+            kwargs.get(k)
+            for k in (
+                "parent_context_id",
+                "parent_turn_id",
+                "predecessor_invocation_id",
+            )
+        )
+    ):
+        raise DraftAssistanceError("CONVERSATION_ROUTING_CONTEXT_INVALID")
     if experience and experience.matches(context):
         try:
             with admission.repository.connection_scope() as c:
                 experience._require(admission, c, context)
-                experience.conversation_scope(c, context, conversation, message_id)
+                experience.conversation_scope(
+                    c, context, conversation, message_id, question_only=question_only
+                )
         except AuthorityError as exc:
             raise DraftAssistanceError(exc.reason_code) from exc
-    token = _binding.set((conversation, message_id, kwargs["key"]))
+    token = _binding.set((conversation, message_id, kwargs["key"], question_only))
     try:
         return service.begin(context, **kwargs)
     finally:
@@ -209,8 +227,10 @@ class ConversationExperienceAdmission:
             raise AuthorityError("CONTEXT_ADMISSION_EXPERIENCE_EXPIRED")
         return account, now, expires
 
-    def conversation_scope(self, c, context, conversation, message_id):
-        if conversation in self.document.conversations:
+    def conversation_scope(
+        self, c, context, conversation, message_id, *, question_only=False
+    ):
+        if conversation in self.document.conversations and not question_only:
             return False
         if not self.document.ownedConversationUnderstanding:
             raise AuthorityError("CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED")
@@ -250,7 +270,11 @@ class ConversationExperienceAdmission:
         ):
             raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
         if not self.conversation_scope(
-            c, context, record["conversation_id"], record["first_user_message_id"]
+            c,
+            context,
+            record["conversation_id"],
+            record["first_user_message_id"],
+            question_only=record.get("question_only", False),
         ):
             raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
 
@@ -268,7 +292,9 @@ class ConversationExperienceAdmission:
             != service.configuration["profile_revision_id"]
         ):
             raise AuthorityError("CONTEXT_ADMISSION_CONVERSATION_BINDING_REQUIRED")
-        general = self.conversation_scope(c, context, binding[0], binding[1])
+        general = self.conversation_scope(
+            c, context, binding[0], binding[1], question_only=binding[3]
+        )
         lock(c, invocation.context_id)
         row = request_row(c, invocation.context_id)
         if row:
@@ -277,6 +303,8 @@ class ConversationExperienceAdmission:
                 row["record"].get("conversation_id"),
             ) != (self.policy_digest, binding[0]):
                 raise AuthorityError("CONTEXT_ADMISSION_CONFIGURATION_MISMATCH")
+            if bool(row["record"].get("question_only")) != binding[3]:
+                raise AuthorityError("CONTEXT_ADMISSION_SCOPE_DENIED")
             self.require_record(c, context, row)
             active(c, row, service.configuration)
             return True
@@ -310,9 +338,10 @@ class ConversationExperienceAdmission:
             "authorization_digest": self.document.authorizationDigest,
             "conversation_id": binding[0],
             "first_user_message_id": binding[1],
-            "scenario": self.document.conversations.get(
-                binding[0], "GENERAL_CONVERSATION_UNDERSTANDING"
-            ),
+            "scenario": "GENERAL_CONVERSATION_UNDERSTANDING"
+            if general
+            else self.document.conversations[binding[0]],
+            **({"question_only": True} if binding[3] else {}),
             **(
                 {"owned_understanding_policy_digest": self.understanding_policy_digest}
                 if general

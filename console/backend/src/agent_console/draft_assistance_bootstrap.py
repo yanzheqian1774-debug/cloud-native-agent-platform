@@ -215,7 +215,7 @@ def _profile(
     )
     if isinstance(document.get("adapter"), dict) and document["adapter"].get(
         "revision"
-    ) in {"v2", "v2-zh-CN", "v3", "v3-execution"}:
+    ) in {"v2", "v2-zh-CN", "v3", "v3-execution", "v3-relation"}:
         expected = expected | {"policyDigest"}
     if (
         set(document) != expected
@@ -276,9 +276,11 @@ def _profile(
     tls = document["tls"]
     budget = document["budget"]
     pricing_successor = planning or (
-        value.adapter_revision == "v3-execution"
-        and value.output_schema_version
-        == "conversation-understanding-output.v3-execution"
+        (value.adapter_revision, value.output_schema_version)
+        in {
+            ("v3-execution", "conversation-understanding-output.v3-execution"),
+            ("v3-relation", "conversation-understanding-output.v3-relation"),
+        }
     )
     if (
         (
@@ -362,7 +364,8 @@ def _profile(
         else:
             policy = policy_for(value.adapter_revision, value.output_schema_version)
             if (
-                policy.revision in {"v2", "v2-zh-CN", "v3", "v3-execution"}
+                policy.revision
+                in {"v2", "v2-zh-CN", "v3", "v3-execution", "v3-relation"}
                 and document["policyDigest"] != policy.digest
             ):
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")

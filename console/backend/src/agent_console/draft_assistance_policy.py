@@ -210,6 +210,10 @@ class DraftPolicy:
     @property
     def schema(self) -> dict:
         # Return a fresh copy; callers cannot mutate the policy for later requests.
+        if self.revision == "v3-relation":
+            from .conversation_relation_policy import SCHEMA
+
+            return json.loads(json.dumps(SCHEMA))
         return json.loads(
             json.dumps(
                 V3_EXECUTION_SCHEMA
@@ -231,7 +235,7 @@ class DraftPolicy:
                     "instructions": self.instructions,
                     "schema": self.schema,
                     "contextVersion": V3_CONTEXT_VERSION
-                    if self.revision in {"v3", V3_EXECUTION_REVISION}
+                    if self.revision in {"v3", V3_EXECUTION_REVISION, "v3-relation"}
                     else CONTEXT_VERSION,
                 },
                 sort_keys=True,
@@ -269,6 +273,13 @@ def policy_for(adapter_revision: str, schema_version: str) -> DraftPolicy:
             V3_EXECUTION_SCHEMA_VERSION,
             V3_EXECUTION_INSTRUCTIONS,
         )
+    if (adapter_revision, schema_version) == (
+        "v3-relation",
+        "conversation-understanding-output.v3-relation",
+    ):
+        from .conversation_relation_policy import INSTRUCTIONS
+
+        return DraftPolicy(adapter_revision, schema_version, INSTRUCTIONS)
     raise PolicyValidationError("DRAFT_POLICY_MISMATCH")
 
 
@@ -376,6 +387,10 @@ def validate_result(
 ) -> list[dict] | None:
     if not isinstance(result, dict) or set(result) != set(policy.schema["required"]):
         raise PolicyValidationError("OUTPUT_SCHEMA_INVALID")
+    if policy.revision == "v3-relation":
+        from .conversation_relation_policy import validate
+
+        return validate(result, refs)
     if policy.revision == "v1":
         return None
     if policy.revision == V3_EXECUTION_REVISION:

@@ -45,6 +45,7 @@ class ConversationPlanningAdmission:
         ).fetchone()
         if not source or (
             source["subject_id"] != context.principal_id
+            or source["record"].get("owned_understanding_policy_digest")
             or source["record"].get("experience_policy_digest")
             != self.experience.policy_digest
             or source["record"].get("conversation_id")

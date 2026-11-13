@@ -15,7 +15,7 @@ export function useConversationScroll({newMessageKey,startAtTop,viewScope,viewId
   const n=stream.current;if(!n)return;
   const saved=viewScope&&viewId?readConversationView(viewScope,viewId).scrollTop:undefined;
   restoring.current=saved!==undefined;following.current=saved===undefined&&!startAtTop;
-  let frame:number|undefined;
+  let frame:number|undefined,replyFrame:number|undefined;
   let preview=Array.from(n.querySelectorAll('.journey-progress,.native-live-progress')).map(e=>e.textContent).join('\n');
   const restoreOrPosition=()=>{if(restoring.current&&saved!==undefined){programmatic.current=true;n.scrollTop=saved;expectedScroll.current=n.scrollTop;programmatic.current=false;setAway(n.scrollHeight-n.scrollTop-n.clientHeight>72);capture()}else position()};
   const schedule=()=>{if(frame===undefined)frame=requestAnimationFrame(()=>{frame=undefined;restoreOrPosition()})};
@@ -29,9 +29,23 @@ export function useConversationScroll({newMessageKey,startAtTop,viewScope,viewId
   const pointer=(event:PointerEvent)=>{stopRestore();if(event.clientX>=n.getBoundingClientRect().left+n.clientWidth)following.current=false};
   const details=(event:MouseEvent)=>{const summary=(event.target as Element).closest('summary');if(!summary||!n.contains(summary))return;stopRestore();following.current=false;anchor.current={node:summary,offset:summary.getBoundingClientRect().top-n.getBoundingClientRect().top};schedule()};
   const accepted=(event:Event)=>{const id=(event as CustomEvent<{conversation:string}>).detail?.conversation;if(id&&viewId?.startsWith('private:'+id+':'))latest()};
-  n.addEventListener('wheel',wheel,{passive:true});n.addEventListener('touchstart',touch,{passive:true});n.addEventListener('keydown',key);n.addEventListener('pointerdown',pointer);n.addEventListener('click',details,true);window.addEventListener('conversation-message-sent',accepted);
+  const replyReady=(event:Event)=>{
+   const value=(event as CustomEvent<{conversation:string;messageId:string}>).detail;
+   if(!value?.messageId||!viewId?.startsWith('private:'+value.conversation+':'))return;
+   if(!following.current||restoring.current){setUnread(true);return;}
+   const token=interaction.current;
+   replyFrame=requestAnimationFrame(()=>{
+    if(token!==interaction.current||!following.current||restoring.current)return;
+    const message=document.getElementById('conversation-message-'+value.messageId);if(!message||!n.contains(message))return;
+    const top=n.getBoundingClientRect().top,box=message.getBoundingClientRect();
+    programmatic.current=true;n.scrollTop+=box.top-top-12;expectedScroll.current=n.scrollTop;programmatic.current=false;
+    following.current=false;anchor.current={node:message,offset:message.getBoundingClientRect().top-top};
+    setAway(n.scrollHeight-n.clientHeight-n.scrollTop>72);setUnread(false);save();
+   });
+  };
+  n.addEventListener('wheel',wheel,{passive:true});n.addEventListener('touchstart',touch,{passive:true});n.addEventListener('keydown',key);n.addEventListener('pointerdown',pointer);n.addEventListener('click',details,true);window.addEventListener('conversation-message-sent',accepted);window.addEventListener('conversation-reply-ready',replyReady);
   restoreOrPosition();
-  return()=>{resize.disconnect();changes.disconnect();if(frame!==undefined)cancelAnimationFrame(frame);n.removeEventListener('wheel',wheel);n.removeEventListener('touchstart',touch);n.removeEventListener('keydown',key);n.removeEventListener('pointerdown',pointer);n.removeEventListener('click',details,true);window.removeEventListener('conversation-message-sent',accepted)};
+  return()=>{resize.disconnect();changes.disconnect();if(frame!==undefined)cancelAnimationFrame(frame);if(replyFrame!==undefined)cancelAnimationFrame(replyFrame);n.removeEventListener('wheel',wheel);n.removeEventListener('touchstart',touch);n.removeEventListener('keydown',key);n.removeEventListener('pointerdown',pointer);n.removeEventListener('click',details,true);window.removeEventListener('conversation-message-sent',accepted);window.removeEventListener('conversation-reply-ready',replyReady)};
  // The observers read mutable refs; recreate only when the persisted view changes.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[viewScope,viewId]);
@@ -41,3 +55,5 @@ export function useConversationScroll({newMessageKey,startAtTop,viewScope,viewId
  return {stream,away,unread,onScroll,latest};
 }
 export function notifyConversationSend(conversation:string){window.dispatchEvent(new CustomEvent('conversation-message-sent',{detail:{conversation}}))}
+
+export function notifyConversationReply(conversation:string,messageId:string){window.dispatchEvent(new CustomEvent('conversation-reply-ready',{detail:{conversation,messageId}}))}

@@ -89,6 +89,7 @@ def build_workbench_composition(
     workflow_database_url: str = "",
     workflows: WorkflowDefinitionService | None = None,
     draft_assistance: DraftAssistanceService | None = None,
+    conversation_routing: DraftAssistanceService | None = None,
     model_grant_target_validator=None,
     model_repository=None,
     planning_v2_enabled: bool = False,
@@ -532,6 +533,18 @@ def build_workbench_composition(
                 task_binding = bind_d12(admission, task_binding)
                 draft_assistance.authorization.context_admission = admission
                 draft_assistance.budget.context_admission = admission
+                if conversation_routing is not None:
+                    from .conversation_relation_admission import (
+                        configure as configure_routing,
+                    )
+
+                    configure_routing(
+                        conversation_routing,
+                        admission,
+                        foundation.grants,
+                        authorizer,
+                        os.environ.get("F3_CONVERSATION_RELATION_POLICY", ""),
+                    )
                 from .conversation_history_access import install_history_access
 
                 delegation_routes += (
@@ -793,6 +806,12 @@ def build_workbench_composition(
 
         from .workbench_model_directory import operations as model_directory_operations
 
+        if (
+            conversation_routing is not None
+            and getattr(conversation_routing.authorization, "context_admission", None)
+            is None
+        ):
+            raise ValueError("CONVERSATION_ROUTING_ADMISSION_REQUIRED")
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -947,7 +966,11 @@ def build_workbench_composition(
                         + test_read_installers
                         + delegation_routes
                         + (
-                            (install_draft_assistance_routes(draft_assistance),)
+                            (
+                                install_draft_assistance_routes(
+                                    draft_assistance, conversation_routing
+                                ),
+                            )
                             if draft_assistance is not None
                             else ()
                         )
@@ -995,8 +1018,15 @@ def build_workbench_composition(
             and resource_automation is not None
             and getattr(application.state, "conversation_actions", None) is not None
         ):
+            from .conversation_relation_reader import reader as relation_reader
             from .conversation_source_input import source_reader
 
+            application.state.conversation_relation_reader = relation_reader(
+                application,
+                authorizer,
+                business_problems,
+                application.state.conversation_actions,
+            )
             application.state.conversation_source_input = source_reader(
                 resource_automation,
                 authorizer,

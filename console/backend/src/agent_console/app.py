@@ -1899,12 +1899,16 @@ _configure_business_problems()
 # configured.  The private ``app`` above never gains browser-session dependencies.
 _workbench_composition = None
 _draft_assistance_composition = None
+_conversation_routing_composition = None
 workbench_app = None
 _workbench_startup_error = "WORKBENCH_DISABLED"
 
 
 def _configure_workbench() -> None:
-    global _draft_assistance_composition, _workbench_composition
+    global \
+        _draft_assistance_composition, \
+        _workbench_composition, \
+        _conversation_routing_composition
     global workbench_app, _workbench_startup_error
     from agent_console.draft_assistance_bootstrap import (
         build_draft_assistance_composition,
@@ -1962,6 +1966,15 @@ def _configure_workbench() -> None:
             _draft_assistance_composition = build_draft_assistance_composition(
                 database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
                 runtime_configuration_path=Path(draft_profile_path),
+                migrations_path=_MIGRATIONS,
+            )
+        routing_path = os.environ.get("CONVERSATION_ROUTING_RUNTIME_FILE", "")
+        if routing_path:
+            if _draft_assistance_composition is None:
+                raise ValueError("CONVERSATION_ROUTING_REQUIRES_PRIMARY_UNDERSTANDING")
+            _conversation_routing_composition = build_draft_assistance_composition(
+                database_url=os.environ.get("EXECUTION_DATABASE_URL", ""),
+                runtime_configuration_path=Path(routing_path),
                 migrations_path=_MIGRATIONS,
             )
         prepared_coordinator = None
@@ -2027,9 +2040,19 @@ def _configure_workbench() -> None:
                 if _draft_assistance_composition is not None
                 else None
             ),
+            conversation_routing=(
+                _conversation_routing_composition.service
+                if _conversation_routing_composition is not None
+                else None
+            ),
             managed_closeables=(
                 (_draft_assistance_composition,)
                 if _draft_assistance_composition is not None
+                else ()
+            )
+            + (
+                (_conversation_routing_composition,)
+                if _conversation_routing_composition is not None
                 else ()
             )
             + ((planning_runtime,) if planning_runtime is not None else ())
@@ -2042,6 +2065,9 @@ def _configure_workbench() -> None:
             prepared_knowledge_pool.close()
         if planning_runtime is not None:
             planning_runtime.close()
+        if _conversation_routing_composition is not None:
+            _conversation_routing_composition.close()
+            _conversation_routing_composition = None
         if _draft_assistance_composition is not None:
             _draft_assistance_composition.close()
             _draft_assistance_composition = None

@@ -263,10 +263,16 @@ class OpenAIResponsesDraftTransport:
             raise DraftAssistanceError("OPENAI_RESPONSES_PROFILE_MISMATCH")
         try:
             policy = policy_for(profile.adapter_revision, profile.output_schema_version)
-            if policy.revision in {"v2", "v2-zh-CN", "v3", "v3-execution"}:
+            if policy.revision in {
+                "v2",
+                "v2-zh-CN",
+                "v3",
+                "v3-execution",
+                "v3-relation",
+            }:
                 (
                     conversation_context_references
-                    if policy.revision in {"v3", "v3-execution"}
+                    if policy.revision in {"v3", "v3-execution", "v3-relation"}
                     else context_references
                 )(content)
             else:
@@ -303,12 +309,23 @@ class OpenAIResponsesDraftTransport:
 
         attachment = current_attachment()
         if attachment is not None:
-            if policy.revision not in {"v3", "v3-execution"}:
+            if policy.revision not in {"v3", "v3-execution", "v3-relation"}:
                 raise DraftAssistanceError("DRAFT_POLICY_MISMATCH")
             document["input"].append(
                 {
                     "role": "user",
                     "content": [{"type": "input_text", "text": attachment}],
+                }
+            )
+        if policy.revision == "v3-relation":
+            from .conversation_relation_context import provider_input
+
+            if attachment is not None:
+                raise DraftAssistanceError("CONVERSATION_ROUTING_SOURCE_CONFLICT")
+            document["input"].append(
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": provider_input()}],
                 }
             )
         payload = json.dumps(
@@ -649,14 +666,25 @@ class OpenAIResponsesDraftTransport:
             )
         try:
             refs = frozenset()
-            if policy.revision in {"v2", "v2-zh-CN", "v3", "v3-execution"}:
+            if policy.revision in {
+                "v2",
+                "v2-zh-CN",
+                "v3",
+                "v3-execution",
+                "v3-relation",
+            }:
                 sent = json.loads(request.payload)
                 refs = (
                     conversation_context_references
-                    if policy.revision in {"v3", "v3-execution"}
+                    if policy.revision in {"v3", "v3-execution", "v3-relation"}
                     else context_references
                 )(sent["input"][0]["content"][0]["text"])
             understanding = validate_result(result, policy, refs)
+            route = None
+            if policy.revision == "v3-relation":
+                from .conversation_relation_context import validated_route
+
+                route = validated_route(result, request.payload)
         except (PolicyValidationError, ValueError, KeyError, TypeError):
             return self._failure(
                 invocation_id,
@@ -670,15 +698,28 @@ class OpenAIResponsesDraftTransport:
         question = result["clarificationQuestion"]
         title = result["title"]
         description = result["description"]
+        if kind == "CURRENT_QUESTION_ANSWER" and policy.revision == "v3-relation":
+            return ProviderObservation(
+                self._observation_id(invocation_id, correlation, kind),
+                ObservationState.SUCCEEDED,
+                correlation=correlation,
+                result_kind=DraftResultKind.CURRENT_QUESTION_ANSWER,
+                conversation_route=route,
+                latency_ms=latency_ms,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
         if kind in {"DIRECT_ANSWER", "NEEDS_DATA"} and policy.revision in {
             "v3",
             "v3-execution",
+            "v3-relation",
         }:
             return ProviderObservation(
                 self._observation_id(invocation_id, correlation, kind),
                 ObservationState.SUCCEEDED,
                 correlation=correlation,
                 result_kind=DraftResultKind(kind),
+                conversation_route=route,
                 answer=result["answer"],
                 data_needs=result["dataNeeds"],
                 latency_ms=latency_ms,
@@ -697,6 +738,7 @@ class OpenAIResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    conversation_route=route,
                     understanding=understanding,
                     result_kind=DraftResultKind.NEEDS_CLARIFICATION,
                     clarification_question=question,
@@ -718,6 +760,7 @@ class OpenAIResponsesDraftTransport:
                     self._observation_id(invocation_id, correlation, kind),
                     ObservationState.SUCCEEDED,
                     correlation=correlation,
+                    conversation_route=route,
                     understanding=understanding,
                     result_kind=DraftResultKind.DRAFT_READY,
                     title=title,

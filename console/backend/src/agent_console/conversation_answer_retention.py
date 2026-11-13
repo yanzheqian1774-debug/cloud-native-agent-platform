@@ -103,6 +103,8 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
             (*actions.records.scope(ctx), conversation, key),
         ).fetchone()
         response = {field: value.get(field) for field in FIELDS}
+        if value.get("conversationRoute"):
+            response["conversationRoute"] = value["conversationRoute"]
         if value.get("inputSource") is not None:
             response["inputSource"] = value["inputSource"]
         if prior:
@@ -139,6 +141,8 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
         kind = value["resultKind"]
         if kind == "DIRECT_ANSWER":
             content = value.get("answer")
+        elif kind == "CURRENT_QUESTION_ANSWER":
+            content = "已理解这条补充，将核对当前问题后接续。"  # noqa: RUF001
         elif kind == "NEEDS_CLARIFICATION":
             content = value.get("clarificationQuestion")
         elif kind == "NEEDS_DATA":

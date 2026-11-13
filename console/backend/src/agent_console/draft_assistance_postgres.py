@@ -146,6 +146,16 @@ def _record(value: DraftInvocation) -> dict[str, Any]:
         "problemRevisionId": value.problem_revision_id,
         "problemDigest": value.problem_digest,
         "inputSource": value.input_source,
+        **(
+            {"conversationContext": value.conversation_context}
+            if value.conversation_context
+            else {}
+        ),
+        **(
+            {"conversationRoute": value.conversation_route}
+            if value.conversation_route
+            else {}
+        ),
     }
 
 
@@ -246,6 +256,8 @@ def _invocation(value: dict[str, Any]) -> DraftInvocation:
         problem_revision_id=value["problemRevisionId"],
         problem_digest=value["problemDigest"],
         input_source=value.get("inputSource"),
+        conversation_context=value.get("conversationContext"),
+        conversation_route=value.get("conversationRoute"),
     )
 
 

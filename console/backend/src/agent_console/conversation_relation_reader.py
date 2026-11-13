@@ -1,0 +1,266 @@
+# ruff: noqa: E501 -- Exact scoped owner reads; no resource content is loaded.
+"""Build and recheck minimal current-work context using existing owner READ ports."""
+
+import copy
+
+from .authority_contracts import ExactGrant
+from .business_problem_authorization import problem_resource
+from .conversation_relation_context import sealed_snapshot
+from .private_conversation import ConversationError, digest
+from .workbench_business_problem import OwnerPrincipal
+
+
+def _ref(value):
+    return (value.get("resource_id"), value.get("revision_id"), value.get("digest"))
+
+
+def _problem_ref(value):
+    return (
+        value.get("business_problem_id"),
+        value.get("revision_id"),
+        value.get("digest"),
+    )
+
+
+def _journal(records, context, conversation):
+    with records.connect() as c:
+        owned = records.owned(c, context, conversation)
+        if owned["archived_at"]:
+            raise ConversationError("CONVERSATION_ARCHIVED")
+        row = c.execute(
+            "SELECT version,state FROM private_conversation.journeys WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",
+            (*records.scope(context), conversation),
+        ).fetchone()
+        return row or {"version": 0, "state": {}}
+
+
+def reader(application, authorizer, business_problems, actions):
+    records = actions.records
+
+    def read(context, conversation, message_id, draft_service):
+        journal = _journal(records, context, conversation)
+        state = journal["state"] or {}
+        current = {
+            "goal": None,
+            "scope": None,
+            "stage": "NO_ACTIVE_WORK",
+            "currentQuestion": None,
+        }
+        target = None
+        problem = state.get("problem")
+        if not problem or state.get("phase") in {"UNDERSTAND", "CLARIFY"}:
+            raise ConversationError("CONVERSATION_ROUTING_WORK_REQUIRED", 409)
+        principal = OwnerPrincipal(
+            context.principal_id, context.scope.tenant_id, context.scope.security_domain
+        )
+        base = {"journalVersion": journal["version"], "journeyKey": state.get("key")}
+        if problem:
+            identity = problem.get("business_problem_id")
+            if not identity:
+                raise ConversationError("CONVERSATION_ROUTING_CONTEXT_INVALID", 409)
+
+            def resolve(call):
+                records.owned(call.connection, context, conversation)
+                link = call.connection.execute(
+                    "SELECT target FROM private_conversation.links WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s AND target->>'problemId'=%s",
+                    (*records.scope(context), conversation, identity),
+                ).fetchall()
+                if not any(
+                    (
+                        r["target"].get("problemId"),
+                        r["target"].get("revisionId"),
+                        r["target"].get("problemDigest"),
+                    )
+                    == _problem_ref(problem)
+                    for r in link
+                ):
+                    raise ConversationError("CONVERSATION_ROUTING_CONTEXT_INVALID", 409)
+                origins = call.connection.execute(
+                    "SELECT r.subject_id,r.record->>'conversation_id' AS conversation_id FROM authorization_admin.context_call_objects o JOIN authorization_admin.context_call_requests r USING(tenant_id,security_domain,context_id) WHERE o.tenant_id=%s AND o.security_domain=%s AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s LIMIT 2",
+                    (*records.scope(context), identity),
+                ).fetchall()
+                if origins != [
+                    {
+                        "subject_id": context.principal_id,
+                        "conversation_id": conversation,
+                    }
+                ]:
+                    raise ConversationError("CONVERSATION_ROUTING_CONTEXT_INVALID", 409)
+                owner = copy.copy(business_problems)
+                owner.authority = call.authority
+                view = owner.read_problem(
+                    principal, identity, connection=call.connection
+                )
+                revision = next(
+                    (
+                        r
+                        for r in view["revisions"]
+                        if r["revision_id"] == view["problem"]["current_revision_id"]
+                    ),
+                    None,
+                )
+                if revision is None or _problem_ref(revision) != _problem_ref(problem):
+                    raise ConversationError("CONVERSATION_ROUTING_CONTEXT_CHANGED", 409)
+                return revision
+
+            revision = authorizer.execute(
+                context,
+                (ExactGrant("BUSINESS_PROBLEM", "READ", problem_resource(identity)),),
+                operation="READ_CONVERSATION_ROUTING_CONTEXT",
+                payload={},
+                path={},
+                query={},
+                handler=resolve,
+            )
+            current.update(
+                goal=revision["title"],
+                scope=revision["description"],
+                stage=state.get("phase", "CURRENT_WORK"),
+            )
+            base["problemId"] = identity
+            if state.get("execution"):
+                execution_digest = state["execution"]
+
+                def native(call):
+                    from .execution_domain import ScopeIdentity
+                    from .native_interaction import progress
+                    from .prepared_execution_application import (
+                        PreparedExecutionApplication,
+                    )
+                    from .workbench_prepared_execution import candidate
+
+                    p = candidate(
+                        call.connection,
+                        ScopeIdentity(*records.scope(context)),
+                        execution_digest,
+                    )
+                    if _ref(
+                        p.semantics.target.problem.model_dump(mode="json")
+                    ) != _problem_ref(problem):
+                        raise ConversationError(
+                            "CONVERSATION_ROUTING_CONTEXT_INVALID", 409
+                        )
+                    app = PreparedExecutionApplication(
+                        call.connection, principal, call.authority
+                    )
+                    value = progress(call, app, p)
+                    run = call.connection.execute(
+                        "SELECT record FROM execution_authority.prepared_run_progress WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s",
+                        (*records.scope(context), p.run_id),
+                    ).fetchone()
+                    running = (
+                        run
+                        and run["record"].get("state") == "RUNNING"
+                        and not run["record"].get("cancellation_request_id")
+                    )
+                    return value, bool(running), p.run_id
+
+                progress, running, run_id = authorizer.execute(
+                    context,
+                    (
+                        ExactGrant(
+                            "EXECUTION",
+                            "READ",
+                            "governed-execution:prepared:" + execution_digest,
+                        ),
+                    ),
+                    operation="READ_NATIVE_PROGRESS",
+                    payload={},
+                    path={"digest": execution_digest},
+                    query={},
+                    handler=native,
+                )
+                questions = (
+                    [
+                        q
+                        for q in progress["questions"]
+                        if not q["answer"] and not q["expired"]
+                    ]
+                    if running
+                    else []
+                )
+                if len(questions) > 1:
+                    raise ConversationError(
+                        "CONVERSATION_ROUTING_QUESTION_AMBIGUOUS", 409
+                    )
+                if questions:
+                    q = questions[0]
+                    current["currentQuestion"] = q["question"]
+                    target = {
+                        **base,
+                        "kind": "NATIVE",
+                        "invocationId": q["invocationId"],
+                        "questionKey": q["questionKey"],
+                        "questionDigest": q["questionDigest"],
+                        "executionDigest": execution_digest,
+                        "runId": run_id,
+                        "expiresAt": q["expiresAt"],
+                    }
+            elif state.get("phase") == "PLANNING_CLARIFY":
+                identity = (
+                    (state.get("planning") or {})
+                    .get("invocation", {})
+                    .get("target", {})
+                    .get("invocation_id")
+                )
+                planning_reader = getattr(
+                    application.state, "conversation_planning_reader", None
+                )
+                if not identity or planning_reader is None:
+                    raise ConversationError(
+                        "CONVERSATION_ROUTING_CONTEXT_UNAVAILABLE", 503
+                    )
+                planning = planning_reader(context, identity)
+                plan_target = planning["invocation"]["target"]
+                if _ref(plan_target["problem"]["problem"]) != _problem_ref(problem):
+                    raise ConversationError("CONVERSATION_ROUTING_CONTEXT_INVALID", 409)
+                result = planning["result"]
+                if (
+                    result.get("technical_status") != "SUCCEEDED"
+                    or result.get("kind") != "NEEDS_CLARIFICATION"
+                    or not result.get("questions")
+                ):
+                    raise ConversationError("CONVERSATION_ROUTING_CONTEXT_CHANGED", 409)
+                current["currentQuestion"] = "\n".join(result["questions"])
+                target = {
+                    **base,
+                    "kind": "PLANNING",
+                    "invocationId": identity,
+                    "questionDigest": digest(result),
+                }
+        # Persist no raw business text in draft invocation metadata; only target
+        # identifiers and a fingerprint. Preserve full owner question, never truncate.
+        if any(isinstance(v, str) and len(v) > 4000 for v in current.values()):
+            raise ConversationError("CONVERSATION_ROUTING_CONTEXT_TOO_LARGE", 422)
+        if _journal(records, context, conversation)["version"] != journal["version"]:
+            raise ConversationError("CONVERSATION_ROUTING_CONTEXT_CHANGED", 409)
+        return sealed_snapshot(conversation, message_id, target, current)
+
+    def safe_read(context, conversation, message_id, draft_service):
+        from psycopg import Error as StorageError
+
+        from .authority_contracts import AuthorityError
+        from .draft_assistance import DraftAssistanceError
+        from .plan_suggestion_domain import PlanningError
+        from .workbench_owner_authorization import WorkbenchOwnerError
+
+        try:
+            return read(context, conversation, message_id, draft_service)
+        except ConversationError:
+            raise
+        except (AuthorityError, WorkbenchOwnerError, DraftAssistanceError) as exc:
+            raise ConversationError("CONVERSATION_ROUTING_ACCESS_DENIED", 403) from exc
+        except (
+            StorageError,
+            OSError,
+            TimeoutError,
+            PlanningError,
+            ValueError,
+            KeyError,
+            TypeError,
+        ) as exc:
+            raise ConversationError(
+                "CONVERSATION_ROUTING_CONTEXT_UNAVAILABLE", 503
+            ) from exc
+
+    return safe_read

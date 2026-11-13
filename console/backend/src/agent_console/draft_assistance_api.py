@@ -26,6 +26,7 @@ class BeginDraftAssistance(BaseModel):
     parentTurnId: str | None = Field(default=None, max_length=128)
     expectedParentVersion: int = Field(default=0, ge=0)
     predecessorInvocationId: str | None = Field(default=None, max_length=128)
+    conversationRouting: bool = False
     conversationId: str | None = Field(default=None, min_length=1, max_length=128)
     conversationMessageId: str | None = Field(
         default=None, min_length=1, max_length=128
@@ -85,6 +86,7 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
     recovered_without_content = (
         value.state.value == "SUCCEEDED"
         and value.result_kind is not None
+        and value.result_kind.value != "CURRENT_QUESTION_ANSWER"
         and value.problem_id is None
         and response.clarification_question is None
         and response.title is None
@@ -139,6 +141,11 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
             "problemRevisionId": value.problem_revision_id,
             "problemDigest": value.problem_digest,
             **({"inputSource": value.input_source} if value.input_source else {}),
+            **(
+                {"conversationRoute": value.conversation_route}
+                if value.conversation_route
+                else {}
+            ),
             "transport": "SYNTHETIC" if response.synthetic else "REAL_PROVIDER",
             "requestAuthorizationRequestId": (
                 value.authorization.request_authorization_request_id
@@ -154,12 +161,39 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
     }
 
 
-def install_draft_assistance_routes(service: DraftAssistanceService):
+def install_draft_assistance_routes(
+    service: DraftAssistanceService, routing_service=None
+):
     def install(app: FastAPI, authenticate, require_csrf, policy: WorkbenchBffPolicy):
         del policy
+
+        def service_for(context, identity):
+            from .draft_assistance import DraftScope
+
+            value = service.repository.get(DraftScope.from_context(context), identity)
+            if value and value.conversation_context:
+                if (
+                    routing_service is None
+                    or value.profile_revision_id
+                    != routing_service.profile.profile_revision_id
+                ):
+                    raise DraftAssistanceError(
+                        "CONVERSATION_ROUTING_SERVICE_UNAVAILABLE"
+                    )
+                return routing_service
+            return service
+
+        app.state.conversation_draft_service_for = service_for
         app.state.conversation_draft_reader = lambda ctx, identity: _payload(
-            service.read(ctx, identity)
+            service_for(ctx, identity).read(ctx, identity)
         )["result"]
+        from .conversation_relation_validation import (
+            install as install_relation_validation,
+        )
+
+        install_relation_validation(
+            app, authenticate, service, service_for, _payload, _status
+        )
 
         def invoke(action, request: Request):
             session, context = authenticate(request)
@@ -174,11 +208,14 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
 
         @app.get(f"{PREFIX}/draft-assistance/capabilities")
         def capabilities(request: Request):
-            authenticate(request)
+            from .conversation_relation_admission import available
+
+            _, context = authenticate(request)
             return {
                 "result": {
                     "conversationUnderstanding": service.profile.adapter_revision
-                    in {"v3", "v3-execution"}
+                    in {"v3", "v3-execution", "v3-relation"},
+                    "conversationRelationRouting": available(routing_service, context),
                 }
             }
 
@@ -216,9 +253,11 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                         status_code=404,
                         content={"reasonCode": "CONVERSATION_REQUEST_NOT_DISPATCHED"},
                     )
-                value = _payload(service.read(context, invocation.invocation_id))[
-                    "result"
-                ]
+                value = _payload(
+                    service_for(context, invocation.invocation_id).read(
+                        context, invocation.invocation_id
+                    )
+                )["result"]
                 return {
                     "result": read_retained(
                         actions,
@@ -243,11 +282,22 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
         async def begin(body: BeginDraftAssistance, request: Request):
             from .conversation_actions import original_action
 
+            active_service = routing_service if body.conversationRouting else service
+
             def action(context):
                 from .conversation_answer_retention import require_target, retain
                 from .private_conversation import ConversationError, digest
 
                 conversation = body.conversationId
+                if body.conversationRouting and (
+                    active_service is None
+                    or active_service.profile.adapter_revision != "v3-relation"
+                    or not conversation
+                    or body.parentContextId
+                    or body.parentTurnId
+                    or body.predecessorInvocationId
+                ):
+                    raise DraftAssistanceError("CONVERSATION_ROUTING_CONTEXT_INVALID")
                 actions = getattr(request.app.state, "conversation_actions", None)
                 if conversation:
                     if request.headers.get("x-conversation-id") or request.headers.get(
@@ -257,9 +307,10 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                             status_code=409,
                             content={"reasonCode": "CONVERSATION_CONTEXT_CONFLICT"},
                         )
-                    if not actions or service.profile.adapter_revision not in {
+                    if not actions or active_service.profile.adapter_revision not in {
                         "v3",
                         "v3-execution",
+                        "v3-relation",
                     }:
                         raise DraftAssistanceError(
                             "CONVERSATION_UNDERSTANDING_UNAVAILABLE"
@@ -284,23 +335,40 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
 
                 def invoke_owner():
                     from .conversation_experience_admission import begin_bound
+                    from .conversation_relation_context import bind_snapshot
                     from .conversation_source_input import bind_attachment
+
+                    snapshot = None
+                    if body.conversationRouting:
+                        routing_reader = getattr(
+                            request.app.state, "conversation_relation_reader", None
+                        )
+                        if routing_reader is None:
+                            raise DraftAssistanceError(
+                                "CONVERSATION_ROUTING_CONTEXT_UNAVAILABLE"
+                            )
+                        snapshot = routing_reader(
+                            context, conversation, body.conversationMessageId, service
+                        )
 
                     reader = getattr(
                         request.app.state, "conversation_source_input", None
                     )
                     attachment = (
                         reader(context, conversation, body.conversationMessageId)
-                        if conversation and reader is not None
+                        if conversation
+                        and reader is not None
+                        and not body.conversationRouting
                         else None
                     )
-                    with bind_attachment(attachment):
+                    with bind_attachment(attachment), bind_snapshot(snapshot):
                         value = _payload(
                             begin_bound(
-                                service,
+                                active_service,
                                 context,
                                 conversation=conversation,
                                 message_id=body.conversationMessageId,
+                                question_only=body.conversationRouting,
                                 key=key,
                                 content=body.content,
                                 parent_context_id=body.parentContextId,
@@ -331,7 +399,13 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
                         request,
                         context,
                         "DRAFT",
-                        body.model_dump(mode="json", exclude_none=True),
+                        body.model_dump(
+                            mode="json",
+                            exclude_none=True,
+                            exclude=set()
+                            if body.conversationRouting
+                            else {"conversationRouting"},
+                        ),
                         invoke_owner,
                     )
                 except ConversationError as exc:
@@ -354,7 +428,10 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
             from .model_stream_api import model_response, stream_authorization
 
             authorize = stream_authorization(
-                request, authenticate, require_csrf, service.authorize_stream
+                request,
+                authenticate,
+                require_csrf,
+                (active_service or service).authorize_stream,
             )
 
             return await model_response(request, submit, authorize)
@@ -377,7 +454,9 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
         def read(invocation_id: str, request: Request):
             _, context = authenticate(request)
             try:
-                return _payload(service.read(context, invocation_id))
+                return _payload(
+                    service_for(context, invocation_id).read(context, invocation_id)
+                )
             except DraftAssistanceError as exc:
                 return JSONResponse(
                     status_code=_status(exc.reason_code),
@@ -388,7 +467,11 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
         def readiness(invocation_id: str, request: Request):
             _, context = authenticate(request)
             try:
-                return {"result": service.read_readiness(context, invocation_id)}
+                return {
+                    "result": service_for(context, invocation_id).read_readiness(
+                        context, invocation_id
+                    )
+                }
             except DraftAssistanceError as exc:
                 return JSONResponse(
                     status_code=_status(exc.reason_code),
@@ -401,7 +484,11 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
 
             _, context = authenticate(request)
             try:
-                return {"result": service.read_usage(context, invocation_id)}
+                return {
+                    "result": service_for(context, invocation_id).read_usage(
+                        context, invocation_id
+                    )
+                }
             except (DraftAssistanceError, AuthorityError):
                 return JSONResponse(
                     status_code=404, content={"reasonCode": "PROVIDER_USAGE_NOT_FOUND"}
@@ -410,19 +497,28 @@ def install_draft_assistance_routes(service: DraftAssistanceService):
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/observe")
         def observe(invocation_id: str, request: Request):
             return invoke(
-                lambda context: service.observe(context, invocation_id), request
+                lambda context: service_for(context, invocation_id).observe(
+                    context, invocation_id
+                ),
+                request,
             )
 
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/cancel")
         def cancel(invocation_id: str, request: Request):
             return invoke(
-                lambda context: service.cancel(context, invocation_id), request
+                lambda context: service_for(context, invocation_id).cancel(
+                    context, invocation_id
+                ),
+                request,
             )
 
         @app.post(f"{PREFIX}/draft-assistance/invocations/{{invocation_id}}/reject")
         def reject(invocation_id: str, request: Request):
             return invoke(
-                lambda context: service.reject(context, invocation_id), request
+                lambda context: service_for(context, invocation_id).reject(
+                    context, invocation_id
+                ),
+                request,
             )
 
         @app.post(

@@ -53,6 +53,26 @@ def source_grant(c, context, source, *, policy=None, conversation=None):
     )
 
 
+def retained_policy(service, c, source, *, general):
+    """Choose only an explicitly configured policy matching the saved context."""
+    if source.get("kind") != "DRAFT":
+        return None
+    row = request_row(c, source.get("contextId"))
+    recorded = (row or {}).get("record", {}).get("owned_understanding_policy_digest")
+    if not recorded:
+        if general:
+            raise AuthorityError("CONVERSATION_HISTORY_SOURCE_MISMATCH")
+        return None
+    for candidate in (service, getattr(service, "conversation_relation", None)):
+        if (
+            candidate is not None
+            and candidate.experience is not None
+            and candidate.experience.understanding_policy_digest == recorded
+        ):
+            return candidate
+    raise AuthorityError("CONVERSATION_HISTORY_SOURCE_MISMATCH")
+
+
 def prepare(service, records, context, conversation, c):
     policy = service.experience
     if policy is None or policy.document.historyReadEnabled is not True:
@@ -70,24 +90,26 @@ def prepare(service, records, context, conversation, c):
         "AND security_domain=%s AND conversation_id=%s ORDER BY message_id",
         (context.scope.tenant_id, context.scope.security_domain, conversation),
     ).fetchall()
-    targets = set()
+    targets = {}
     for fact in facts:
         for key in ("source", "authorizationSource"):
             source = fact["facts"].get(key)
-            if source and (
-                grant := source_grant(
-                    c,
-                    context,
-                    source,
-                    policy=policy if general else None,
-                    conversation=conversation,
-                )
-            ):
-                targets.add(grant)
+            if not source:
+                continue
+            selected = retained_policy(service, c, source, general=general)
+            selected_policy = selected.experience if selected else None
+            if selected:
+                selected_policy._require(selected, c, context)
+            grant = source_grant(
+                c, context, source, policy=selected_policy, conversation=conversation
+            )
+            if grant:
+                targets[grant] = selected_policy or policy
     grants = service.delegation.grants
     bound = bound_grants(grants, c)
     results = []
     for grant in sorted(targets, key=lambda g: g.exact_resource):
+        policy = targets[grant]
         lock(c, "history-read:" + context.principal_id + ":" + grant.exact_resource)
         state = current(bound, context, (grant,))
         if state == "UNAVAILABLE":

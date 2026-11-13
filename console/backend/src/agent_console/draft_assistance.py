@@ -54,6 +54,7 @@ class DraftInvocationState(StrEnum):
 
 
 class DraftResultKind(StrEnum):
+    CURRENT_QUESTION_ANSWER = "CURRENT_QUESTION_ANSWER"
     DIRECT_ANSWER = "DIRECT_ANSWER"
     NEEDS_DATA = "NEEDS_DATA"
     NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
@@ -200,11 +201,26 @@ class ProviderObservation:
     understanding: list[dict] | None = field(default=None, repr=False)
     answer: str | None = field(default=None, repr=False)
     data_needs: list[str] | None = field(default=None, repr=False)
+    conversation_route: dict | None = None
     measurement: dict | None = None
     local_cleanup: dict | None = None
 
     def __post_init__(self) -> None:
         if self.state is ObservationState.SUCCEEDED:
+            if self.result_kind is DraftResultKind.CURRENT_QUESTION_ANSWER:
+                if (
+                    not self.conversation_route
+                    or self.conversation_route.get("relation") != "CURRENT_QUESTION"
+                    or not self.conversation_route.get("currentQuestionToken")
+                    or self.answer is not None
+                    or self.data_needs
+                    or self.clarification_question
+                    or self.title
+                    or self.description
+                    or self.understanding
+                ):
+                    raise DraftAssistanceError("OUTPUT_SCHEMA_INVALID")
+                return
             if self.result_kind in {
                 DraftResultKind.DIRECT_ANSWER,
                 DraftResultKind.NEEDS_DATA,
@@ -312,6 +328,8 @@ class DraftInvocation:
     problem_revision_id: str | None = None
     problem_digest: str | None = None
     input_source: dict | None = None
+    conversation_context: dict | None = None
+    conversation_route: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -752,6 +770,16 @@ class DraftAssistanceService:
         attachment = current_attachment()
         if attachment is not None:
             values += ("SERVER_READ_SELECTED_SOURCE.v1", attachment)
+        from .conversation_relation_context import current_snapshot
+
+        routing = current_snapshot()
+        if routing is not None:
+            import json
+
+            values += (
+                "SERVER_CURRENT_CONVERSATION.v1",
+                json.dumps(routing, sort_keys=True),
+            )
         return b"".join(_field(value) for value in values)
 
     def _commitment(
@@ -835,6 +863,7 @@ class DraftAssistanceService:
             pepper,
         )
         turn_version = expected_parent_version + 1
+        from .conversation_relation_context import current_metadata
         from .conversation_source_input import current_source_metadata
 
         candidate = DraftInvocation(
@@ -862,6 +891,7 @@ class DraftAssistanceService:
             parent_turn_id,
             predecessor_invocation_id,
             input_source=current_source_metadata(),
+            conversation_context=current_metadata(),
         )
         invocation, won = self.repository.claim(candidate)
         if not won:
@@ -1235,6 +1265,14 @@ class DraftAssistanceService:
                 else None
             ),
             result_kind=observation.result_kind,
+            conversation_route={
+                **observation.conversation_route,
+                "contextDigest": (invocation.conversation_context or {}).get(
+                    "contextDigest"
+                ),
+            }
+            if observation.conversation_route
+            else None,
             reason_code=observation.reason_code,
             owner_write_reason_code=None,
             last_observation_state=observation.state,
@@ -1364,6 +1402,7 @@ class DraftAssistanceService:
             observation_id,
             state,
             correlation=invocation.provider_correlation,
+            conversation_route=invocation.conversation_route,
             measurement=invocation.measurement,
             local_cleanup=invocation.local_cleanup,
             result_kind=invocation.result_kind,

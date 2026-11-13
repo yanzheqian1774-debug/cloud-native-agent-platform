@@ -52,6 +52,7 @@ class ConversationWorkAuthorization:
             or value.get("resultKind") != "DRAFT_READY"
             or value.get("initiatingPrincipalId") != context.principal_id
             or row["subject_id"] != context.principal_id
+            or row["record"].get("owned_understanding_policy_digest")
             or row["record"].get("experience_policy_digest")
             != self.experience.policy_digest
             or row["record"].get("conversation_id")
