@@ -88,7 +88,9 @@ def install(app, invoke, authenticate, require_csrf, reader):
             state = projection(admission, context, row["recovery_id"])
             if state["state"] == "OBSERVED":
                 service.begin(
-                    principal, PlanningRequest.model_validate(row["record"]["request"])
+                    principal,
+                    PlanningRequest.model_validate(row["record"]["request"]),
+                    prepare_only=True,
                 )
             return projection(admission, context, row["recovery_id"])
 

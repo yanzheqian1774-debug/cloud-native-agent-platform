@@ -98,7 +98,14 @@ class PlanningSuggestionService:
         return run(self, principal, request, self.adaptive_limits)
 
     def begin(
-        self, principal, request, *, diagnostic_layer=None, repair=None, loop=None
+        self,
+        principal,
+        request,
+        *,
+        diagnostic_layer=None,
+        repair=None,
+        loop=None,
+        prepare_only=False,
     ):
         app = self.application
         scope = app.scope(principal)
@@ -143,7 +150,7 @@ class PlanningSuggestionService:
             scope, principal.principal_id, request.idempotency_key, commitment
         )
         if replay:
-            return self.read(principal, replay)
+            return self.read(principal, replay, settle_receipt=not prepare_only)
         with app.repository.transaction(
             scope, request.target.problem.resource_id, authorized=True
         ) as cursor:
@@ -283,12 +290,15 @@ class PlanningSuggestionService:
         if self.exact_admission is not None:
             prepared = self.exact_admission.prepare(request, record)
             if prepared is not None:
-                if not prepared["admission"]["ready"]:
+                if prepare_only or not prepared["admission"]["ready"]:
                     return prepared
                 record = prepared["invocation"]
                 target = PlanningInvocationTarget.model_validate(record["target"])
                 invocation_id = target.invocation_id
                 context_id = target.suggestion_context_id
+        if prepare_only:
+            # No exact prepared record means there is nothing safe to sign.
+            raise PlanningError("PLANNING_PREPARATION_REQUIRED")
         if request.output_language and self.prepare_admission:
             self.prepare_admission(request)
         persisted, claimed = self.invocations.claim(

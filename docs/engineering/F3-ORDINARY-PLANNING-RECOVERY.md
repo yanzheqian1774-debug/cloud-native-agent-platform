@@ -75,3 +75,20 @@ Actual fresh invocation, receipt, model-use evidence and budget reservation/sett
 are written only by their normal existing owners after signature. The old problem,
 invocation/result/receipt/reservation/settlement and historical context rows must
 retain their hashes. Existing budget policy/allowance and expiry are not rewritten.
+
+Review follow-up: recovery prepare uses PlanningSuggestionService.begin with an
+internal prepare_only barrier. Even if a second applicant observes OBSERVED and
+an administrator signs before that applicant reaches admission, preparation never
+claims/reserves/dispatches. Already-claimed replay is read without settlement;
+absence of an exact preparation fails closed. Only explicit continue dispatches.
+The current pending planning request key is persisted before dispatch; historical
+successful planning data is not a locator for a newer clarification/cycle request.
+A new recovery result carries its exact request locator back from recovery state.
+
+Follow-up validation: 22 controlled-provider planning owner tests on disposable
+PostgreSQL passed, including a two-thread ready-state interleaving with zero claims,
+reservations and provider calls, then one normal call. The ready-state switch is a
+fixture, not an actual administrator-signature concurrency test. Nine browser
+cases passed for original clarification, explicit recovery, approval withdrawal,
+and current clarification/cycle/fresh-recovery locators across refresh. Frontend
+build/lint passed; no actual platform, administrator signature or model was used.

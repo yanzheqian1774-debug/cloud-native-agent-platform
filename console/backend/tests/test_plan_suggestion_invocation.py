@@ -113,7 +113,10 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
     provider = Provider()
 
     class Budget(InMemoryProviderCallBudget):
+        reserve_calls = 0
+
         def reserve(self, *args):
+            self.reserve_calls += 1
             if outcome == "budget":
                 from agent_console.draft_assistance import DraftAssistanceError
 
@@ -164,6 +167,14 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
         policy=sample.semantics.policy if modern_policy else None,
         answers=(boundary(SOURCE),) if outcome.startswith("source_") else (),
     )
+    if outcome == "valid":
+        with pytest.raises(PlanningError, match="PLANNING_PREPARATION_REQUIRED"):
+            service.begin(principal, request, prepare_only=True)
+        assert provider.calls == 0
+        assert service.budget.reserve_calls == 0
+        assert (
+            invocations.find_request(scope, principal.principal_id, "same-key") is None
+        )
     if outcome in {"denied", "budget", "input"}:
         from agent_console.draft_assistance import DraftAssistanceError
         from agent_console.model_binding_resolution import ModelBindingResolutionFailure
@@ -207,10 +218,49 @@ def test_governed_invocation_replay_and_owner_facts(repository, outcome, modern_
             invocations.find_request(scope, principal.principal_id, "same-key") is None
         )
         assert provider.calls == 0
+        # Both applicants already observed OBSERVED. An independent signature
+        # arrives while they prepare; neither applicant may become dispatch.
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        barrier = Barrier(2)
+        original_prepare = service.exact_admission.prepare
+
+        def interleaved_prepare(request, record):
+            barrier.wait(timeout=10)
+            service.exact_admission.ready = True
+            return original_prepare(request, record)
+
+        service.exact_admission.prepare = interleaved_prepare
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(service.begin, principal, request, prepare_only=True)
+                for _ in range(2)
+            ]
+            assert all(f.result()["admission"]["ready"] for f in futures)
+        service.exact_admission.prepare = original_prepare
+        assert (
+            invocations.find_request(scope, principal.principal_id, "same-key") is None
+        )
+        assert service.budget.reserve_calls == 0
+        assert provider.calls == 0
         service.exact_admission.ready = True
     result = service.begin(principal, request)
     assert service.begin(principal, request) == result
     assert provider.calls == 1
+    if outcome == "admission":
+        original_read = service.read
+        reads = []
+
+        def observe_read(principal, identity, *, settle_receipt=True):
+            reads.append(settle_receipt)
+            return original_read(principal, identity, settle_receipt=settle_receipt)
+
+        service.read = observe_read
+        assert service.begin(principal, request, prepare_only=True) == result
+        assert reads == [False]
+        assert service.budget.reserve_calls == 1
+        assert provider.calls == 1
     if modern_policy:
         assert result["invocation"]["request"]["policy"] == request.policy.model_dump(
             mode="json"

@@ -4,7 +4,7 @@ import type {ModelProgress} from '../api/modelStream';
 
 type Recovery={state:string;recovery_id?:string;new_request_key?:string;original_outcome:string};
 /** All mount/refresh paths are reads. A new call needs a separate signed request. */
-export function ConversationPlanningRecovery({conversation,requestKey,principal,onResult,onProgress}:{conversation:string;requestKey:string;principal:string;onResult:(value:Invocation)=>Promise<void>;onProgress:(value:ModelProgress)=>void}){
+export function ConversationPlanningRecovery({conversation,requestKey,principal,onResult,onProgress}:{conversation:string;requestKey:string;principal:string;onResult:(value:Invocation,requestKey:string)=>Promise<void>;onProgress:(value:ModelProgress)=>void}){
  const [status,setStatus]=useState<Recovery|null>(null),[old,setOld]=useState<Invocation|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[progress,setProgress]=useState<ModelProgress|null>(null);
  const flight=useRef(false),live=useRef(true);
  const expected=()=>({principal,isCurrent:()=>live.current});
@@ -32,7 +32,8 @@ export function ConversationPlanningRecovery({conversation,requestKey,principal,
      ?await planningRequest<Invocation>('planning-v2/requests/'+encodeURIComponent(status.new_request_key!)+'/read-only',undefined,{},expected())
      :await planningRequest<Invocation>('planning-v2/recoveries/'+encodeURIComponent(status.recovery_id)+'/continue',{}, {},expected(),p=>{if(live.current){setProgress(p);onProgress(p)}});
     if(value.result.technical_status==='AUTHORIZATION_PENDING'){await read();return;}
-    if(live.current)await onResult(value);
+    if(!status.new_request_key)throw Error('本次处理的记录尚未核实，请重新读取处理进展。');
+    if(live.current)await onResult(value,status.new_request_key);
    }
   }catch(e){if(live.current)setError(String(e))}finally{flight.current=false;if(live.current)setBusy(false)}
  }
