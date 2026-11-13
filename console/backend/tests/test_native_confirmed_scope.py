@@ -199,3 +199,206 @@ def test_original_message_change_invalidates_captured_scope_evidence(service):
     assert after["scope"] == "测试环境"
     assert before["messages"] != after["messages"]
     assert after != before  # Runtime supervisor requires exact captured equality.
+
+
+def scoped_history(service, actor, current_messages, *, history_count=1):
+    identity = service.create(
+        actor, {"idempotencyKey": str(uuid4()), "title": "Separate problem scopes"}
+    )["conversation_id"]
+    version = 0
+    first = None
+    for text in [
+        "先确认是测试环境还是生产环境再检查。"
+    ] * history_count + current_messages:
+        reply = service.mutate(
+            actor,
+            identity,
+            {
+                "idempotencyKey": str(uuid4()),
+                "expectedVersion": version,
+                "content": text,
+            },
+            "message",
+        )
+        if version == history_count:
+            first = reply["identity"]
+        version += 1
+    service.mutate(
+        actor,
+        identity,
+        {
+            "idempotencyKey": "link",
+            "expectedVersion": version,
+            "target": {
+                "problemId": "allowed",
+                "revisionId": "allowed:1",
+                "problemDigest": "a" * 64,
+            },
+        },
+        "link",
+    )
+    p = SimpleNamespace(
+        namespace="tenant",
+        security_domain="domain",
+        semantics=SimpleNamespace(
+            target=SimpleNamespace(
+                problem=ExactReference(
+                    resource_id="allowed", revision_id="allowed:1", digest="a" * 64
+                )
+            )
+        ),
+    )
+    return identity, first, p
+
+
+def lineage_projection(c, identity, first, principal, *, variant):
+    """Minimal isolated owner projections; no live admission or permission writes."""
+    from psycopg.types.json import Jsonb
+
+    c.execute("CREATE SCHEMA IF NOT EXISTS authorization_admin")
+    c.execute("CREATE SCHEMA IF NOT EXISTS draft_assistance")
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS authorization_admin.context_call_objects "
+        "(tenant_id text,security_domain text,owner text,resource_id text,"
+        "context_id text,invocation_id text)"
+    )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS authorization_admin.context_call_requests "
+        "(context_id text,tenant_id text,security_domain "
+        "text,subject_id text,record jsonb)"
+    )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS draft_assistance.invocation_versions "
+        "(namespace text,security_domain text,invocation_id "
+        "text,aggregate_version int,record jsonb)"
+    )
+    context = "context:" + uuid4().hex
+    invocation = "invocation:" + uuid4().hex
+    record = {
+        "context_id": context,
+        "subject_id": principal,
+        "conversation_id": "other-conversation"
+        if variant == "other-conversation"
+        else identity,
+        "first_user_message_id": "missing" if variant == "missing-first" else first,
+    }
+    value = {
+        "state": "FAILED" if variant == "failed-invocation" else "SUCCEEDED",
+        "resultKind": "DRAFT_READY",
+        "contextId": "other" if variant == "wrong-context" else context,
+        "initiatingPrincipalId": "other" if variant == "other-subject" else principal,
+        "problemId": "allowed",
+        "problemRevisionId": "allowed:2"
+        if variant == "wrong-problem-revision"
+        else "allowed:1",
+        "problemDigest": "b" * 64 if variant == "wrong-problem-digest" else "a" * 64,
+    }
+    c.execute(
+        "INSERT INTO authorization_admin.context_call_objects VALUES "
+        "('tenant','domain','BUSINESS_PROBLEM','allowed',%s,%s)",
+        (context, invocation),
+    )
+    c.execute(
+        "INSERT INTO authorization_admin.context_call_requests VALUES "
+        "(%s,'tenant','domain',%s,%s)",
+        (context, principal, Jsonb(record)),
+    )
+    c.execute(
+        "INSERT INTO draft_assistance.invocation_versions VALUES "
+        "('tenant','domain',%s,1,%s)",
+        (invocation, Jsonb(value)),
+    )
+    return context, invocation
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "historical-ambiguity",
+        "many-historical-messages",
+        "current-reversal",
+        "current-uncertain",
+        "other-conversation",
+        "other-subject",
+        "wrong-context",
+        "missing-first",
+        "failed-invocation",
+        "wrong-problem-revision",
+        "wrong-problem-digest",
+        "current-over-limit",
+        "current-too-long",
+    ],
+)
+def test_current_problem_scope_uses_immutable_context_boundary(service, variant):
+    actor = ctx("current-scope-" + uuid4().hex)
+    current = ["请按生产环境规范检查。", "使用系统现有交接资料，保持只读。"]
+    if variant == "current-reversal":
+        current += ["请按测试环境规范检查。"]
+    if variant == "current-uncertain":
+        current += ["不确定是否应按生产环境规范。"]
+    if variant == "current-over-limit":
+        current += ["补充资料说明。"] * 31
+    if variant == "current-too-long":
+        current += ["合成补充说明。" * 500] * 10
+    identity, first, p = scoped_history(
+        service,
+        actor,
+        current,
+        history_count=35 if variant == "many-historical-messages" else 1,
+    )
+    with service.connect() as c:
+        context, invocation = lineage_projection(
+            c, identity, first, actor.principal_id, variant=variant
+        )
+        try:
+            before = c.execute(
+                "SELECT count(*) n FROM private_conversation.messages "
+                "WHERE conversation_id=%s",
+                (identity,),
+            ).fetchone()["n"]
+            value = read_confirmed_scope(
+                c, p, actor.principal_id, ["生产环境", "测试环境"]
+            )
+            after = c.execute(
+                "SELECT count(*) n FROM private_conversation.messages "
+                "WHERE conversation_id=%s",
+                (identity,),
+            ).fetchone()["n"]
+            assert (
+                before
+                == after
+                == len(current) + (35 if variant == "many-historical-messages" else 1)
+            )
+            if variant not in {"historical-ambiguity", "many-historical-messages"}:
+                assert value is None
+            else:
+                assert value["scope"] == "生产环境"
+                assert value["conversationId"] == identity
+                assert len(value["messages"]) == 2
+                assert value["affirmativeMessageIds"] == [first]
+        finally:
+            c.execute(
+                "DELETE FROM authorization_admin.context_call_objects "
+                "WHERE context_id=%s",
+                (context,),
+            )
+            c.execute(
+                "DELETE FROM "
+                "authorization_admin.context_call_requests WHERE context_id=%s",
+                (context,),
+            )
+            c.execute(
+                "DELETE FROM draft_assistance.invocation_versions "
+                "WHERE invocation_id=%s",
+                (invocation,),
+            )
+
+
+def test_unbound_legacy_multi_message_history_does_not_invent_a_context(service):
+    actor = ctx("legacy-multi-" + uuid4().hex)
+    _, _, p = scoped_history(service, actor, ["请按生产环境规范检查。"])
+    with service.connect() as c:
+        assert (
+            read_confirmed_scope(c, p, actor.principal_id, ["生产环境", "测试环境"])
+            is None
+        )

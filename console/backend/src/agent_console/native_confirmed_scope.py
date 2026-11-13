@@ -64,6 +64,85 @@ def classify_scope(messages, scopes):
     }
 
 
+def _context_start(connection, preparation, principal, origin):
+    """Resolve immutable owner lineage; a conversation alone is not a work boundary."""
+    tables = connection.execute(
+        "SELECT to_regclass('authorization_admin.context_call_objects') AS objects, "
+        "to_regclass('authorization_admin.context_call_requests') AS requests, "
+        "to_regclass('draft_assistance.invocation_versions') AS invocations"
+    ).fetchone()
+    if not any(tables.values()):
+        return {"legacy": True}
+    if not all(tables.values()):
+        return None
+    rows = connection.execute(
+        "SELECT o.context_id,o.invocation_id,r.subject_id,r.record FROM "
+        "authorization_admin.context_call_objects o JOIN "
+        "authorization_admin.context_call_requests r ON r.context_id=o.context_id "
+        "AND r.tenant_id=o.tenant_id AND r.security_domain=o.security_domain "
+        "WHERE o.tenant_id=%s AND o.security_domain=%s "
+        "AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s LIMIT 2",
+        (
+            preparation.namespace,
+            preparation.security_domain,
+            preparation.semantics.target.problem.resource_id,
+        ),
+    ).fetchall()
+    if not rows:
+        return {"legacy": True}
+    if len(rows) != 1:
+        return None
+    row = rows[0]
+    record = row["record"]
+    if (
+        row["subject_id"] != principal
+        or record.get("subject_id") != principal
+        or record.get("context_id") != row["context_id"]
+        or record.get("conversation_id") != origin["conversation_id"]
+    ):
+        return None
+    invocation = connection.execute(
+        "SELECT record FROM draft_assistance.invocation_versions WHERE "
+        "namespace=%s AND security_domain=%s AND invocation_id=%s "
+        "ORDER BY aggregate_version DESC LIMIT 1",
+        (preparation.namespace, preparation.security_domain, row["invocation_id"]),
+    ).fetchone()
+    value = invocation["record"] if invocation else {}
+    if (
+        value.get("state") != "SUCCEEDED"
+        or value.get("resultKind") != "DRAFT_READY"
+        or value.get("contextId") != row["context_id"]
+        or value.get("initiatingPrincipalId") != principal
+        or (
+            value.get("problemId"),
+            value.get("problemRevisionId"),
+            value.get("problemDigest"),
+        )
+        != (
+            preparation.semantics.target.problem.resource_id,
+            preparation.semantics.target.problem.revision_id,
+            preparation.semantics.target.problem.digest,
+        )
+    ):
+        return None
+    first = connection.execute(
+        "SELECT sequence FROM private_conversation.messages WHERE "
+        "tenant_id=%s AND security_domain=%s AND conversation_id=%s "
+        "AND message_id=%s AND author_id=%s AND schema_version=1 AND created_at<=%s",
+        (
+            preparation.namespace,
+            preparation.security_domain,
+            origin["conversation_id"],
+            record.get("first_user_message_id", ""),
+            principal,
+            origin["created_at"],
+        ),
+    ).fetchone()
+    if first is None:
+        return None
+    return {"legacy": False, "sequence": first["sequence"]}
+
+
 def read_confirmed_scope(connection, preparation, principal, scopes):
     """Owner-scoped exact Problem lineage; ambiguous origins require clarification."""
     problem = preparation.semantics.target.problem
@@ -92,11 +171,15 @@ def read_confirmed_scope(connection, preparation, principal, scopes):
     if len(origins) != 1:
         return None
     origin = origins[0]
+    start = _context_start(connection, preparation, principal, origin)
+    if start is None:
+        return None
     messages = connection.execute(
         """SELECT message_id,content,request_digest,sequence
         FROM private_conversation.messages
         WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s
           AND author_id=%s AND schema_version=1 AND created_at<=%s
+          AND sequence >= %s
         ORDER BY sequence LIMIT 33""",
         (
             preparation.namespace,
@@ -104,8 +187,11 @@ def read_confirmed_scope(connection, preparation, principal, scopes):
             origin["conversation_id"],
             principal,
             origin["created_at"],
+            start.get("sequence", 0),
         ),
     ).fetchall()
+    if start["legacy"] and len(messages) != 1:
+        return None
     if len(messages) > 32 or sum(len(m["content"]) for m in messages) > 32768:
         return None
     choice = classify_scope(messages, scopes)
