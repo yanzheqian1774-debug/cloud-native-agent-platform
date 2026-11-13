@@ -114,6 +114,7 @@ class PreparedNativeCoordinator:
                 app.scope, request, placement, require_employee_lineage=True
             )
             from .native_document_skill import (
+                NativeDefinitionQuerySkillExecutor,
                 NativeDocumentSkillExecutor,
                 NativeEmployeeDocumentSkillExecutor,
                 NativeRuleDocumentSkillExecutor,
@@ -129,6 +130,7 @@ class PreparedNativeCoordinator:
                 NativeEmployeeDocumentSkillExecutor.revision,
                 NativeUserScopeDocumentSkillExecutor.revision,
                 NativeRuleDocumentSkillExecutor.revision,
+                NativeDefinitionQuerySkillExecutor.revision,
                 NativeLoopSkillExecutor.revision,
                 NativeValidatedLoopSkillExecutor.revision,
             )

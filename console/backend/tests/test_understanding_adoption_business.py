@@ -34,8 +34,8 @@ from test_understanding_adoption_bff import adopted, answer
 from test_understanding_adoption_source import select
 
 
-@pytest.mark.parametrize("adopted", ["BUSINESS_DATA"], indirect=True)
-def test_exact_business_origin_creates_and_plans_from_adopted_actual_source(adopted):
+@pytest.fixture
+def adopted_business(adopted):
     e = adopted
     selected = select(e)
     e.kind = DraftResultKind.DRAFT_READY
@@ -151,8 +151,20 @@ def test_exact_business_origin_creates_and_plans_from_adopted_actual_source(adop
             assert bound["context_id"] != e.original["contextId"]
         assert created["revision"]["description"] == value["draft"]["description"]
         assert len(e.calls) == 1
+        e.adopted_result, e.created = value, created
+        yield e
     finally:
         repository.pool.close()
+
+
+@pytest.mark.parametrize("adopted", ["BUSINESS_DATA"], indirect=True)
+def test_exact_business_origin_creates_and_plans_from_adopted_actual_source(
+    adopted_business,
+):
+    assert (
+        adopted_business.created["revision"]["description"]
+        == adopted_business.adopted_result["draft"]["description"]
+    )
 
 
 def test_general_question_adoption_does_not_grant_business_scope(adopted):

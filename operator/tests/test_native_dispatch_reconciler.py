@@ -284,3 +284,27 @@ def test_managed_failure_status_matches_frozen_crd_without_reinvocation(failure)
     # Observe-only resume cannot call the managed Skill again.
     driver.run_once()
     assert caller.calls == 1
+
+
+def test_restarted_source_observer_replay_has_zero_new_effects():
+    from types import SimpleNamespace
+
+    repository = Repository()
+    repository.effect_started = True
+    kubernetes = Kubernetes()
+    kubernetes.body = {
+        "metadata": {"name": "existing-task", "uid": "task-uid-1"},
+        "status": {"phase": "Succeeded", "result": "previous effect result"},
+    }
+    transport = Transport()
+    completions, receipts = [], []
+    current = worker(repository, kubernetes, transport, completions)
+    current.startup_observation = SimpleNamespace(
+        current=lambda: {"controlled": "source lineage already checked by owner"},
+        observe_only_receipt=lambda claim: receipts.append(claim),
+    )
+    result = current.run_once()
+    assert result.state == "SUCCEEDED"
+    assert transport.calls == kubernetes.created == 0
+    assert receipts == [repository.original_claim]
+    assert len(completions) == 1

@@ -52,7 +52,11 @@ def operations(planning=None):
         service = OntologyService(call)
         rows = call.connection.execute(
             "SELECT r.ontology_id,r.revision_id,r.digest,r.content->>'name' A"
-            "S name,d.version "
+            "S name,d.version,COALESCE((SELECT f.action FROM "
+            "business_ontology.lifecycle_facts f WHERE f.namespace=r.namespace "
+            "AND f.security_domain=r.security_domain AND f.ontology_id=r.ontology_id "
+            "AND f.revision_id=r.revision_id ORDER BY f.ordinal DESC LIMIT 1),"
+            "'DRAFT') AS state "
             "FROM business_ontology.revisions r JOIN business_ontology.definitions d "
             "USING(namespace,security_domain,ontology_id) "
             "WHERE r.namespace=%s AND r.security_domain=%s ORDER BY r.ontolog"

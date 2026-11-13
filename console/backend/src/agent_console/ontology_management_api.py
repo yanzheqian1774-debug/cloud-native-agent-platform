@@ -5,6 +5,7 @@ from dataclasses import replace
 from fastapi import Request
 
 from .ontology_domain import OntologyError
+from .ontology_maintenance_read import PrepareRead
 from .ontology_management_policy import MaintenanceCommand
 from .workbench_bff import PREFIX, WorkbenchBoundaryError
 from .workbench_owner_authorization import (
@@ -54,7 +55,7 @@ def install_ontology_management(manager, authorizer):
             return run(request, lambda call: manager.capabilities(call, identity))
 
         @app.post(root + "/commands")
-        def command(request: Request, body: MaintenanceCommand):
+        def command(request: Request, body: MaintenanceCommand | PrepareRead):
             return run(
                 request,
                 lambda call: manager.handle(

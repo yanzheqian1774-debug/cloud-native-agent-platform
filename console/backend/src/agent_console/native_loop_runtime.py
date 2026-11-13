@@ -30,6 +30,7 @@ from .model_governance_authorization import invoke_model_use
 from .native_confirmed_scope import read_confirmed_scope
 from .native_diagnostic_tools import NativeDiagnosticTools
 from .native_document_skill import (
+    NativeDefinitionQuerySkillExecutor,
     NativeEmployeeDocumentSkillExecutor,
     NativeRuleDocumentSkillExecutor,
     NativeUserScopeDocumentSkillExecutor,
@@ -174,6 +175,7 @@ class NativeLoopRuntime:
                     ("native-document-review", "2"),
                     ("native-document-review", "3"),
                     ("native-document-review", "4"),
+                    ("native-document-review", "5"),
                 }
             ):
                 raise ValueError("NATIVE_LOOP_INVOCATION_REQUIRED")
@@ -184,14 +186,18 @@ class NativeLoopRuntime:
             ("native-document-review", "2"),
             ("native-document-review", "3"),
             ("native-document-review", "4"),
+            ("native-document-review", "5"),
         }
-        rule_mode = employee_mode and invocation["executor_revision"] == "4"
+        rule_mode = employee_mode and invocation["executor_revision"] in {"4", "5"}
         user_scope_mode = employee_mode and invocation["executor_revision"] in {
             "3",
             "4",
+            "5",
         }
         document_revision = (
-            NativeRuleDocumentSkillExecutor
+            NativeDefinitionQuerySkillExecutor
+            if invocation["executor_revision"] == "5"
+            else NativeRuleDocumentSkillExecutor
             if rule_mode
             else NativeUserScopeDocumentSkillExecutor
             if user_scope_mode
@@ -278,7 +284,14 @@ class NativeLoopRuntime:
 
             with self.pool.connection() as c:
                 rule_content = rule_snapshot(c)
-            library = NativeDocumentRuleTools(
+            from .native_definition_query_tools import NativeDefinitionQueryTools
+
+            library_type = (
+                NativeDefinitionQueryTools
+                if invocation["executor_revision"] == "5"
+                else NativeDocumentRuleTools
+            )
+            library = library_type(
                 output["source"],
                 output["sourceSnapshot"],
                 rule_content,

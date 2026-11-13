@@ -9,7 +9,26 @@ from .resource_automation_validation import validate
 from .workbench_business_problem import OwnerPrincipal
 
 
-def observe(automation, call, source, source_schema, work, *, fixed_bindings=None):
+def observe(
+    automation,
+    call,
+    source,
+    source_schema,
+    work,
+    *,
+    fixed_bindings=None,
+    ontology_binding=None,
+):
+    semantic_refs = [
+        b["reference"] for b in (fixed_bindings or ()) if b["kind"] == "ONTOLOGY"
+    ]
+    if semantic_refs and (
+        ontology_binding is None
+        or semantic_refs != [ontology_binding.ontology.model_dump(mode="json")]
+    ):
+        from .workbench_owner_authorization import WorkbenchOwnerError
+
+        raise WorkbenchOwnerError("CAPABILITY_ONTOLOGY_WORK_BINDING_MISMATCH", 409)
     if not getattr(automation, "services", None):
         return {"state": "NOT_CONFIGURED", "operations": [], "executionReady": False}
     scope = ScopeIdentity(
@@ -50,7 +69,7 @@ def observe(automation, call, source, source_schema, work, *, fixed_bindings=Non
                         b["reference"]["digest"].removeprefix("sha256:"),
                     )
                     for b in fixed_bindings
-                    if b["kind"] != "EMPLOYEE"
+                    if b["kind"] not in {"EMPLOYEE", "ONTOLOGY"}
                 }
                 actual = {
                     (

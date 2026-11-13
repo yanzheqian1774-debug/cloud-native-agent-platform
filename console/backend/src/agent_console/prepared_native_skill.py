@@ -96,6 +96,7 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
         )
     )
     from .native_document_skill import (
+        NativeDefinitionQuerySkillExecutor,
         NativeDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
@@ -113,6 +114,7 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
             NativeEmployeeDocumentSkillExecutor.revision,
             NativeUserScopeDocumentSkillExecutor.revision,
             NativeRuleDocumentSkillExecutor.revision,
+            NativeDefinitionQuerySkillExecutor.revision,
         )
     }
     result = {

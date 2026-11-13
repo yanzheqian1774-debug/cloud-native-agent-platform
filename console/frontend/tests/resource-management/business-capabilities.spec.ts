@@ -36,7 +36,7 @@ async function fixture(page:Page){
    return json(state.journal);
   }
   if(path.endsWith('/conversations/original/messages')&&route.request().method()==='POST'){
-   const body=route.request().postDataJSON();state.answerWrites.push(body);work.messages.push({message_id:'answer-message',kind:'USER',content:body.content,request_key:body.idempotencyKey,disposition:'FOLLOWUP_RECORDED'});
+   const body=route.request().postDataJSON();state.answerWrites.push(body);work.messages.push({message_id:'answer-message',author_id:'human:tester',content:body.content,request_key:body.idempotencyKey,disposition:'FOLLOWUP_RECORDED'});
    if(state.answerUnknown)return route.abort('failed');
    return json({identity:'answer-message'});
   }
@@ -168,7 +168,7 @@ for(const mode of ['ready','partial','unknown','changed'] as const)test('origina
  if(mode==='changed')state.work.criterion={...state.work.criterion,measurement:{rubric:'替换完成标准'}};
  await page.reload();await page.getByText('准备遇到问题？',{exact:true}).click();await page.getByRole('button',{name:'核对准备记录',exact:true}).click();
  if(mode==='unknown'||mode==='changed'){await expect(page.locator('.capability-work-resume').getByRole('alert')).toContainText(mode==='unknown'?'不会重复创建':'不同的完成标准');expect(state.work.writes).toHaveLength(before)}
- else{await expect(page.locator('.capability-work-resume').getByRole('status')).toContainText('已核实目标和完成标准');expect(state.work.writes).toHaveLength(before+(mode==='partial'?3:0));expect(state.work.active).toBe(true)}
+ else{await expect(page.locator('.capability-work-resume').getByRole('status',{name:'准备核对结果',exact:true})).toContainText('已核实目标和完成标准');expect(state.work.writes).toHaveLength(before+(mode==='partial'?3:0));expect(state.work.active).toBe(true)}
  expect(state.work.writes.filter(w=>w.path.endsWith('/problems'))).toHaveLength(1);expect(state.sources).toHaveLength(1);
 });
 
@@ -193,7 +193,7 @@ for(const lost of [false,true])test('saved capability progress survives refresh 
  await page.reload();await expect(progress).toContainText('等待方案准备');
  state.journal={...state.journal,version:2,state:{phase:'WAITING_FOR_CLARIFICATION',problemId:'new-problem'}};
  await page.getByText('准备遇到问题？',{exact:true}).click();await page.getByRole('button',{name:'核对准备记录',exact:true}).click();
- await expect(page.locator('.capability-work-resume').getByRole('status')).toContainText('已核实目标');
+ await expect(page.locator('.capability-work-resume').getByRole('status',{name:'准备核对结果',exact:true})).toContainText('已核实目标');
  await expect(progress).toContainText('后续办理记录已保留');expect(state.journal.version).toBe(2);expect(state.journalWrites).toHaveLength(1);expect(state.work.writes).toHaveLength(writes);
 });
 
@@ -289,8 +289,8 @@ for(const mode of ['normal','selection-lost','preparation-lost','wrong-resource'
  await page.reload();const panel=page.getByRole('region',{name:'本次固定资源准备',exact:true});await panel.getByRole('button',{name:'继续准备资源',exact:true}).click();
  if(mode==='wrong-resource'){await expect(panel.getByRole('alert')).toContainText('固定能力不一致');expect(preparations).toBe(0);return}
  if(mode.endsWith('lost')){await expect(panel.getByRole('alert')).toBeVisible();await page.reload();await panel.getByRole('button',{name:'核实并继续准备资源',exact:true}).click()}
- await expect(panel).toContainText('本次固定资源已就绪');expect(selections).toBe(1);expect(preparations).toBe(1);expect(state.journal.state?.phase).toBe('RESOURCES_READY');
- await page.reload();await panel.getByRole('button',{name:'读取资源准备记录',exact:true}).click();await expect(panel).toContainText('本次固定资源已就绪');expect(selections).toBe(1);expect(preparations).toBe(1);
+ await expect(panel).toContainText('下列执行资源已就绪，尚未启动执行');await expect(panel).toContainText('业务规则与使用权限仍需在执行前核验');expect(selections).toBe(1);expect(preparations).toBe(1);expect(state.journal.state?.phase).toBe('RESOURCES_READY');
+ await page.reload();await panel.getByRole('button',{name:'读取资源准备记录',exact:true}).click();await expect(panel).toContainText('下列执行资源已就绪，尚未启动执行');await expect(panel).toContainText('业务规则与使用权限仍需在执行前核验');expect(selections).toBe(1);expect(preparations).toBe(1);
 });
 
 for(const mode of ['normal','lost','wrong-source','wrong-artifact'] as const)test('capability execution returns document findings to exact conversation '+mode,async({page})=>{
@@ -488,9 +488,10 @@ test('partial Runtime reference never falls back to management or latest revisio
  const state=await fixture(page);let unavailable=true;
  await page.route('**/api/workbench/v1/session',route=>unavailable?route.fulfill({status:503,json:{reasonCode:'UNAVAILABLE'}}):route.fallback());
  await page.goto('/capabilities');
- await expect(page.getByRole('alert').filter({hasText:'暂时无法获取能力信息'})).toBeVisible();
+ await expect(page.getByRole('alert').filter({hasText:'暂时无法核对登录状态'})).toBeVisible();
+ await expect(page.getByText('正在核对登录状态，请稍候或使用右上角登录入口。',{exact:true})).toHaveCount(0);
  await expect(page.getByText('正在读取业务能力…',{exact:true})).toHaveCount(0);
- unavailable=false;await page.getByRole('button',{name:'重新读取',exact:true}).click();
+ unavailable=false;await page.getByRole('button',{name:'重新核对登录状态',exact:true}).click();
  await expect(page.getByRole('button',{name:revision.title,exact:true})).toBeVisible();
  expect(state.writes).toEqual([]);expect(state.preferenceWrites).toEqual([]);
  });
@@ -816,4 +817,18 @@ test('conversation without capability preparation retains existing work associat
  const state=await fixture(page);state.links=[{link_id:'original-target',title:'已有目标',readable:true,target:{problemId:'new-problem'}}];
  await page.goto('/work?conversation=original');await expect(page.getByRole('heading',{name:'关联工作',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'已有目标',exact:true})).toBeVisible();
  await expect(page.getByRole('region',{name:'当前能力准备',exact:true})).toHaveCount(0);expect(state.work.writes).toHaveLength(0);expect(state.journalWrites).toHaveLength(0);
+});
+
+test('capability fixes a readable published ontology without changing employee membership',async({page},info)=>{
+ const state=await fixture(page);
+ await page.route('**/business-ontologies',route=>route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:[{ontology_id:'rules',revision_id:'published-r1',digest:'c'.repeat(64),name:'交接规则',state:'PUBLISH'},{ontology_id:'rules',revision_id:'draft-r2',digest:'e'.repeat(64),name:'未发布规则',state:'TEST'}]},continuationIds:[]}}));
+ await page.goto('/capabilities?capability=handover&revision=r2');await page.getByRole('button',{name:'修改能力',exact:true}).click();
+ const form=page.getByRole('form',{name:'业务能力编辑'});await form.getByLabel('资源类别').selectOption('ONTOLOGY');
+ await expect(form.getByLabel('已发布资源',{exact:true})).toContainText('交接规则');await expect(form.getByLabel('已发布资源',{exact:true})).not.toContainText('未发布规则');
+ await form.getByLabel('已发布资源',{exact:true}).selectOption({label:'交接规则'});await form.getByLabel('本次承担什么职责').fill('提供固定版本规则与来源');await form.getByRole('button',{name:'加入能力组成'}).click();
+ await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:info.outputPath('ontology-capability-binding-1440.png'),fullPage:true});
+ await form.getByRole('button',{name:'保存草稿',exact:true}).click();await expect.poll(()=>state.saves.length).toBe(1);
+ expect(state.saves[0].revision.bindings.filter(b=>b.kind==='EMPLOYEE')).toEqual(revision.bindings);
+ expect(state.saves[0].revision.bindings.find(b=>String(b.kind)==='ONTOLOGY')?.reference).toEqual({resource_id:'rules',revision_id:'published-r1',digest:'c'.repeat(64)});
+ expect(state.writes).toHaveLength(0);expect(state.sources).toHaveLength(0);
 });

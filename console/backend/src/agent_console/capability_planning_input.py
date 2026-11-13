@@ -60,11 +60,21 @@ class CapabilityPlanningInput:
             or len(employees) != 1
             or any(
                 b["kind"]
-                not in {"EMPLOYEE", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME_PROFILE"}
+                not in {
+                    "EMPLOYEE",
+                    "SKILL",
+                    "MCP",
+                    "KNOWLEDGE",
+                    "RUNTIME_PROFILE",
+                    "ONTOLOGY",
+                }
                 for b in bindings
             )
         ):
             raise WorkbenchOwnerError("CAPABILITY_PLANNING_ADAPTER_UNAVAILABLE", 409)
+        from .ontology_capability_binding import document_binding
+
+        semantics = document_binding(call, resolved)
         source = ExactReference.model_validate(sources[0])
         require_read(call.authority, principal, "KNOWLEDGE", source)
         content, _ = read_published(
@@ -76,7 +86,13 @@ class CapabilityPlanningInput:
         if raw.get("synthetic") is not True:
             raise WorkbenchOwnerError("CAPABILITY_PLANNING_ADAPTER_UNAVAILABLE", 409)
         facts = observe(
-            a, call, source, check["sourceSchema"], work, fixed_bindings=bindings
+            a,
+            call,
+            source,
+            check["sourceSchema"],
+            work,
+            fixed_bindings=bindings,
+            **({"ontology_binding": semantics} if semantics is not None else {}),
         )
         if not {"READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"} <= {
             item["operation"] for item in facts["operations"]
@@ -125,6 +141,11 @@ class CapabilityPlanningInput:
             },
             "source": source.model_dump(mode="json"),
             "fixedMemberObservation": facts,
+            **(
+                {"ontologyBinding": semantics.model_dump(mode="json")}
+                if semantics
+                else {}
+            ),
             "executionStarted": False,
             "modelCalls": 0,
         }

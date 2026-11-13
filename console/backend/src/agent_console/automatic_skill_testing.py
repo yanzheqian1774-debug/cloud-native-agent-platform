@@ -116,16 +116,21 @@ def verify_skill(
     )
     if sales_v2:
         require_source(source)
-    from .native_document_skill import NativeRuleDocumentSkillExecutor
+    from .native_document_skill import (
+        NativeDefinitionQuerySkillExecutor,
+        NativeRuleDocumentSkillExecutor,
+    )
 
-    rule_revision = NativeRuleDocumentSkillExecutor.revision
+    rule_revisions = (
+        NativeRuleDocumentSkillExecutor.revision,
+        NativeDefinitionQuerySkillExecutor.revision,
+    )
     rule_bound = any(
         (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
-        == (
-            rule_revision.executor_id,
-            rule_revision.executor_revision,
-            rule_revision.configuration_digest,
-        )
+        in {
+            (v.executor_id, v.executor_revision, v.configuration_digest)
+            for v in rule_revisions
+        }
         for op in revision["content"].get("operations", [])
     )
     extra_inputs, rule_evidence = {}, {}

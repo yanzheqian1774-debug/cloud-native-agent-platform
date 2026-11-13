@@ -49,20 +49,41 @@ def targets(service, records, c, context, conversation):
         "AND resource_id=%s",
         (*scope, identity),
     ).fetchone()
-    if binding:
-        lock(c, binding["context_id"])
     row = request_row(c, binding["context_id"]) if binding else None
     record = (row or {}).get("record") or {}
+    adopted = False
+    if row and record.get("configuration") != service.configuration:
+        from .draft_assistance import DraftAssistanceError
+        from .understanding_adoption_history import source
+
+        try:
+            row = source(
+                getattr(service, "understanding_adoption", None),
+                c,
+                context,
+                binding["invocation_id"],
+                conversation,
+            )
+        except DraftAssistanceError as exc:
+            raise AuthorityError("CONVERSATION_HISTORY_WORK_SOURCE_MISMATCH") from exc
+        if row["context_id"] != binding["context_id"]:
+            raise AuthorityError("CONVERSATION_HISTORY_WORK_SOURCE_MISMATCH")
+        record = row["record"]
+        adopted = True
+    elif binding:
+        lock(c, binding["context_id"])
     if (
         not row
         or (row["tenant_id"], row["security_domain"]) != tuple(scope)
         or row["subject_id"] != context.principal_id
         or record.get("conversation_id") != conversation
         or record.get("experience_policy_digest") != policy.policy_digest
-        or record.get("configuration") != service.configuration
+        or (not adopted and record.get("configuration") != service.configuration)
     ):
         raise AuthorityError("CONVERSATION_HISTORY_WORK_SOURCE_MISMATCH")
-    if record.get("owned_understanding_policy_digest"):
+    if adopted:
+        pass  # The historical resolver validated every exact context in the chain.
+    elif record.get("owned_understanding_policy_digest"):
         policy.require_record(c, context, row)
     elif conversation not in policy.document.conversations:
         raise AuthorityError("CONVERSATION_HISTORY_WORK_SCOPE_DENIED")

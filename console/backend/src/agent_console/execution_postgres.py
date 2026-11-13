@@ -441,6 +441,7 @@ class PostgresExecutionAuthorityRepository:
         now: datetime | None = None,
         lease_seconds: int = 30,
         eligible_dispatches: tuple[tuple[str, str, str], ...] | None = None,
+        startup_observation: dict | None = None,
     ) -> NativeDispatchClaim | None:
         now = (now or datetime.now(UTC)).astimezone(UTC)
         if not worker_id or not 1 <= lease_seconds <= 300:
@@ -467,7 +468,42 @@ class PostgresExecutionAuthorityRepository:
                 list(values) for values in zip(*eligible_dispatches, strict=True)
             )
 
+        if startup_observation is not None:
+            from .native_host_provenance import lineage, validate
+
+            startup = validate(startup_observation, worker_id)
+            eligibility_filter += (
+                "AND n.namespace=%s AND n.security_domain=%s AND n.principal_id=%s "
+                "AND n.authorization_resource=ANY(%s) "
+            )
+            eligibility_params += (
+                startup["namespace"],
+                startup["securityDomain"],
+                startup["principalId"],
+                startup["authorizationResources"],
+            )
+            eligibility_filter += (
+                "AND ((n.state='QUEUED' AND n.worker_id IS NULL) OR "
+                "(n.state='CLAIMED' AND n.worker_id=%s AND EXISTS ("
+                "SELECT 1 FROM execution_authority.native_dispatch_facts f "
+                "WHERE f.namespace=n.namespace AND f.security_domain=n.security_domain "
+                "AND f.command_id=n.command_id AND f.kind='CLAIMED' "
+                "AND (f.record->>'claimGeneration')::bigint=n.claim_generation "
+                "AND f.record->'hostStartup'->>'digest'=ANY(%s)))) "
+            )
+            eligibility_params += (worker_id, lineage(startup_observation))
+        else:
+            eligibility_filter += (
+                "AND NOT EXISTS (SELECT 1 FROM execution_authority.native_dispatch_facts f "
+                "WHERE f.namespace=n.namespace AND f.security_domain=n.security_domain "
+                "AND f.command_id=n.command_id AND f.kind='CLAIMED' "
+                "AND f.record ? 'hostStartup') "
+            )
+
         def operation(connection):
+            from .native_host_provenance import lock_identity
+
+            lock_identity(connection, startup_observation, worker_id)
             has_stops = (
                 connection.execute(
                     "SELECT to_regclass('execution_authority.prepared_stop_receipts') AS t"
@@ -511,6 +547,15 @@ class PostgresExecutionAuthorityRepository:
                     "claimGeneration": claim.claim_generation.value,
                     "workerId": worker_id,
                     "leaseExpiresAt": lease.isoformat(),
+                    **(
+                        {
+                            "hostStartup": startup_observation,
+                            "commandId": str(command.command_id),
+                            "commandDigest": command.digest,
+                        }
+                        if startup_observation is not None
+                        else {}
+                    ),
                 },
             )
             return claim
@@ -583,13 +628,23 @@ class PostgresExecutionAuthorityRepository:
         authorization_check: Callable[[Any, NativeDispatchCommand], bool],
         *,
         now: datetime | None = None,
+        startup_observation: dict | None = None,
     ) -> AppendDisposition:
         """Linearization point: current grant and active fencing commit together."""
         now = (now or datetime.now(UTC)).astimezone(UTC)
         command = claim.command
 
         def operation(connection):
+            from .native_host_provenance import lock_identity, require_claim
+
+            lock_identity(connection, startup_observation, claim.worker_id)
             row = self._locked_claim(connection, claim)
+            require_claim(
+                connection,
+                claim,
+                startup_observation,
+                observe_only=row["state"] == NativeDispatchState.EFFECT_STARTED,
+            )
             if row["state"] == NativeDispatchState.EFFECT_STARTED:
                 if row["kubernetes_task_name"] != task_name:
                     raise ExecutionConflict("NATIVE_DISPATCH_EFFECT_CONFLICT")

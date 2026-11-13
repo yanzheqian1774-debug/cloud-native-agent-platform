@@ -5,6 +5,7 @@ import json
 
 from .native_document_skill import (
     OPERATIONS,
+    NativeDefinitionQuerySkillExecutor,
     NativeDocumentSkillExecutor,
     NativeEmployeeDocumentSkillExecutor,
     NativeRuleDocumentSkillExecutor,
@@ -16,8 +17,15 @@ from .skill_mcp_schemas import ResourceContent
 
 
 def resource_content(
-    source, *, bound_employee=False, confirmed_user_scope=False, rule_bound=False
+    source,
+    *,
+    bound_employee=False,
+    confirmed_user_scope=False,
+    rule_bound=False,
+    definition_query=False,
 ):
+    if definition_query and not rule_bound:
+        raise ValueError("DOCUMENT_RULE_BINDING_REQUIRED")
     validate_source(source)
     bundle = base_content()
     skill = bundle["skill"]
@@ -28,7 +36,9 @@ def resource_content(
     )
     skill["operations"] = [op for op in skill["operations"] if op["name"] in OPERATIONS]
     revision = (
-        NativeRuleDocumentSkillExecutor
+        NativeDefinitionQuerySkillExecutor
+        if definition_query
+        else NativeRuleDocumentSkillExecutor
         if rule_bound
         else NativeUserScopeDocumentSkillExecutor
         if confirmed_user_scope

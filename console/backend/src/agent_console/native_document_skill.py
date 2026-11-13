@@ -192,6 +192,22 @@ class NativeRuleDocumentSkillExecutor(NativeUserScopeDocumentSkillExecutor):
         return result
 
 
+class NativeDefinitionQuerySkillExecutor(NativeRuleDocumentSkillExecutor):
+    """Optional exact-definition query successor; revision four is unchanged."""
+
+    revision = ExecutorRevision(
+        "native-document-review",
+        "5",
+        digest(
+            {
+                **RULE_BOUND_CONFIGURATION,
+                "schemaVersion": "native-document-review.v5",
+                "definitionQuery": "exact-document-rule-query.v1",
+            }
+        ),
+    )
+
+
 def document_executor_revision(operations):
     revisions = {
         (op["executorId"], op["executorRevision"], op["executorConfigurationDigest"])
@@ -202,6 +218,7 @@ def document_executor_revision(operations):
         NativeEmployeeDocumentSkillExecutor,
         NativeUserScopeDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
+        NativeDefinitionQuerySkillExecutor,
     ):
         ref = executor.revision
         if revisions == {

@@ -55,7 +55,7 @@ export function CapabilityResourcePreparation({conversation,messageId,principal,
    if(prepared.planId!==selected.plan.plan_id||prepared.planVersion!==selected.plan.version||prepared.planDigest!==selected.digest||prepared.requestKey!==key||prepared.executionStarted!==false||stable(prepared.assembly.definition)!==stable(employee))throw Error('资源准备结果尚未核实，不会启动执行。');
    const resources=prepared.resources.map(r=>({kind:r.kind==='runtime'?'RUNTIME_PROFILE':r.kind.toUpperCase(),reference:r.reference}));
    const bindings=source.contract.bindings;
-   if(bindings.some(b=>b.kind!=='EMPLOYEE'&&!resources.some(r=>r.kind===b.kind&&stable(r.reference)===stable(b.reference)))||resources.some(r=>['SKILL','MCP','KNOWLEDGE'].includes(r.kind)&&!bindings.some(b=>b.kind===r.kind&&stable(b.reference)===stable(r.reference))))throw Error('准备后的资源不符合本次固定范围。');
+   if(bindings.some(b=>!['EMPLOYEE','ONTOLOGY'].includes(b.kind)&&!resources.some(r=>r.kind===b.kind&&stable(r.reference)===stable(b.reference)))||resources.some(r=>['SKILL','MCP','KNOWLEDGE'].includes(r.kind)&&!bindings.some(b=>b.kind===r.kind&&stable(b.reference)===stable(r.reference))))throw Error('准备后的资源不符合本次固定范围。');
    if(prepared.state!=='READY')throw Error('固定资源尚未全部就绪，已保留检查记录，不会启动执行。');
    if(latest.state?.phase!=='RESOURCES_READY')await save('RESOURCES_READY',{selectedPlan,resourcePreparationKey:key});
    await verify();setReady(prepared);
@@ -65,5 +65,5 @@ export function CapabilityResourcePreparation({conversation,messageId,principal,
  useCapabilityAdvance(autoContinue&&journal.state?.phase==='PLAN_CONFIRMED',JSON.stringify([principal,conversation,messageId,journal.contractDigest,'PLAN_CONFIRMED']),()=>act());
  const phase=journal.state?.phase;
  if(!['PLAN_CONFIRMED','RESOURCE_SELECTING','RESOURCES_SELECTED','RESOURCES_PREPARING','RESOURCES_READY'].includes(phase??''))return null;
- return <section aria-label="本次固定资源准备"><button type="button" disabled={busy} onClick={()=>void act()}>{busy?'正在准备固定资源…':phase==='PLAN_CONFIRMED'?'继续准备资源':phase==='RESOURCES_READY'?'读取资源准备记录':'核实并继续准备资源'}</button>{busy&&<p role="status">{status}</p>}{error&&<p role="alert">{error}</p>}{ready&&<div><p>本次固定资源已就绪，尚未启动执行。</p><ul>{ready.resources.map(r=><li key={r.kind+':'+r.reference.resource_id}>{r.name??r.kind}：已核验</li>)}</ul></div>}</section>;
+ return <section aria-label="本次固定资源准备"><button type="button" disabled={busy} onClick={()=>void act()}>{busy?'正在准备固定资源…':phase==='PLAN_CONFIRMED'?'继续准备资源':phase==='RESOURCES_READY'?'读取资源准备记录':'核实并继续准备资源'}</button>{busy&&<p role="status">{status}</p>}{error&&<p role="alert">{error}</p>}{ready&&<div><p>下列执行资源已就绪，尚未启动执行；业务规则与使用权限仍需在执行前核验。</p><ul>{ready.resources.map(r=><li key={r.kind+':'+r.reference.resource_id}>{r.name??r.kind}：已核验</li>)}</ul></div>}</section>;
 }

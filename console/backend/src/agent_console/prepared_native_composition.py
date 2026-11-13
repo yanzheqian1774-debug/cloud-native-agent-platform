@@ -82,6 +82,7 @@ def compose(
         if mode == "sales-gross-profit-v2-candidate":
             executors += (executor,)
     from .native_document_skill import (
+        NativeDefinitionQuerySkillExecutor,
         NativeDocumentSkillExecutor,
         NativeEmployeeDocumentSkillExecutor,
         NativeRuleDocumentSkillExecutor,
@@ -106,6 +107,7 @@ def compose(
                 NativeEmployeeDocumentSkillExecutor,
                 NativeUserScopeDocumentSkillExecutor,
                 NativeRuleDocumentSkillExecutor,
+                NativeDefinitionQuerySkillExecutor,
                 NativeLoopSkillExecutor,
                 NativeValidatedLoopSkillExecutor,
             )

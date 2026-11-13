@@ -160,11 +160,18 @@ def validate_semantics(connection, scope, preparation, participant):
     binding = getattr(preparation, "business_semantics", None)
     if binding is None:
         return
-    from .native_document_skill import NativeRuleDocumentSkillExecutor
+    from .native_document_skill import (
+        NativeDefinitionQuerySkillExecutor,
+        NativeRuleDocumentSkillExecutor,
+    )
     from .sales_ontology_executor import SalesOntologyExecutor
 
     expected = (
-        NativeRuleDocumentSkillExecutor.revision
+        (
+            NativeDefinitionQuerySkillExecutor
+            if participant.executor_revision == "5"
+            else NativeRuleDocumentSkillExecutor
+        ).revision
         if isinstance(binding, DocumentSemanticsBinding)
         else SalesOntologyExecutor.revision
     )
@@ -214,19 +221,24 @@ def attach_binding(connection, preparation):
 
 def document_mapping_digest(mapping, binding):
     """Commit the policy-selected rules before the execution plan is approved."""
-    from .native_document_skill import NativeRuleDocumentSkillExecutor
+    from .native_document_skill import (
+        NativeDefinitionQuerySkillExecutor,
+        NativeRuleDocumentSkillExecutor,
+    )
 
     if mapping["source_snapshot"] != binding.source.model_dump(mode="json"):
         raise ExecutionPreparationError("ONTOLOGY_PREPARATION_SOURCE_MISMATCH")
-    expected = NativeRuleDocumentSkillExecutor.revision
+    accepted = (
+        NativeRuleDocumentSkillExecutor.revision,
+        NativeDefinitionQuerySkillExecutor.revision,
+    )
     participants = mapping["participants"]
     if not participants or any(
         (p["executor_id"], p["executor_revision"], p["executor_digest"])
-        != (
-            expected.executor_id,
-            expected.executor_revision,
-            expected.configuration_digest,
-        )
+        not in {
+            (v.executor_id, v.executor_revision, v.configuration_digest)
+            for v in accepted
+        }
         for p in participants
     ):
         raise ExecutionPreparationError("ONTOLOGY_EXECUTOR_UNSUPPORTED")

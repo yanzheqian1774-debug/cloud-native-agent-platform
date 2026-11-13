@@ -594,3 +594,347 @@ def test_revocation_first_prevents_effect_and_effect_first_serializes_revocation
         assert revoked.result(timeout=10) is True
     authority.close()
     value.pool.close()
+
+
+def test_new_host_provenance_claim_is_atomic_and_effect_requires_same_binding():
+    import hashlib
+    import json
+
+    value = repository()
+    _, command, _ = seeded(value)
+    worker = "new-provenance-worker"
+
+    def observation(principal=command.principal_id, startup="new-startup"):
+        record = {
+            "schema": "native-host-startup.v1",
+            "startupId": startup,
+            "workerId": worker,
+            "namespace": command.scope.namespace,
+            "securityDomain": command.scope.security_domain,
+            "principalId": principal,
+            "authorizationResources": [command.authorization_resource],
+        }
+        return {
+            "observation": record,
+            "digest": hashlib.sha256(
+                json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest(),
+        }
+
+    try:
+        assert (
+            value.claim_next(worker, startup_observation=observation("other")) is None
+        )
+        proof = observation()
+        claim = value.claim_next(worker, startup_observation=proof)
+        assert claim is not None
+        with value.pool.connection() as connection:
+            fact = connection.execute(
+                "SELECT record FROM execution_authority.native_dispatch_facts "
+                "WHERE command_id=%s AND kind='CLAIMED'",
+                (str(command.command_id),),
+            ).fetchone()["record"]
+        assert fact["hostStartup"] == proof
+        assert fact["commandDigest"] == command.digest
+        assert fact["commandId"] == str(command.command_id)
+        with pytest.raises(ExecutionConflict, match="REUSED"):
+            value.claim_next(worker)
+        assert (
+            value.claim_next(
+                "unbound-other-worker", now=datetime.now(UTC) + timedelta(minutes=2)
+            )
+            is None
+        )
+        assert (
+            value.claim_next(
+                "different-startup",
+                now=datetime.now(UTC) + timedelta(minutes=2),
+                startup_observation={
+                    "observation": {
+                        **proof["observation"],
+                        "workerId": "different-startup",
+                    },
+                    "digest": hashlib.sha256(
+                        json.dumps(
+                            {**proof["observation"], "workerId": "different-startup"},
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        ).encode()
+                    ).hexdigest(),
+                },
+            )
+            is None
+        )
+        with pytest.raises(ExecutionConflict, match="WORKER_ID_REUSED"):
+            value.permit_effect(claim, "task-provenance", lambda *_: True)
+        with pytest.raises(ExecutionConflict, match="WORKER_ID_REUSED"):
+            value.permit_effect(
+                claim,
+                "task-provenance",
+                lambda *_: True,
+                startup_observation=observation(startup="other"),
+            )
+        with pytest.raises(ExecutionConflict, match="REUSED"):
+            value.claim_next(worker, startup_observation=observation(startup="other"))
+        assert (
+            value.permit_effect(
+                claim, "task-provenance", lambda *_: True, startup_observation=proof
+            ).value
+            == "APPENDED"
+        )
+        assert (
+            value.permit_effect(
+                claim, "task-provenance", lambda *_: True, startup_observation=proof
+            ).value
+            == "REPLAYED"
+        )
+    finally:
+        value.pool.close()
+
+
+def host_proof(command, *, startup="first", predecessor=None):
+    import hashlib
+    import json
+
+    record = {
+        "schema": "native-host-startup.v1",
+        "startupId": startup,
+        "workerId": "bounded-host",
+        "namespace": command.scope.namespace,
+        "securityDomain": command.scope.security_domain,
+        "principalId": command.principal_id,
+        "authorizationResources": [command.authorization_resource],
+        "predecessorDigests": []
+        if predecessor is None
+        else [
+            predecessor["digest"],
+            *predecessor["observation"].get("predecessorDigests", []),
+        ],
+    }
+    return {
+        "observation": record,
+        "digest": hashlib.sha256(
+            json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+
+
+def test_provenance_pre_effect_restart_preserves_fencing_and_history():
+    value = repository()
+    _, command, _ = seeded(value)
+    proof = host_proof(command)
+    now = datetime.now(UTC)
+    try:
+        old = value.claim_next(
+            "bounded-host", now=now, lease_seconds=1, startup_observation=proof
+        )
+        successor = host_proof(command, startup="second", predecessor=proof)
+        assert value.resume_effect_started("bounded-host") is None
+        with pytest.raises(ExecutionConflict, match="BINDING_MISMATCH"):
+            value.permit_effect(
+                old,
+                "not-started",
+                lambda *_: True,
+                now=now,
+                startup_observation=successor,
+            )
+        assert (
+            value.claim_next("bounded-host", now=now, startup_observation=successor)
+            is None
+        )
+        assert (
+            value.claim_next("different-host", now=now + timedelta(seconds=2)) is None
+        )
+        new = value.claim_next(
+            "bounded-host",
+            now=now + timedelta(seconds=2),
+            startup_observation=successor,
+        )
+        assert new.claim_generation.value == old.claim_generation.value + 1
+        assert new.fencing_token != old.fencing_token
+        with pytest.raises(ExecutionConflict, match="CLAIM_STALE"):
+            value.permit_effect(
+                old,
+                "task-restarted",
+                lambda *_: True,
+                now=now + timedelta(seconds=2),
+                startup_observation=successor,
+            )
+        with pytest.raises(ExecutionConflict, match="REUSED"):
+            value.permit_effect(
+                old, "task-restarted", lambda *_: True, startup_observation=proof
+            )
+        with value.pool.connection() as connection:
+            facts = connection.execute(
+                "SELECT record FROM execution_authority.native_dispatch_facts "
+                "WHERE command_id=%s AND kind='CLAIMED' ORDER BY ordinal",
+                (str(command.command_id),),
+            ).fetchall()
+        assert [f["record"]["hostStartup"] for f in facts] == [proof, successor]
+        assert (
+            value.permit_effect(
+                new,
+                "task-restarted",
+                lambda *_: True,
+                now=now + timedelta(seconds=2),
+                startup_observation=successor,
+            ).value
+            == "APPENDED"
+        )
+    finally:
+        value.pool.close()
+
+
+def test_provenance_started_restart_is_only_replayed_not_reclaimed():
+    value = repository()
+    _, command, _ = seeded(value)
+    proof = host_proof(command)
+    try:
+        old = value.claim_next("bounded-host", startup_observation=proof)
+        value.permit_effect(
+            old, "task-observe", lambda *_: True, startup_observation=proof
+        )
+        successor = host_proof(command, startup="new-observer", predecessor=proof)
+        resumed = value.resume_effect_started("bounded-host")
+        assert resumed.fencing_token == old.fencing_token
+        assert resumed.claim_generation == old.claim_generation
+        assert value.claim_next("bounded-host", startup_observation=successor) is None
+        assert (
+            value.permit_effect(
+                resumed, "task-observe", lambda *_: False, startup_observation=successor
+            ).value
+            == "REPLAYED"
+        )
+        with pytest.raises(ExecutionConflict, match="REUSED"):
+            value.permit_effect(
+                resumed,
+                "task-observe",
+                lambda *_: True,
+                startup_observation=host_proof(command, startup="unrelated"),
+            )
+        with value.pool.connection() as connection:
+            kinds = connection.execute(
+                "SELECT kind FROM execution_authority.native_dispatch_facts "
+                "WHERE command_id=%s ORDER BY ordinal",
+                (str(command.command_id),),
+            ).fetchall()
+        assert [r["kind"] for r in kinds] == ["QUEUED", "CLAIMED", "EFFECT_STARTED"]
+    finally:
+        value.pool.close()
+
+
+def test_two_provenance_successors_have_one_claim_winner():
+    value = repository()
+    _, command, _ = seeded(value)
+    proof = host_proof(command)
+    now = datetime.now(UTC)
+    try:
+        value.claim_next(
+            "bounded-host", now=now, lease_seconds=1, startup_observation=proof
+        )
+
+        def compete(startup):
+            try:
+                return value.claim_next(
+                    "bounded-host",
+                    now=now + timedelta(seconds=2),
+                    startup_observation=host_proof(
+                        command, startup=startup, predecessor=proof
+                    ),
+                )
+            except ExecutionConflict as exc:
+                assert str(exc) == "NATIVE_HOST_WORKER_ID_REUSED"
+                return None
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            claims = list(pool.map(compete, ("second-a", "second-b")))
+        assert len([c for c in claims if c is not None]) == 1
+        with value.pool.connection() as connection:
+            row = connection.execute(
+                "SELECT state,claim_generation FROM "
+                "execution_authority.native_dispatch_commands WHERE command_id=%s",
+                (str(command.command_id),),
+            ).fetchone()
+        assert row == {"state": "CLAIMED", "claim_generation": 2}
+    finally:
+        value.pool.close()
+
+
+def test_effect_permission_winning_restart_race_blocks_reclaim():
+    value = repository()
+    _, command, _ = seeded(value)
+    proof = host_proof(command)
+    successor = host_proof(command, startup="restart", predecessor=proof)
+    now = datetime.now(UTC)
+    entered, release, restart_submitted = Event(), Event(), Event()
+    try:
+        claim = value.claim_next(
+            "bounded-host", now=now, lease_seconds=1, startup_observation=proof
+        )
+
+        def authorize(_connection, _command):
+            entered.set()
+            assert release.wait(5)
+            return True
+
+        def restart():
+            restart_submitted.set()
+            return value.claim_next(
+                "bounded-host",
+                now=now + timedelta(seconds=2),
+                startup_observation=successor,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            effect = pool.submit(
+                value.permit_effect,
+                claim,
+                "race-task",
+                authorize,
+                now=now,
+                startup_observation=proof,
+            )
+            assert entered.wait(5)
+            reclaim = pool.submit(restart)
+            assert restart_submitted.wait(5)
+            release.set()
+            assert effect.result().value == "APPENDED"
+            assert reclaim.result() is None
+        with value.pool.connection() as connection:
+            row = connection.execute(
+                "SELECT state,claim_generation FROM "
+                "execution_authority.native_dispatch_commands WHERE command_id=%s",
+                (str(command.command_id),),
+            ).fetchone()
+        assert row == {"state": "EFFECT_STARTED", "claim_generation": 1}
+    finally:
+        release.set()
+        value.pool.close()
+
+
+def test_source_restart_does_not_reclaim_or_rewrite_unknown():
+    value = repository()
+    _, command, _ = seeded(value)
+    proof = host_proof(command)
+    try:
+        claim = value.claim_next("bounded-host", startup_observation=proof)
+        value.permit_effect(
+            claim, "unknown-task", lambda *_: True, startup_observation=proof
+        )
+        observation = NativeTerminalObservation(
+            command.command_id,
+            NativeTerminalKind.UNKNOWN,
+            "unknown-task",
+            None,
+            None,
+            "TRANSPORT_AMBIGUOUS",
+            datetime.now(UTC),
+        )
+        value.record_uncertain(claim, observation)
+        before = value.dispatch_status(command.scope, command.command_id)
+        successor = host_proof(command, startup="restart", predecessor=proof)
+        assert value.resume_effect_started("bounded-host") is None
+        assert value.claim_next("bounded-host", startup_observation=successor) is None
+        assert value.dispatch_status(command.scope, command.command_id) == before
+    finally:
+        value.pool.close()

@@ -49,7 +49,7 @@ def verify_plan(resolved, plan, current):
         raise WorkbenchOwnerError("CAPABILITY_PLAN_BOUNDARY_MISMATCH", 409)
 
 
-def verify_resources(resolved, ready):
+def verify_resources(resolved, ready, *, ontology_binding=None):
     bindings = resolved["contract"]["bindings"]
     employees = [
         binding["reference"] for binding in bindings if binding["kind"] == "EMPLOYEE"
@@ -69,6 +69,16 @@ def verify_resources(resolved, ready):
     ]
     for binding in bindings:
         if binding["kind"] == "EMPLOYEE":
+            continue
+        if binding["kind"] == "ONTOLOGY":
+            if (
+                ontology_binding is None
+                or ontology_binding.ontology.model_dump(mode="json")
+                != binding["reference"]
+            ):
+                raise WorkbenchOwnerError(
+                    "CAPABILITY_ONTOLOGY_WORK_BINDING_MISMATCH", 409
+                )
             continue
         if binding["kind"] not in allowed:
             raise WorkbenchOwnerError("CAPABILITY_EXECUTION_ADAPTER_UNAVAILABLE", 409)

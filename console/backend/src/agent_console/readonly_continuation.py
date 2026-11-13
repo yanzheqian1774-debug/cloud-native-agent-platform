@@ -327,8 +327,22 @@ class ReadonlyContinuation:
                 )
             if resolved:
                 from .capability_execution_constraints import verify_resources
+                from .ontology_capability_binding import (
+                    document_binding,
+                    require_work_binding,
+                )
 
-                verify_resources(resolved, ready)
+                selected_ontology = document_binding(call, resolved)
+                require_work_binding(selected_ontology, approved_work.documentRules)
+                verify_resources(
+                    resolved,
+                    ready,
+                    **(
+                        {"ontology_binding": selected_ontology}
+                        if selected_ontology is not None
+                        else {}
+                    ),
+                )
             self.automation.recheck(call, ready)
             if self.automation.runtime_probe(scope.namespace)["status"] != "PASSED":
                 raise WorkbenchOwnerError("READONLY_RUNTIME_NOT_READY", 409)

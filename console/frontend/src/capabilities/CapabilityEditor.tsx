@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useEffectEvent,useRef,useState,type FormEvent} from 'react';
-import {capabilitySession,CapabilityRequestError,readCapability,saveCapability,type CapabilityBinding,type CapabilityDetail,type CapabilityReference,type CapabilityRevision} from '../api/businessCapabilities';
+import {capabilitySession,listCapabilityOntologies,CapabilityRequestError,readCapability,saveCapability,type CapabilityBinding,type CapabilityDetail,type CapabilityReference,type CapabilityRevision} from '../api/businessCapabilities';
 import {getEmployeeDefinition,listEmployeeDefinitions,workbenchPrincipalKey} from '../api/digitalEmployees';
 import {listReadableResources,type DirectoryKind} from '../api/resourceDirectory';
 
@@ -18,7 +18,7 @@ function optionLabel(option:Option,options:Option[]){
  return `${option.title} · 标识 ${length<value.length?'…':''}${value.slice(-length)} · 已发布`;
 }
 
-const kinds:{kind:PickKind;title:string;directory?:DirectoryKind}[]=[{kind:'EMPLOYEE',title:'数字人'},{kind:'SKILL',title:'技能',directory:'skill'},{kind:'MCP',title:'MCP 服务',directory:'mcp'},{kind:'KNOWLEDGE',title:'知识',directory:'knowledge'},{kind:'RUNTIME_PROFILE',title:'运行环境',directory:'runtime'},{kind:'WORKFLOW',title:'来源执行方案',directory:'workflow'}];
+const kinds:{kind:PickKind;title:string;directory?:DirectoryKind}[]=[{kind:'EMPLOYEE',title:'数字人'},{kind:'SKILL',title:'技能',directory:'skill'},{kind:'MCP',title:'MCP 服务',directory:'mcp'},{kind:'KNOWLEDGE',title:'知识',directory:'knowledge'},{kind:'ONTOLOGY',title:'本体'},{kind:'RUNTIME_PROFILE',title:'运行环境',directory:'runtime'},{kind:'WORKFLOW',title:'来源执行方案',directory:'workflow'}];
 const textFields=[['title','能力名称'],['intent','希望完成什么'],['inputs','需要提供哪些资料'],['outputs','将交付什么'],['business_scope','适用范围'],['exclusions','不包含哪些操作'],['manual_involvement','需要人工参与什么'],['known_limitations','当前已知限制']] as const;
 type FormFields=Record<typeof textFields[number][0],string>;
 export type CapabilitySaveDraft={revision:CapabilityRevision;expectedVersion:number;commandId:string};
@@ -45,6 +45,9 @@ export function CapabilityEditor({base,principal,fromWorkflow=false,seed,initial
   if(type==='EMPLOYEE'){
    const page=await listEmployeeDefinitions(after??undefined,signal);
    result={items:page.items.filter(item=>item.publicationState==='PUBLISHED').map(item=>({title:item.role,reference:{resource_id:item.employeeDefinitionId,revision_id:item.employeeDefinitionRevisionId,digest:item.employeeDefinitionDigest}})),cursor:page.nextCursor??null};
+  }else if(type==='ONTOLOGY'){
+   const page=await listCapabilityOntologies(principal,signal);
+   result={items:page.items.filter(item=>item.state==='PUBLISH').map(item=>({title:item.name,reference:{resource_id:item.ontology_id,revision_id:item.revision_id,digest:item.digest}})),cursor:null};
   }else{
    const directory=kinds.find(item=>item.kind===type)!.directory!;
    const page=await listReadableResources(directory,'','PUBLISHED',after,signal);

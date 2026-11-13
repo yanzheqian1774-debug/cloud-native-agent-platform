@@ -275,6 +275,7 @@ class NativeDispatchWorker:
         self.task_prefix = task_prefix
         self.checkpoint = checkpoint
         self.prepare_ready = prepare_ready
+        self.startup_observation = None
 
     def task_name(self, command: NativeDispatchCommand) -> str:
         suffix = hashlib.sha256(str(command.command_id).encode()).hexdigest()[:32]
@@ -285,7 +286,12 @@ class NativeDispatchWorker:
         if claim is None:
             if self.prepare_ready is not None:
                 self.prepare_ready()
-            claim = self.repository.claim_next(self.worker_id)
+            options = (
+                {}
+                if self.startup_observation is None
+                else {"startup_observation": self.startup_observation.current()}
+            )
+            claim = self.repository.claim_next(self.worker_id, **options)
         if claim is None:
             return DispatchRunResult("IDLE", None)
         self.checkpoint("claimed")
@@ -301,11 +307,18 @@ class NativeDispatchWorker:
         if stop is not None and stop(claim):
             return DispatchRunResult("CANCELLED", str(command.command_id))
         task_name = self.task_name(command)
+        options = (
+            {}
+            if self.startup_observation is None
+            else {"startup_observation": self.startup_observation.current()}
+        )
         permission = self.repository.permit_effect(
-            claim, task_name, self.authorization_check
+            claim, task_name, self.authorization_check, **options
         )
         self.checkpoint("effect_started")
         if permission is AppendDisposition.REPLAYED:
+            if self.startup_observation is not None:
+                self.startup_observation.observe_only_receipt(claim)
             observed = self.kubernetes.read(claim, task_name)
             observation = self._terminal_observation(command, task_name, observed)
             return self._finish(claim, observation)

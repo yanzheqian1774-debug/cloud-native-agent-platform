@@ -1,0 +1,42 @@
+G1：已发布本体→能力精确引用→独立文档任务→定义查询与规则依据
+2026-11-13。只读核对，未改源码/实际平台/配置/DB/模型。主线66ff8db与隔离f17b77c在下列关键文件无差异。动态READ7文件不在本包修改范围。
+
+一、现有实现事实
+1 business_capability.py BindingKind.ONTOLOGY已经存在，CapabilityBinding只含kind/reference(resource_id,revision_id,digest)/purpose；无需新增枚举或持久表。引用说明purpose不是可执行规则。
+2 workbench_business_capability.CapabilityMemberReader.validate仅EMPLOYEE与SKILL/MCP/KNOWLEDGE/RUNTIME_PROFILE适配，本体当前返回CAPABILITY_MEMBER_ADAPTER_UNAVAILABLE；CapabilityEditor.kinds/readOptions亦无本体入口。因此“枚举已有”不等于可保存/发布/阅读。
+3 digital_employee_definition.MemberKind无ONTOLOGY。员工成员及responsibilityBindings不能直接塞入本体，本包不改冻结成员类型。采用能力同时固定EMPLOYEE与ONTOLOGY，再由执行preparation固定语义版本。
+4 capability_planning_input白名单拒ONTOLOGY；question_member_capabilities.observe把全部非EMPLOYEE绑定要求为员工成员，当前本体会令固定数字人不可用；capability_execution_constraints.verify_resources也拒ONTOLOGY。三层都需领域适配，不能只删白名单。READ_DATA/ANALYZE_DATA/RENDER_REPORT同时被文档执行器复用，不能据操作名断言只能数值；resource_automation_validation明确登记document-review。
+5 readonly_continuation当前已支持capabilitySource及DocumentRuleExecutionPreparation(v3)，但rule_binding来源是服务端approved_work.documentRules，尚不来自能力绑定。仅加能力ONTOLOGY不会自动进入执行。
+6 ontology_execution.DocumentSemanticsBinding精确绑定ontology/mapping_code/source/scope；published_content校验内容digest/发布未弃用/规则域/mapping与source。PreparedExecutionApplication要求BUSINESS_ONTOLOGY USE；resource_read_grants另要求READ。Native runtime rule_snapshot每次工具前再核USE与原精确发布内容。动态READ绝不替代USE。
+7 NativeDocumentRuleTools.inventory带规则列表和ruleBinding，review_document真实评估并输出规则证据；尚无专用“查询本体定义/规则来源”工具。Agent使用页的静态定义不可冒称真实执行查询。
+8 普通能力维护还需既有CREATE collection或REVISE aggregate，精确READ及REVIEW_PUBLISH。CapabilityOwner.save持久记录actor/decision/CAS，但不会自动派生新revision READ/REVIEW_PUBLISH；resource_management只skill/mcp，resource_definition_management只agent/knowledge。本体maintenance facade不能自动当能力维护资格。实际普通维护授权是否已有由根核验；逐UUID手工配权只能验证接口，不应宣称自然维护闭环。
+
+二、最小产品闭环（不改冻结MemberKind）
+A 普通维护账号在现能力编辑器选数字人、知识、技能、运行环境，并增加一个“本体”已发布精确引用。候选从已有ontology目录/详情读取并逐版本验READ；用户查看规则/来源后保存，服务端复核同tenant/domain、精确digest、已发布未弃用。独立本体历史不被替换。能力仍按原impactDigest/REVIEW_PUBLISH流程发布，不把能力发布冒称本体独立审核。
+B 普通业务账号以此已发布能力在原会话发起新的独立文档任务。固定能力版本与原用户消息由现capability contract/journal保存。本体引用只是固定业务语义来源，员工成员保持原集合。
+C 规划阶段分别检查员工可执行资源和本体语义：observe只处理原员工成员；本体由独立验证器校验并写入本次精确能力约束，不用排除本体来跳过验证。文档mapping/source/scope必须与能力唯一知识引用及当前文档工作一致，不允许从描述猜。多来源/多本体映射无法唯一确定则明确必要追问或拒绝，不自动挑第一个。
+D 执行阶段将已验证语义写入现execution-preparation.v3，其digest承诺整个binding。首版应要求能力本体与现已授权approved_work.documentRules完全一致；不把用户选引用提升为工具/USE权限。现grant owner继续独立授权READ/USE、PLAN/RUN/工具预算。若以后从能力自动派生work授权，另需有界策略G1，不能本包静默扩大。
+E 版本化文档工具适配提供有界query_rule_definition(ruleCode可选)，只读已绑定快照，返回ontology exact ref、规则定义、适用scope、mapping/source refs；缺失字段/不存在ruleCode明确UNKNOWN。结构定义可按既有schema投影，不生成实例/通用推理。新工具改变库存与执行器配置摘要，应登记后继executor/skill版本，旧revision4不原地变更。运行每轮仍核原USE与当前未弃用状态，不升级到最新发布。
+F 原会话展示新任务query工具观测→实际review_document→命中/不满足/未知/冲突→带原文行与精确规则来源的结果，旧任务/旧能力引用保持不变。仅查到定义不算应用规则，仅owner TEST不算Native完成。
+
+三、实现顺序与文件所有权候选
+1 可先实施确定性引用适配：独立ontology_capability_binding helper，workbench_business_capability reader，CapabilityEditor与现API类型/列表转换，受控前端与真实隔离PG。不触动态READ7文件。
+2 对齐契约后再实施planning/observe/verify_resources与readonly_continuation：只能在原capability binding中精确承诺，不新增MemberKind。需要协调question_member_capabilities.py、readonly_continuation.py的独占hunk；不碰C2/Journey恢复文件。
+3 新工具独立后继版本及registry接线：native_document_rule_tools/skill/runtime/resource bundle，仅后继配置启用；根负责签名资源/模型配置准入/实际普通账号验证。无新图引擎。
+4 普通能力维护如果现有角色策略不能授予新revision精确READ/REVIEW_PUBLISH，需要单独有界capability facade或既有grant owner策略接线：绑定正式save receipt、actor/scope/base/CAS/content，禁止凭ID前缀继承权；不把业务只读用户提升维护者、不通配写。本项须根确认范围后实施，不用devadmin截图替代普通维护。
+
+四、待确认的契约选择（实现前）
+- 本包先以“能力绑定ONTOLOGY；员工成员不变”为唯一入口，不直接改数字人定义。
+- 首版文档语义绑定要求与既有服务器授权documentRules exact一致；不在能力引用保存时自动授予USE或拓展问题scope。
+- 后继query工具采用版本化executor/skill资源；旧规则revision4及历史结果不改。
+- 若普通能力维护准入不足，是否同包加入有界capability维护facade（复用现有grant owner/receipt，不新增DB）需根明确。
+
+五、测试和验收边界
+隔离PG：缺READ/错误scope/digest/未发布/已弃用、本体不可读不泄漏名称、能力旧版本不可写、CAS/同key不同body冲突、exactmapping/source不一致、多引用拒绝、能力ONTOLOGY与approvedwork不一致拒绝、仅READ无USE不能执行、运行中权限撤销/弃用不能继续、旧任务固定旧版本。
+受控浏览器：普通maintainer选择实际可读发布本体→保存→影响确认→发布；业务账号不出现维护入口；选择返回保留能力草稿与上下文；UNKNOWN只读核对不重发；无人工填写技术UUID。
+真实验收由根：新非表格“核对这份变更上线交接，缺什么依据，哪些内容还不能确认”，使用新独立会话/任务，模型实际选择query_rule_definition后review_document并返回原会话。若query未实际被选择，记录未验收；不能把库存声明算查询执行。记录能力/本体/source/employee/skill的exact refs和原用户消息、每轮tool、ruleResult证据。禁止复用旧任务已完成结果或同一UNKNOWN重跑。
+
+有条件估时：引用owner/UI适配与隔离验证约半日；固定能力→既有文档执行桥+新查询工具约1日；普通能力维护准入如需新facade另半日至1日。均以契约确认/现存测试环境/后继资源审核可用为前提，不代表实际业务验收完成时间。
+
+实施记录：根已批准四项边界。当前候选仅引用/执行精确适配与可选 rev5 查询；未新增任何 collection/aggregate 维护授权。普通维护资格由根实际核验，精确新修订读取不足仍为后继缺口。查询成功不等于规则执行或业务验收；rev5需独立正式skill和ontology动作精确引用，旧rev4不改。
+验证：53项定向通过（含隔离PG），5项受控浏览器通过，frontend lint/build通过；实际环境未安装、未调用模型。

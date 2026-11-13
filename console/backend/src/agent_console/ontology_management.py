@@ -174,6 +174,13 @@ class OntologyManagement:
     def receipt(self, call, key):
         row = self._row(call, key)
         record = row["result"] if row else None
+        from .ontology_maintenance_read import SCHEMA as READ_SCHEMA
+        from .ontology_maintenance_read import receipt
+
+        if record and record.get("schemaVersion") == READ_SCHEMA:
+            if record.get("command", {}).get("commandKey") != key:
+                raise WorkbenchOwnerError("ONTOLOGY_COMMAND_NOT_FOUND", 404)
+            return receipt(self, call, record)
         if (
             not record
             or record.get("schemaVersion") != SCHEMA
@@ -217,6 +224,10 @@ class OntologyManagement:
         }
 
     def handle(self, call):
+        if call.payload.get("action") == "PREPARE_READ":
+            from .ontology_maintenance_read import prepare
+
+            return prepare(self, call)
         cmd = MaintenanceCommand.model_validate(call.payload)
         issuer, work = self.scope(call, cmd.ontologyId, cmd.action)
         scope = (call.context.scope.tenant_id, call.context.scope.security_domain)

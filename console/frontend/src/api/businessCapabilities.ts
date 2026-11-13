@@ -80,3 +80,5 @@ export async function readCapabilityWorkflowSource(reference:CapabilityReference
 }
 
 export const listWorkflowDerivedCapabilities=(reference:CapabilityReference,principal:string,cursor:string|null=null,signal?:AbortSignal)=>request<CapabilityList>(root+'?'+new URLSearchParams({pageSize:'20',workflowId:reference.resource_id,workflowRevision:reference.revision_id,workflowDigest:reference.digest,...(cursor?{cursor}:{})}),principal,signal);
+
+export const listCapabilityOntologies=(principal:string,signal?:AbortSignal)=>request<{items:{ontology_id:string;revision_id:string;digest:string;name:string;state:string}[];limitations?:string[]}>('/api/workbench/v1/business-ontologies',principal,signal);

@@ -4,6 +4,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from agent_console.draft_assistance import DraftAssistanceError
+from agent_console.understanding_adoption_history import source
 from agent_console.understanding_adoption_origin import AdoptionOrigin
 
 
@@ -26,3 +27,5 @@ def test_old_profiles_and_disabled_bridge_cannot_enter_business_resolver(
     )
     with pytest.raises(DraftAssistanceError, match="BRIDGE_DISABLED"):
         resolver.business_source(None, None, "unread-result")
+    with pytest.raises(DraftAssistanceError, match="BRIDGE_DISABLED"):
+        source(resolver, None, None, "unread-result", "unread-conversation")

@@ -157,6 +157,19 @@ class CapabilityReferences:
                 actual_digest = value["digest"]
                 if require_published and value["publicationState"] != "PUBLISHED":
                     raise BusinessCapabilityError("CAPABILITY_MEMBER_NOT_PUBLISHED")
+            elif binding.kind is BindingKind.ONTOLOGY:
+                from dataclasses import asdict
+
+                from .ontology_capability_binding import read_reference
+
+                value = read_reference(
+                    call,
+                    asdict(ref),
+                    current=require_published
+                    or call.operation == "SAVE_CAPABILITY_DRAFT",
+                )
+                name = value["content"]["name"]
+                actual_digest = value["digest"]
             else:
                 kind = {
                     BindingKind.SKILL: "skill",
