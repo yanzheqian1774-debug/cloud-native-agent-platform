@@ -8,6 +8,8 @@ import json
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from psycopg import Error as StorageError
+
 from .authority_contracts import AuthorityError, ExactGrant
 from .plan_suggestion_domain import ExactReference, PlanningError
 from .planning_candidates import read_published, require_read
@@ -126,16 +128,42 @@ def source_reader(automation, authorizer, records):
                 query={},
                 handler=resolve,
             )
-        except (
-            AuthorityError,
-            PlanningError,
-            WorkbenchOwnerError,
-            ValueError,
-            KeyError,
-            TypeError,
-        ) as exc:
-            if isinstance(exc, ConversationError):
-                raise
+        except ConversationError:
+            raise
+        except AuthorityError as exc:
+            denied = exc.reason_code in {
+                "AUTHORIZATION_NOT_FOUND",
+                "AUTHORIZATION_DENIED",
+                "AUTHORIZATION_EXPIRED",
+                "AUTHORIZATION_REVOKED",
+            }
+            raise ConversationError(
+                "CONVERSATION_INPUT_ACCESS_DENIED"
+                if denied
+                else "CONVERSATION_INPUT_SERVICE_UNAVAILABLE",
+                403 if denied else 503,
+            ) from exc
+        except WorkbenchOwnerError as exc:
+            denied = exc.status_code in {401, 403, 404}
+            raise ConversationError(
+                "CONVERSATION_INPUT_ACCESS_DENIED"
+                if denied
+                else "CONVERSATION_INPUT_SERVICE_UNAVAILABLE",
+                403 if denied else 503,
+            ) from exc
+        except (StorageError, OSError, TimeoutError) as exc:
+            raise ConversationError(
+                "CONVERSATION_INPUT_SERVICE_UNAVAILABLE", 503
+            ) from exc
+        except PlanningError as exc:
+            stale = str(exc) == "CANDIDATE_VERSION_UNAVAILABLE"
+            raise ConversationError(
+                "CONVERSATION_SOURCE_STALE_OR_UNREADABLE"
+                if stale
+                else "CONVERSATION_INPUT_SERVICE_UNAVAILABLE",
+                409 if stale else 503,
+            ) from exc
+        except (ValueError, KeyError, TypeError) as exc:
             raise ConversationError(
                 "CONVERSATION_SOURCE_STALE_OR_UNREADABLE", 409
             ) from exc

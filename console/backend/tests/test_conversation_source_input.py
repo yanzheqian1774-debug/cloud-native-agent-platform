@@ -115,3 +115,72 @@ def test_invocation_keeps_exact_metadata_without_original_content(monkeypatch):
     stored.pop("inputSource")
     assert _invocation(stored).input_source is None
     assert source.current_source_metadata() is None
+
+
+@pytest.mark.parametrize(
+    "failure,code,status",
+    [
+        (
+            AuthorityError("AUTHORIZATION_NOT_FOUND"),
+            "CONVERSATION_INPUT_ACCESS_DENIED",
+            403,
+        ),
+        (
+            AuthorityError("AUTHORIZATION_STATE_UNAVAILABLE"),
+            "CONVERSATION_INPUT_SERVICE_UNAVAILABLE",
+            503,
+        ),
+    ],
+)
+def test_no_source_still_checks_list_without_claiming_source_stale(
+    failure, code, status
+):
+    observed = []
+
+    def execute(context, grants, **kwargs):
+        observed.extend(grants)
+        raise failure
+
+    reader = source.source_reader(None, SimpleNamespace(execute=execute), None)
+    with pytest.raises(ConversationError) as error:
+        reader(object(), "conversation", "message")
+    assert error.value.reason == code
+    assert error.value.status == status
+    assert len(observed) == 1
+    assert (observed[0].owner, observed[0].action) == ("BUSINESS_PROBLEM", "LIST")
+    assert "knowledge" not in str(error.value)
+    assert source.current_attachment() is None
+
+
+@pytest.mark.parametrize("storage_failure", [True, False])
+def test_source_reader_distinguishes_storage_failure_from_exact_digest_stale(
+    monkeypatch, storage_failure
+):
+    from psycopg import OperationalError
+
+    automation, call, selected, _, _ = setup(monkeypatch)
+    selected["sourceContentDigest"] = "c" * 64
+
+    def execute_sql(*args):
+        if storage_failure:
+            raise OperationalError("private storage details must not escape")
+        return SimpleNamespace(
+            fetchone=lambda: {"state": {"source": selected, "userMessageId": "message"}}
+        )
+
+    call.connection = SimpleNamespace(execute=execute_sql)
+    records = SimpleNamespace(owned=lambda *args: None, scope=lambda ctx: ("t", "s"))
+    authorizer = SimpleNamespace(
+        execute=lambda *args, **kwargs: kwargs["handler"](call)
+    )
+    reader = source.source_reader(automation, authorizer, records)
+    with pytest.raises(ConversationError) as error:
+        reader(call.context, "conversation", "message")
+    assert error.value.reason == (
+        "CONVERSATION_INPUT_SERVICE_UNAVAILABLE"
+        if storage_failure
+        else "CONVERSATION_SOURCE_STALE_OR_UNREADABLE"
+    )
+    assert error.value.status == (503 if storage_failure else 409)
+    assert "private storage" not in str(error.value)
+    assert source.current_attachment() is None
