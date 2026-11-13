@@ -4,6 +4,7 @@ test('business process is not falsely linked or highlighted as execution workflo
  await page.route('**/api/**',route=>{
   const p=new URL(route.request().url()).pathname;
   if(route.request().method()==='POST')writes.push(p);
+  if(p==='/api/internal/v0.2.2/workflow-definitions')return route.fulfill({json:[]});
   if(p.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:test',tenantId:'tenant',securityDomain:'domain'},session:{expiresAt:'2099-01-01',idleExpiresAt:'2099-01-01'},csrfToken:'csrf'}});
   return route.fulfill({json:{schemaVersion:'workbench-operation.v1',result:{items:[],entries:[],rejectedResources:0}}});
  });

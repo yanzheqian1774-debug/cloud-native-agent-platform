@@ -1,0 +1,46 @@
+# F3 navigation closeout
+
+Base 2624d0c; isolated worktree f3-navigation-closeout. Shared navigation/Shell,
+ConversationList and related tests only. No Journey, execution API, model or DB changes.
+
+The legacy entry is not duplicate chat data: ProblemWorkspacePage reads the separate
+business-problem collection and revisions; private conversations have independent
+messages and explicit links. Preserve /work?legacy=1&panel=existing as a secondary
+historical-business-problem entry without copying, deleting or auto-linking records.
+No live database inventory is claimed; verify an unlinked legacy problem fixture.
+
+Plan: remove inner conversation fold; keep one scope-bound outer fold with stable
+expanded state across routes. Preserve history scroll independently of outer-nav
+scroll. Use native scrollbars and stable gutter with quiet default/hover/focus/scroll
+visibility; do not hide OS-mandated scrollbars. Remove sticky group-title occlusion,
+reserve safe padding, and prevent automatic heading focus from scrolling ancestors.
+Unify selected icon/color behavior across tasks, resources and member aliases.
+
+Validation: ordinary-account fixtures, 1440 and narrow viewport; one fold, legacy-only
+problem access, cross-route folds/history scroll, refresh and return input+selection,
+no model/execution POST; computed icon and clipping geometry checks; screenshots.
+Run frontend lint/build and normal commit hooks. Actual installed acceptance remains
+coordinator-owned. OS always-show behavior is preserved by native scrollbars but
+must not claim physical OS settings were toggled unless actually tested.
+
+## Verification
+
+Final isolated run f3-navigation-closeout-r4: 26/26 passed. Covers the four new
+navigation cases plus existing history/menu/security-isolation regressions. Frontend
+lint and build passed. Final screenshots navigation-1440.png/navigation-390.png
+were visually inspected; the executed frozen F3 reference in
+f3-team-member-directory-prototype/prototype-team-members-1440.png was also reviewed.
+These are fixture screenshots, not actual installed-account acceptance.
+
+A meaningful old-test fixture defect was corrected: the internal workflow-definition
+collection returns a raw array, not a workbench result envelope; the original
+navigation assertions remain intact. Selected resource icon colors were overriding
+shared active colors; the selected-state shell rule now explicitly inherits text
+color. No resource content or authority behavior changed.
+
+Known boundaries: legacy inventory was verified by source and an independently
+unlinked historical problem fixture, not a new live DB scan. No OS preferences were
+changed; native scrollbars are retained and never display:none/width:0. Hover has a
+stronger thumb, stable gutter geometry is verified, forced-colors uses native auto.
+Actual resource/employee detail roundtrip is covered elsewhere; this package re-ran
+historical-work return and navigation/menu restoration, not every detail editor.
