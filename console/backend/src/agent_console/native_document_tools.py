@@ -232,13 +232,21 @@ class NativeDocumentTools:
             raise ValueError("DOCUMENT_CONFIRMED_SCOPE_UNAVAILABLE")
         self.confirmed_scope = scope
 
-    def record_answer(self, answer):
-        scopes = [
-            d["scope"]
-            for d in self.documents.values()
-            if d["role"] == "POLICY" and d["scope"] in answer
-        ]
-        self.confirmed_scope = scopes[0] if len(scopes) == 1 else None
+    def record_answer(self, answer, *, question=None):
+        from .native_scope_answer import confirmed_answer_scope
+
+        self.confirmed_scope = confirmed_answer_scope(
+            answer,
+            [d["scope"] for d in self.documents.values() if d["role"] == "POLICY"],
+            question=question,
+            previous=self.confirmed_scope,
+            policy_labels=[
+                (d["scope"], label)
+                for d in self.documents.values()
+                if d["role"] == "POLICY"
+                for label in (d["title"], d["text"].splitlines()[0].lstrip("# "))
+            ],
+        )
 
     def inventory(self):
         """Already-loaded source metadata; not evidence of reading document lines."""

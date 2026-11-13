@@ -1,0 +1,105 @@
+Read-only diagnosis and proposed G1; no implementation or runtime change.
+
+Observed actual case
+- native-service-live-question-1/current-owner-records.json step0 asks confirmation
+  of production policy + synthetic material + no deployment/rollback.
+- Exact question digest fb10388311a9abd9381f7c8577f74d3b348bb335a8e3922a0476152769b0726e
+  has a saved original-user answer: yes, inspect only this synthetic material,
+  no deployment/rollback. C1 recognized current-question answer; Native accepted.
+- step3 review_document returns NEEDS_CLARIFICATION/USER_POLICY_SCOPE_REQUIRED.
+- step4 repeats scope confirmation. Answer contains literal policy scope and
+  review/build_report/FINISH succeed. All recorded initial confirmedScopeEvidence
+  values are null. Do not alter these historical facts or replay the work.
+
+Exact implementation cause (main installed implementation inspected read-only)
+console/backend/src/agent_console/native_interaction.py: await_answer returns
+question, answer, questionDigest after same invocation/key/digest verification.
+console/backend/src/agent_console/native_loop_runtime.py:512 discards that
+question context at library boundary, calling record_answer(reply['answer']).
+console/backend/src/agent_console/native_document_tools.py:235-241 searches each
+policy scope as a literal substring in answer, then overwrites confirmed_scope
+with the sole match or None. It is neither answer-to-question interpretation nor
+safe negation handling.
+console/backend/src/agent_console/native_document_rule_tools.py:62 faithfully
+rejects review when confirmed_scope is absent; this check should remain.
+
+Local pure reproduction of actual method, no DB/provider/worker:
+first actual answer -> None
+second actual answer -> production scope
+'不要按生产环境规范检查。' -> production scope (unsafe substring positive)
+First import attempt lacked runtime/src; corrected PYTHONPATH and reproduced.
+This is not evidence of actual unauthorized tool invocation; it identifies a
+potential negative-answer misclassification in current implementation.
+
+Original scope evidence is a separate conservative extractor:
+native_confirmed_scope.py:31 requires direct instruction plus exact policy scope
+label; original '帮我按系统里的生产交接规范...' does not contain '生产环境'.
+The generated business draft cannot be promoted to user confirmation. Even if
+one initial question is retained conservatively, the actual bound affirmative
+answer should close it once rather than requiring verbatim scope repetition.
+
+Recommended minimal G1 (not yet implemented)
+1. Keep owner answer authority, exact invocation/questionKey/digest/principal/run,
+   expiry/current START+USE checks unchanged. Pass the verified question-answer
+   pair to the document adapter; never concatenate arbitrary old chat text.
+2. Add a bounded generic scope-confirmation resolver driven by the actual policy
+   scope set, never the string '生产环境'. Explicit user scope statements use the
+   existing conservative positive/negative/conflict rules. A short affirmative
+   may accept only an unambiguous affirmative confirmation proposition in the
+   exact question containing one allowed scope, with no alternative/negative/
+   hypothetical/reported-text/uncertain premise or contradictory answer.
+   If the question/answer cannot establish that relation, retain clarification.
+3. Treat unrelated no-deployment/read-only constraints separately from denial of
+   the scope. Preserve a previously proved scope across unrelated questions;
+   explicit contradiction must invalidate it, not retain silently. Do not allow
+   user scope evidence to change resource refs or grant data/tool permission.
+4. Keep a digest-bound interpretation observation in the existing Native journal
+   or original clarification result only after exact pair verification; no new
+   authority store. Historical records are not rewritten. If extra observation
+   requires a frozen result-contract change, report exact difference first.
+5. No extra classification model call. Keep current model profile/output schema
+   unchanged for this bounded adapter fix. More general semantic interpretation
+   via a typed model output would be a separate explicit contract/profile change,
+   not smuggled into this G1 or achieved by another routing call.
+
+Required isolated verification before integration
+- Exact live question + first answer confirms scope once; review no repeat.
+- Same behavior for another policy label (not a production-specific string fix).
+- Explicit denial ('不要按…'), uncertainty, alternatives, quoted scope,
+  hypothetical question, contradictory yes+correction all fail closed.
+- Same answer to different question digest/invocation/run/subject/source cannot
+  be used; revoked/expired owner answer still rejected.
+- Existing confirmed scope + unrelated answer does not erase valid evidence;
+  explicit scope change/contradiction does not silently carry old selection.
+- Controlled full Native question -> saved answer -> tools -> result journal,
+  repeated delivery/restart no duplicate answer/model/tool effect.
+- One later real new task verifies natural affirmative and original result
+  return; do not replay this already successful task for demonstration.
+
+Scope: document adapter/runtime binding and tests, no public CRD, new scheduler,
+permission, model output schema, real history rewrite or automatic execution
+retry. Root decides integration/real validation; this report is diagnosis only.
+
+Implementation refinement following independent review
+- Short affirmative interpretation accepts only fully parsed bounded clauses:
+  exact affirmation, current-material referential inspection, complete no-effect
+  constraints, and continue/return-result instruction. Unrecognized tails remain
+  unresolved. It is not a general natural-language inference engine.
+- Explicit scope selection also validates the complete first clause and tails;
+  an unknown different environment cannot hide after a recognized scope.
+- Unknown scope propositions and explicit withdrawal invalidate the old selection
+  even when the current question is unrelated; ordinary unrelated answers retain it.
+- The existing saved question/digest/answer is sufficient interpretation evidence;
+  no new persisted observation shape, journal key or frozen contract is changed.
+- Initial scope-message extraction remains unchanged and is a separate limitation.
+- Both live confirmation forms are now explicit regression fixtures. '是否按'
+  is a positive yes/no proposition, not a denial. A second policy name in its
+  tail is recognized only as an exact title/first heading from the already-loaded
+  POLICY with that scope. Unknown/other-scope policy labels remain unresolved.
+- Implementation evidence: 81 pure scope/document/original-extractor checks pass;
+  22 existing PostgreSQL extractor tests skipped (no DB configured). Another27
+  existing owner-boundary/subject pure checks pass; one dedicated PG interaction
+  test skipped. No actual model/task replay, deployment or new grant.
+- Natural expressions outside this bounded grammar can still require clarification;
+  initial pre-execution scope extraction and asynchronous human waiting remain
+  separate limitations. No claim of general natural-language scope understanding.

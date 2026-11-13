@@ -509,7 +509,9 @@ class NativeLoopRuntime:
                     run_id=p.run_id,
                     policy_expiry=self.expiry,
                 )
-                library.record_answer(reply["answer"])
+                from .native_scope_answer import record_bound_answer
+
+                record_bound_answer(library, question, reply)
                 return reply
 
             ports.clarify = clarify
