@@ -27,6 +27,7 @@ class BeginDraftAssistance(BaseModel):
     expectedParentVersion: int = Field(default=0, ge=0)
     predecessorInvocationId: str | None = Field(default=None, max_length=128)
     conversationRouting: bool = False
+    failedRetryOf: str | None = Field(default=None, min_length=1, max_length=128)
     conversationId: str | None = Field(default=None, min_length=1, max_length=128)
     conversationMessageId: str | None = Field(
         default=None, min_length=1, max_length=128
@@ -49,6 +50,10 @@ class LinkDraftProblem(BaseModel):
 
 
 def _status(reason: str) -> int:
+    if reason == "CONVERSATION_FAILED_RETRY_IN_PROGRESS":
+        return 503
+    if reason.startswith("CONVERSATION_FAILED_RETRY_"):
+        return 409
     if (
         reason.startswith("CONTEXT_ADMISSION_")
         or reason == "DRAFT_AUTHORIZATION_UNAVAILABLE"
@@ -310,6 +315,44 @@ def install_draft_assistance_routes(
                     content={"reasonCode": exc.reason_code},
                 )
 
+        @app.get(f"{PREFIX}/conversations/{{conversation}}/understanding-failures")
+        def understanding_failures(conversation: str, request: Request):
+            _, context = authenticate(request)
+            from .conversation_understanding_failure import discover
+            from .private_conversation import ConversationError
+
+            try:
+                actions = getattr(request.app.state, "conversation_actions", None)
+                if not actions:
+                    raise DraftAssistanceError("CONVERSATION_UNDERSTANDING_UNAVAILABLE")
+                return {
+                    "result": discover(
+                        actions,
+                        context,
+                        conversation,
+                        service,
+                        service_for,
+                        _payload,
+                        getattr(
+                            request.app.state, "conversation_relation_reader", None
+                        ),
+                        getattr(
+                            request.app.state,
+                            "conversation_adoption_source_input",
+                            None,
+                        ),
+                    )
+                }
+            except ConversationError as exc:
+                return JSONResponse(
+                    status_code=exc.status, content={"reasonCode": exc.reason}
+                )
+            except DraftAssistanceError as exc:
+                return JSONResponse(
+                    status_code=_status(exc.reason_code),
+                    content={"reasonCode": exc.reason_code},
+                )
+
         @app.post(f"{PREFIX}/draft-assistance/invocations", status_code=201)
         async def begin(body: BeginDraftAssistance, request: Request):
             from .conversation_actions import original_action
@@ -321,6 +364,10 @@ def install_draft_assistance_routes(
                 from .private_conversation import ConversationError, digest
 
                 conversation = body.conversationId
+                if body.failedRetryOf and not body.conversationRouting:
+                    raise DraftAssistanceError(
+                        "CONVERSATION_FAILED_RETRY_CONTEXT_CHANGED"
+                    )
                 if body.conversationRouting and (
                     active_service is None
                     or active_service.profile.adapter_revision
@@ -416,9 +463,51 @@ def install_draft_assistance_routes(
                         )
                         else None
                     )
+                    if body.failedRetryOf:
+                        from .conversation_source_input import current_source_metadata
+                        from .conversation_understanding_failure import (
+                            require,
+                            require_snapshot,
+                            successor_key,
+                        )
+
+                        original = (
+                            service_for(context, body.failedRetryOf)
+                            .read(context, body.failedRetryOf)
+                            .invocation
+                        )
+                        require(
+                            body.idempotencyKey == successor_key(original.invocation_id)
+                        )
+                        with bind_attachment(attachment):
+                            selected = current_source_metadata()
+                        require_snapshot(
+                            original,
+                            subject=context.principal_id,
+                            conversation=conversation,
+                            message_id=body.conversationMessageId,
+                            snapshot=snapshot,
+                            source=selected,
+                        )
+                        from .conversation_understanding_failure import retry_content
+
+                        text_digest = retry_content(
+                            actions,
+                            context,
+                            conversation,
+                            body.conversationMessageId,
+                            body.content,
+                        )
+                        snapshot = {
+                            **snapshot,
+                            "failedRetryOf": original.invocation_id,
+                            "failedRetryInputDigest": text_digest,
+                        }
+                    from .conversation_understanding_failure import begin_retry
+
                     with bind_attachment(attachment), bind_snapshot(snapshot):
                         value = _payload(
-                            begin_bound(
+                            (begin_retry if body.failedRetryOf else begin_bound)(
                                 active_service,
                                 context,
                                 conversation=conversation,

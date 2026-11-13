@@ -27,6 +27,9 @@ def metadata_for_snapshot(value, *, include_source_branch=True):
             "target",
         )
     }
+    if value.get("failedRetryOf") is not None:
+        metadata["failedRetryOf"] = value["failedRetryOf"]
+        metadata["failedRetryInputDigest"] = value["failedRetryInputDigest"]
     if include_source_branch:
         current = value.get("input") or {}
         metadata["sourceInputBranch"] = {

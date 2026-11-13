@@ -8,7 +8,8 @@ import {notifyConversationReply,notifyConversationSend} from './useConversationS
 import type {RoutedOwner,ConversationRoutingValue,RoutedOwnerTarget} from './ConversationRoutingContext';
 
 type Phase='MESSAGE_PENDING'|'MODEL_PENDING'|'READY_TO_APPLY'|'APPLYING'|'DONE'|'REVIEW';
-type Saved={key:string;messageKey:string;messageId?:string;text:string;phase:Phase;thread:UserFactMessage[];previousQuestion?:string;relation?:string;ownerTarget?:RoutedOwnerTarget;persistentRecovery?:boolean;observedOwner?:RoutedOwnerTarget;lastResult?:{state:string;reasonCode:string|null};unacceptedPreview?:string};
+type Saved={key:string;messageKey:string;messageId?:string;text:string;phase:Phase;thread:UserFactMessage[];previousQuestion?:string;relation?:string;ownerTarget?:RoutedOwnerTarget;persistentRecovery?:boolean;observedOwner?:RoutedOwnerTarget;lastResult?:{state:string;reasonCode:string|null};unacceptedPreview?:string;failedRetryOf?:string;failureInvocationId?:string;routeRejected?:boolean};
+type FailedItem={invocationId:string;messageId:string;originalText:string;state:string;reasonCode:string;target:RoutedOwnerTarget;continuationEligible:boolean;successorRequestKey:string;successor:DraftAssistanceResult|null};
 type ExactRoute={relation:string;originalText:string;messageId:string;target:RoutedOwnerTarget|null};
 function restored(key:string):Saved|null{try{const raw=sessionStorage.getItem(key);if(!raw||raw.length>64000)return null;const value=JSON.parse(raw);return typeof value?.key==='string'&&typeof value.messageKey==='string'&&typeof value.text==='string'&&Array.isArray(value.thread)&&['MESSAGE_PENDING','MODEL_PENDING','READY_TO_APPLY','APPLYING','DONE','REVIEW'].includes(value.phase)?value:null}catch{return null}}
 function notDispatched(error:unknown){return error instanceof WorkbenchRequestError&&error.status===404&&error.reasonCode==='CONVERSATION_REQUEST_NOT_DISPATCHED'}
@@ -21,7 +22,7 @@ function sameTarget(expected:RoutedOwnerTarget,actual:RoutedOwnerTarget){
 }
 export function useConversationRouting({enabled,conversation,session,onMessagesChanged}:{enabled:boolean;conversation:string|null;session:WorkbenchSession;onMessagesChanged:()=>Promise<void>}){
  const scope=conversationScope(session),storage='conversation-routing.v1:'+scope+':'+conversation;
- const [saved,setSaved]=useState<Saved|null>(()=>restored(storage)),[busy,setBusy]=useState(false),[notice,setNotice]=useState(()=>{const r=restored(storage)?.lastResult;return r?terminalNotice(r.state,r.reasonCode):''}),[preview,setPreview]=useState(()=>restored(storage)?.unacceptedPreview??''),[modelState,setModelState]=useState(saved?.lastResult?.state??'UNKNOWN'),[canResume,setCanResume]=useState(false),[ownerEpoch,setOwnerEpoch]=useState(0);
+ const [saved,setSaved]=useState<Saved|null>(()=>restored(storage)),[busy,setBusy]=useState(false),[notice,setNotice]=useState(()=>{const r=restored(storage)?.lastResult;return r?terminalNotice(r.state,r.reasonCode):''}),[preview,setPreview]=useState(()=>restored(storage)?.unacceptedPreview??''),[failedCandidate,setFailedCandidate]=useState<FailedItem|null>(null),[modelState,setModelState]=useState(saved?.lastResult?.state??'UNKNOWN'),[canResume,setCanResume]=useState(false),[ownerEpoch,setOwnerEpoch]=useState(0);
  const previewRef=useRef(preview);
  const current=useRef(saved),flight=useRef(false),alive=useRef(true),owners=useRef(new Map<symbol,RoutedOwner>()),refresh=useRef(onMessagesChanged);useEffect(()=>{refresh.current=onMessagesChanged},[onMessagesChanged]);
  const persist=useCallback((value:Saved)=>{current.current=value;try{sessionStorage.setItem(storage,JSON.stringify(value))}catch{/* The server still owns the saved request. */}if(alive.current)setSaved(value)},[storage]);
@@ -68,7 +69,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   if(!alive.current)return false;
   setModelState(result.state);
   if(result.state!=='SUCCEEDED'){
-   if(['FAILED','CANCELLED','REJECTED'].includes(result.state)){const lastResult={state:result.state,reasonCode:result.reasonCode??null};persist({...request,phase:'REVIEW',lastResult,unacceptedPreview:previewRef.current});setNotice(terminalNotice(lastResult.state,lastResult.reasonCode));}
+   if(['FAILED','CANCELLED','REJECTED'].includes(result.state)){const lastResult={state:result.state,reasonCode:result.reasonCode??null};persist({...request,phase:'REVIEW',failureInvocationId:result.invocationId,lastResult,unacceptedPreview:previewRef.current});setNotice(terminalNotice(lastResult.state,lastResult.reasonCode));}
    else {persist({...request,unacceptedPreview:previewRef.current});setNotice(['RUNNING','ACCEPTED','DISPATCHING','DISPATCH_PREPARED'].includes(result.state)?'这条补充仍在处理，正在保留原请求；不会重复提交。':'这条补充的处理结果尚未核实，生成文字未被采纳。原请求保留，不会自动重复提交。');}
    return false;
   }
@@ -90,7 +91,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   await verify();
   let route:ExactRoute;
   try{route=await conversationRequest<ExactRoute>('/'+encodeURIComponent(conversation)+'/understanding-results/'+encodeURIComponent(request.messageId)+'/route?'+new URLSearchParams({requestKey:request.key}));}
-  catch(e){if(e instanceof WorkbenchRequestError&&[400,403,404,409,410,422].includes(e.status))persist({...request,phase:request.ownerTarget?.kind==='UNDERSTANDING'?'APPLYING':'REVIEW'});throw e;}
+  catch(e){if(e instanceof WorkbenchRequestError&&[400,403,404,409,410,422].includes(e.status))persist({...request,phase:request.ownerTarget?.kind==='UNDERSTANDING'?'APPLYING':'REVIEW',routeRejected:true});throw e;}
   await verify();
   if(route.relation!=='CURRENT_QUESTION'||route.messageId!==request.messageId||route.originalText!==request.text||!route.target)throw Error('原问题对应关系已变化，未提交或改投其他任务。');
   const matches=[...owners.current.values()].filter(owner=>sameTarget(owner.target,route.target!));
@@ -141,7 +142,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
  // Restoration is strictly read-only: never dispatch or apply a recovered answer.
  const readSavedEffect=useEffectEvent(readSaved),savedKey=saved?.key,savedPhase=saved?.phase;
  useEffect(()=>{
-  if(!enabled||!savedKey||!savedPhase||(['DONE','READY_TO_APPLY'].includes(savedPhase)||savedPhase==='REVIEW'&&Boolean(current.current?.lastResult)))return;
+  if(!enabled||!savedKey||!savedPhase||(['DONE','READY_TO_APPLY'].includes(savedPhase)||savedPhase==='REVIEW'&&Boolean(current.current?.lastResult||current.current?.routeRejected)))return;
   let live=true,timer:ReturnType<typeof setTimeout>|undefined;
   const tick=async()=>{if(await readSavedEffect()&&live)timer=setTimeout(tick,3000)};void tick();
   return()=>{live=false;clearTimeout(timer)};
@@ -162,7 +163,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   if(!conversation||!request.messageId)return false;
   setCanResume(false);setModelState('RUNNING');
   const content=conversationUnderstandingContent(request.thread,request.previousQuestion?{clarificationQuestion:request.previousQuestion} as DraftAssistanceResult:undefined);
-  const result=await beginDraftAssistance(session.csrfToken,{idempotencyKey:request.key,content,conversationId:conversation,conversationMessageId:request.messageId,conversationRouting:true},{},event=>{if(alive.current){setNotice('正在处理这条补充，原工作继续保留。');if(event.preview){previewRef.current=event.preview.slice(-600);setPreview(previewRef.current)}}});
+  const result=await beginDraftAssistance(session.csrfToken,{idempotencyKey:request.key,content,conversationId:conversation,conversationMessageId:request.messageId,conversationRouting:true,...(request.failedRetryOf?{failedRetryOf:request.failedRetryOf}:{})},{},event=>{if(alive.current){setNotice('正在处理这条补充，原工作继续保留。');if(event.preview){previewRef.current=event.preview.slice(-600);setPreview(previewRef.current)}}});
   await verify();return await accept(result,request,true);
  }
  async function resumeUnstarted(){
@@ -177,7 +178,20 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   finally{flight.current=false;if(alive.current)setBusy(false)}
  }
  useEffect(()=>{sendHandler.current=send});
+ async function failureCandidates(){if(!conversation)return [];await verify();const value=await conversationRequest<{items:FailedItem[]}>('/'+encodeURIComponent(conversation)+'/understanding-failures');await verify();if(!Array.isArray(value.items))throw Error('原理解失败记录尚未核实。');return value.items}
+ const discoverFailure=useEffectEvent(async()=>{
+  if(!enabled||flight.current||current.current&&!['DONE','REVIEW'].includes(current.current.phase))return;
+  const before=current.current;
+  try{const candidates=await failureCandidates();if(!alive.current||flight.current||current.current!==before)return;const exact=candidates.find(item=>item.target?.kind==='UNDERSTANDING'&&[...owners.current.values()].some(o=>sameTarget(item.target,o.target)));if(!alive.current)return;setFailedCandidate(exact??null);
+   if(exact?.successor&&!current.current){const request:Saved={key:exact.successorRequestKey,messageKey:exact.messageId,messageId:exact.messageId,text:exact.originalText,thread:[{id:'user:'+exact.messageId,text:exact.originalText}],phase:'MODEL_PENDING',observedOwner:exact.target,failedRetryOf:exact.invocationId};persist(request);await accept(exact.successor,request,false);return}
+   if(exact&&!exact.successor){const request=current.current;if(!request||request.phase==='REVIEW'){const lastResult={state:exact.state,reasonCode:exact.reasonCode};persist({key:exact.successorRequestKey+':failed',messageKey:exact.messageId,messageId:exact.messageId,text:exact.originalText,thread:[{id:'user:'+exact.messageId,text:exact.originalText}],phase:'REVIEW',observedOwner:exact.target,lastResult,failureInvocationId:exact.invocationId,unacceptedPreview:request?.failureInvocationId===exact.invocationId?request.unacceptedPreview:undefined});setNotice(terminalNotice(lastResult.state,lastResult.reasonCode))}}
+  }catch{/* Failure discovery cannot authorize a retry; retain the original view. */}
+ });
+ useEffect(()=>{if(!enabled)return;const timer=setTimeout(()=>void discoverFailure(),0);return()=>clearTimeout(timer)},[enabled,ownerEpoch,saved?.failureInvocationId]);
+ async function retryFailed(){const previous=failedCandidate;if(!previous||!previous.continuationEligible||flight.current)return;flight.current=true;setBusy(true);try{const candidates=await failureCandidates();if(!alive.current)return;const found=candidates.find(i=>i.invocationId===previous.invocationId);if(!found||!found.continuationEligible||found.successor||!sameTarget(previous.target,found.target)||![...owners.current.values()].some(o=>sameTarget(found.target,o.target)))throw Error('原问题或资料已变化，未重新调用模型。');
+   const request:Saved={key:found.successorRequestKey,messageKey:found.messageId,messageId:found.messageId,text:found.originalText,phase:'MODEL_PENDING',thread:[{id:'user:'+found.messageId,text:found.originalText}],observedOwner:found.target,failedRetryOf:found.invocationId};persist(request);setFailedCandidate(null);setPreview('');previewRef.current='';await dispatchSaved(request);
+  }catch(e){if(alive.current){setModelState('UNKNOWN');setNotice(failureNotice(e))}}finally{flight.current=false;if(alive.current)setBusy(false)}}
  async function continueAnswer(){if(flight.current||current.current?.phase!=='READY_TO_APPLY')return;flight.current=true;setBusy(true);try{await applyOwner(current.current)}catch(e){if(alive.current)setNotice(failureNotice(e))}finally{flight.current=false;if(alive.current)setBusy(false)}}
  const blocked=Boolean(saved&&!['DONE','REVIEW'].includes(saved.phase));
- return {context,send,busy,blocked,notice,preview,previewLabel:saved?.lastResult?'本条回复未被采纳':['RUNNING','ACCEPTED','DISPATCHING','DISPATCH_PREPARED'].includes(modelState)?'本条回复生成中':'本条回复待核实',previewNotice:saved?.lastResult?'以下生成文字未被采纳，不作为处理结果：':['RUNNING','ACCEPTED','DISPATCHING','DISPATCH_PREPARED'].includes(modelState)?'正在生成回复，尚未核验：':'生成文字尚未核实，不作为处理结果：',readSaved,continueAnswer,canResume,resumeUnstarted,acceptedKey:saved?.phase==='DONE'?saved.key:undefined,acceptedText:saved?.phase==='DONE'?saved.text:undefined,persistentRecovery:saved?.persistentRecovery===true,readyToApply:saved?.phase==='READY_TO_APPLY'};
+ return {context,send,busy,blocked,notice,preview,retryFailed,canRetryFailed:failedCandidate?.continuationEligible===true&&!failedCandidate.successor,previewLabel:saved?.lastResult?'本条回复未被采纳':['RUNNING','ACCEPTED','DISPATCHING','DISPATCH_PREPARED'].includes(modelState)?'本条回复生成中':'本条回复待核实',previewNotice:saved?.lastResult?'以下生成文字未被采纳，不作为处理结果：':['RUNNING','ACCEPTED','DISPATCHING','DISPATCH_PREPARED'].includes(modelState)?'正在生成回复，尚未核验：':'生成文字尚未核实，不作为处理结果：',readSaved,continueAnswer,canResume,resumeUnstarted,acceptedKey:saved?.phase==='DONE'?saved.key:undefined,acceptedText:saved?.phase==='DONE'?saved.text:undefined,persistentRecovery:saved?.persistentRecovery===true,readyToApply:saved?.phase==='READY_TO_APPLY'};
 }

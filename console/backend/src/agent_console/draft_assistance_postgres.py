@@ -419,6 +419,10 @@ class PostgresDraftAssistanceRepository(_Pool):
 
                     lock_context(connection, candidate.scope, candidate.context_id)
                     require_unconsumed_parent(connection, candidate)
+                if (candidate.conversation_context or {}).get("failedRetryOf"):
+                    from .conversation_understanding_failure import require_retry_claim
+
+                    require_retry_claim(connection, candidate)
                 if candidate.conversation_context:
                     from .understanding_adoption_postgres import (
                         require_unconsumed_question,

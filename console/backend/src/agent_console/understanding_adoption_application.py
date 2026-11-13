@@ -154,6 +154,12 @@ class UnderstandingAdoptionApplication:
                     ctx, conversation, message, connection=connection
                 )
                 require(selected == actual.input_source, "SOURCE_CHANGED")
+                if (actual.conversation_context or {}).get("failedRetryOf"):
+                    from .conversation_understanding_failure import (
+                        verified_retry_metadata,
+                    )
+
+                    current = verified_retry_metadata(connection, actual, current)
                 facts = connection.execute(
                     "SELECT facts FROM private_conversation.message_facts WHERE "
                     "tenant_id=%s AND security_domain=%s AND conversation_id=%s AND "

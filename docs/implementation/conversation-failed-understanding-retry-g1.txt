@@ -1,0 +1,15 @@
+G1: 原会话持久失败发现与显式单次后继理解
+
+范围：仅 FAILED / OUTPUT_SCHEMA_INVALID，正式结算 ESTIMATE_SETTLED，原本地调用已 reaped 且有 terminal observation；当前本人 owned 未归档会话、精确消息和 UNDERSTANDING owner/source 均未变化。旧失败、正文、草案和账本不可改。无新表、无宽授权、无模型 schema 变更。
+
+GET understanding-failures 从真实 invocation versions 与真实用户消息列举最多20条，以当前服务原 READ 核实。读取不派发模型、不授 retry。原失败不可读、当前 source/owner不匹配则无可用继续资格。后继存在只读恢复，不发第二请求。
+
+显式 POST 使用 failedRetryOf + 原消息内容，服务器要求 canonical 原补充上下文与固定 successor key。现 owner 事务中 idempotency claim → conversation → journal → 原 context，重新核原FAILED、settled/reaped、原作者/消息非assistant、内容digest、当前journal完整target和source版本；冲突全部回滚。模型仍走现admission、预算、授权、审计。旧key不重派。
+
+并发输家可能在新claim已持久但exact READ尚未安装时无法读取：保持原READ拒绝，不返回该invocation；仅映射503 IN_PROGRESS，客户端UNKNOWN保留确定key，只GET恢复。不会依据503生成另一key。
+
+正式结果采用重新检查同一failed origin和当前snapshot/source/消息digest后构建retry元事实，继续原adoption全部精确比对和settlement检查；不能仅模型SUCCEEDED当已采用。
+
+前端跨刷新/新登录从服务端发现失败。显式“沿用原补充继续理解”先只读复核；不新写用户消息、不自动POST。已有成功后继在新页面只读恢复后仍需显式采用（accept automatic=false）。原输入/工作保留。
+
+验证范围：隔离真实PG owner与受控provider；受控浏览器。不是实际模型/安装验收。主线负责原真实会话重新登录→发现→显式继续→采用及账本对照。

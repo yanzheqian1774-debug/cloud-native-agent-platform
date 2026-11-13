@@ -238,3 +238,27 @@ test('owned source selection uses published name and distinguishes readable scop
  const s=await fixture(page,true);const allowed={...source,name:'生产上线交接与检查规范（合成测试）',label:'文档检查资料',businessEligibility:{state:'SOURCE_SCOPE_MATCHED',executionReady:false}},readonly={...source,name:'旧交接说明',businessEligibility:{state:'READ_ONLY',executionReady:false}};
  await page.route('**/conversations/adoption/sources',route=>route.fulfill({json:{result:{items:[readonly,allowed]}}}));await page.goto('/work?conversation=adoption');await expect(page.getByRole('button',{name:'使用生产上线交接与检查规范（合成测试）',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'使用旧交接说明',exact:true})).toBeDisabled();await expect(page.getByText('文档检查资料 · 已匹配当前资料处理范围，仍需核对本次要求与执行条件。',{exact:true})).toBeVisible();expect(s.calls).toHaveLength(0);expect(s.writes).toHaveLength(0);
 });
+
+for(const eligible of [true,false])test(`persisted failed understanding discovers original message and explicit continuation eligible=${eligible}`,async({page},info)=>{
+ const s=await fixture(page);s.journal.state.source=source;
+ s.messages.push({message_id:'failed-user',content:'生产环境',author_id:'human:alice',disposition:'FOLLOWUP_RECORDED'});
+ const d=s.journal.state.draft,target={kind:'UNDERSTANDING',invocationId:d.invocationId,contextId:d.contextId,turnId:d.turnId,turnVersion:d.turnVersion,aggregateVersion:d.aggregateVersion,journalVersion:s.journal.version,journeyKey:s.journal.state.key};
+ let reads=0;
+ await page.route('**/conversations/adoption/understanding-failures',route=>{reads++;return route.fulfill({json:{result:{items:[{invocationId:'failed-call',messageId:'failed-user',originalText:'生产环境',state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',target,inputSource:source,continuationEligible:eligible&&!s.last,successorRequestKey:'failed-understanding:fixed',successor:s.last}],complete:true,modelDispatched:false}}})});
+ await page.goto('/work?conversation=adoption');await expect.poll(()=>reads).toBeGreaterThan(0);
+ await expect(page.getByText('本次补充的回复格式校验未通过，生成文字未被采纳。原问题、输入与原任务均保留，不会自动重试。',{exact:true})).toBeVisible();
+ const retry=page.getByRole('button',{name:'沿用原补充继续理解',exact:true});
+ if(!eligible){await expect(retry).toHaveCount(0);expect(s.calls).toHaveLength(0);return}
+ await expect(retry).toBeVisible();await page.reload();await expect(retry).toBeVisible();expect(s.calls).toHaveLength(0);
+ await page.screenshot({path:info.outputPath('persisted-failure.png'),fullPage:true});
+ await retry.click();await expect.poll(()=>s.calls.length).toBe(1);expect(s.calls[0].failedRetryOf).toBe('failed-call');expect(s.calls[0].idempotencyKey).toBe('failed-understanding:fixed');expect(s.calls[0].conversationMessageId).toBe('failed-user');expect(JSON.parse(s.calls[0].content as string).messages).toEqual([{id:'user:failed-user',text:'生产环境'}]);expect(s.writes.filter(p=>p.endsWith('/messages'))).toHaveLength(0);
+ await expect.poll(()=>s.adoptions.length).toBe(1);await page.reload();expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);
+});
+
+test('persisted successor is read after new login without dispatch or automatic adoption',async({page})=>{
+ const s=await fixture(page);s.journal.state.source=source;
+ const d=s.journal.state.draft,target={kind:'UNDERSTANDING',invocationId:d.invocationId,contextId:d.contextId,turnId:d.turnId,turnVersion:d.turnVersion,aggregateVersion:d.aggregateVersion,journalVersion:s.journal.version,journeyKey:s.journal.state.key};
+ const successor={...d,invocationId:'already-succeeded',contextId:'new-context',turnId:'new-turn',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'确认检查边界',conversationDelivery:{state:'SAVED',messageId:'saved-response'},conversationRoute:{relation:'CURRENT_QUESTION',currentQuestionToken:'token',contextDigest:'d'.repeat(64)}};
+ await page.route('**/conversations/adoption/understanding-failures',route=>route.fulfill({json:{result:{items:[{invocationId:'failed-call',messageId:'failed-user',originalText:'生产环境',state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',target,continuationEligible:false,successorRequestKey:'fixed-successor',successor}],complete:true}}}));
+ await page.goto('/work?conversation=adoption');await expect(page.getByRole('button',{name:'继续提交这条回答',exact:true})).toBeVisible();expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);expect(s.writes).toHaveLength(0);
+});
