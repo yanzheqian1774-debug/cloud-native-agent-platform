@@ -48,7 +48,11 @@ def describe(source, observed):
             "limitations": [
                 "仅使用所选测试资料",
                 "只读分析，不执行外部业务操作",
-                "原因与改善效果需要进一步证据",
+                *(
+                    []
+                    if schema == "document-review-source.v1"
+                    else ["原因与改善效果需要进一步证据"]
+                ),
             ],
         },
         "completionCriteria": criteria,

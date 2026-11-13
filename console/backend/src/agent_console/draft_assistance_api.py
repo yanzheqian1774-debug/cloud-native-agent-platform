@@ -82,6 +82,8 @@ def _status(reason: str) -> int:
 
 
 def _payload(response: DraftResponse) -> dict[str, Any]:
+    from .understanding_source_presentation import source_input_observation
+
     value = response.invocation
     recovered_without_content = (
         value.state.value == "SUCCEEDED"
@@ -96,6 +98,7 @@ def _payload(response: DraftResponse) -> dict[str, Any]:
     )
     return {
         "result": {
+            "sourceInputObservation": source_input_observation(response),
             "contextId": value.context_id,
             "turnId": value.turn_id,
             "turnVersion": value.turn_version,
@@ -223,10 +226,17 @@ def install_draft_assistance_routes(
         @app.get(f"{PREFIX}/draft-assistance/capabilities")
         def capabilities(request: Request):
             from .conversation_relation_admission import available
+            from .understanding_source_presentation import current_source_capability
 
             _, context = authenticate(request)
             return {
                 "result": {
+                    "selectedSourceContext": current_source_capability(
+                        routing_service,
+                        available(routing_service, context)
+                        and getattr(app.state, "understanding_adoption", None)
+                        is not None,
+                    ),
                     "conversationUnderstanding": service.profile.adapter_revision
                     in {"v3", "v3-execution", "v3-relation"},
                     "conversationRelationRouting": available(routing_service, context),

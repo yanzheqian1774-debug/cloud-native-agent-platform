@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from datetime import UTC, datetime
 
 from .conversation_answer_retention import read_retained, require_target
+from .conversation_relation_context import metadata_for_snapshot
 from .draft_assistance import DraftScope
 from .private_conversation import digest
 from .understanding_adoption_evidence import retained_evidence, target_from_result
@@ -144,16 +145,11 @@ class UnderstandingAdoptionApplication:
             def verify(connection, ctx, expected, original, actual):
                 self.authorize(connection, ctx, original, actual)
                 snapshot = self.reader(ctx, conversation, message, self.primary)
-                current = {
-                    k: snapshot[k]
-                    for k in (
-                        "conversationId",
-                        "messageId",
-                        "contextDigest",
-                        "currentQuestionToken",
-                        "target",
-                    )
-                }
+                current = metadata_for_snapshot(
+                    snapshot,
+                    include_source_branch="sourceInputBranch"
+                    in (actual.conversation_context or {}),
+                )
                 selected = self.source_reader(
                     ctx, conversation, message, connection=connection
                 )

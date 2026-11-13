@@ -7,7 +7,7 @@ async function fixture(page:Page,needsData=false,retained?:Awaited<ReturnType<ty
 }
 function freshState(needsData=false){
  const initial={state:'SUCCEEDED',resultKind:needsData?'NEEDS_DATA':'NEEDS_CLARIFICATION',invocationId:'initial',contextId:'initial-context',turnId:'initial-turn',turnVersion:1,aggregateVersion:5,clarificationQuestion:needsData?null:'请确认需要检查的环境。',dataNeeds:needsData?['请提供交接材料']:[],draft:null,conversationDelivery:{state:'SAVED',messageId:'original-answer'}};
- const state={calls:[] as Record<string,unknown>[],adoptions:[] as Record<string,unknown>[],writes:[] as string[],version:2,relation:'CURRENT_QUESTION',stale:false,lost:false,reject:false,receipt:null as Record<string,unknown>|null,last:null as Record<string,unknown>|null,target:null as Record<string,unknown>|null,denyReads:false,rejectCode:'UNDERSTANDING_ADOPTION_BUDGET_UNRESOLVED',rejectStatus:409,adoptionReadStatus:0,journalFailure:false,guardAfterCommit:false,
+ const state={calls:[] as Record<string,unknown>[],adoptions:[] as Record<string,unknown>[],writes:[] as string[],version:2,relation:'CURRENT_QUESTION',stale:false,lost:false,reject:false,receipt:null as Record<string,unknown>|null,last:null as Record<string,unknown>|null,target:null as Record<string,unknown>|null,denyReads:false,rejectCode:'UNDERSTANDING_ADOPTION_BUDGET_UNRESOLVED',rejectStatus:409,adoptionReadStatus:0,journalFailure:false,guardAfterCommit:false,sourceObservation:null as Record<string,unknown>|null,sourceCapability:undefined as string|undefined,
  journal:{version:7,state:{key:'work',phase:'CLARIFY',understandingProtocol:3,userMessageId:'original',question:'请检查交接材料',messages:[{id:'user:original',text:'请检查交接材料'}],draft:initial,sources:needsData?[source]:[],source:undefined as typeof source|undefined,log:[] as string[]}},
  messages:[{message_id:'original',content:'请检查交接材料',author_id:'human:alice',disposition:'GOAL_RECORDED'},{message_id:'original-answer',content:initial.clarificationQuestion??'请提供交接材料',kind:'SOURCE',facts:{assistantResponse:true,state:'SUCCEEDED',response:initial,source:{kind:'DRAFT',invocationId:initial.invocationId,contextId:initial.contextId,turnId:initial.turnId,turnVersion:initial.turnVersion}}}] as Record<string,unknown>[]};
  return state;
@@ -19,11 +19,12 @@ async function installRoutes(page:Page,state:ReturnType<typeof freshState>,initi
   if(p.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:alice',tenantId:'tenant',securityDomain:'domain'},csrfToken:'csrf',session:{}}});
   if(p.endsWith('/development-administrator'))return result({enabled:false});
   if(p.endsWith('/conversations/capabilities'))return result({enabled:true});
-  if(p.endsWith('/draft-assistance/capabilities'))return result({conversationUnderstanding:true,conversationRelationRouting:true,initialUnderstandingAdoption:true});
+  if(p.endsWith('/draft-assistance/capabilities'))return result({conversationUnderstanding:true,conversationRelationRouting:true,initialUnderstandingAdoption:true,selectedSourceContext:state.sourceCapability});
   if(p.endsWith('/conversations/adoption/journey')){if(b){if(state.journalFailure)return route.fulfill({status:503,json:{reasonCode:'JOURNAL_UNAVAILABLE'}});expect(b.expectedVersion).toBe(state.journal.version);state.journal={version:state.journal.version+1,state:b.state}}return result(state.journal)}
   if(p.endsWith('/conversations/adoption/messages')){expect(b.expectedVersion).toBe(state.version);state.version++;const id='user-'+state.version;state.messages.push({message_id:id,content:b.content,author_id:'human:alice',disposition:'FOLLOWUP_RECORDED',request_key:b.idempotencyKey});return result({identity:id})}
   if(p.endsWith('/conversations/adoption/head'))return result({conversation:{conversation_id:'adoption',version:state.version,title:'交接检查'}});
   if(p.endsWith('/conversations/adoption'))return result({conversation:{conversation_id:'adoption',version:state.version,title:'交接检查'},messages:state.messages,links:[]});
+  if(p.endsWith('/draft-assistance/invocations/initial'))return result({...initial,inputSource:source,sourceInputObservation:state.sourceObservation});
   if(p.endsWith('/draft-assistance/invocations')){
    state.calls.push(b);expect(b.conversationRouting).toBe(true);expect(b.predecessorInvocationId).toBeUndefined();const n=state.calls.length;
    const value={...initial,invocationId:'adopted-'+n,contextId:'result-context-'+n,turnId:'result-turn-'+n,resultKind:state.relation==='INDEPENDENT'?'DIRECT_ANSWER':'NEEDS_CLARIFICATION',clarificationQuestion:state.relation==='INDEPENDENT'?null:'还需要确认交接范围。',answer:state.relation==='INDEPENDENT'?'HTTP 是传输协议。':null,conversationDelivery:{state:'SAVED',messageId:'answer-'+n},conversationRoute:{relation:state.relation,currentQuestionToken:state.relation==='INDEPENDENT'?null:'token',contextDigest:'d'.repeat(64)}};
@@ -115,7 +116,7 @@ for(const code of ['CONVERSATION_INPUT_ACCESS_DENIED','OUTCOME_UNKNOWN'])test(`e
 
 test('NEEDS_DATA renders exact requested document content before generic hints',async({page})=>{
  const s=await fixture(page,true);s.journal.state.source=source;s.journal.state.draft.dataNeeds=['请提供上线交接说明正文。','请补充文中引用的清单与附件。'];await page.goto('/work?conversation=adoption');
- const needs=page.getByRole('list',{name:'需要补充的资料'});await expect(needs).toContainText('请提供上线交接说明正文。');await expect(needs).toContainText('请补充文中引用的清单与附件。');await expect(page.getByText('请补充你最关注的问题，例如关注的指标、时间或对象。',{exact:true})).toHaveCount(0);expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);
+ const needs=page.getByRole('list',{name:'本次回复提到的资料需求'});await expect(needs).toContainText('请提供上线交接说明正文。');await expect(needs).toContainText('请补充文中引用的清单与附件。');await expect(page.getByText('请补充你最关注的问题，例如关注的指标、时间或对象。',{exact:true})).toHaveCount(0);expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);
 });
 
 test('guard response cannot erase a concurrent saved adoption or enable model replay',async({page})=>{
@@ -136,4 +137,19 @@ test('explicit continuation rechecks stale route without exposing its technical 
 
 test('permission loss during uncertain adoption continuation preserves readback without new model',async({page})=>{
  const s=await fixture(page);s.reject=true;await page.goto('/work?conversation=adoption');await send(page,'生产环境');const button=page.getByRole('button',{name:'核对并继续已有回答',exact:true});await expect(button).toBeVisible();s.denyReads=true;await button.click();await expect(page.getByRole('button',{name:'发送',exact:true})).toBeDisabled();await page.reload();await expect(page.getByRole('button',{name:'发送',exact:true})).toBeDisabled();expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);
+});
+
+for(const mode of ['metadata-off','metadata-now-on','body','unverified','mismatch'] as const)test(`exact source input presentation ${mode}`,async({page})=>{
+ const s=await fixture(page,true);s.journal.state.source=source;s.journal.state.draft.dataNeeds=['请补充交接验收负责人。'];s.sourceCapability=mode==='metadata-off'?'METADATA_ONLY':'BODY_SUPPORTED';
+ s.sourceObservation={state:mode==='body'?'BODY_CONTEXT':mode==='unverified'?'UNVERIFIED':'METADATA_ONLY',invocationId:mode==='mismatch'?'other':'initial',aggregateVersion:5,source,basis:'RECORDED_ADAPTER_CONTRACT'};
+ await page.goto('/work?conversation=adoption');
+ if(mode.startsWith('metadata')){await expect(page.getByRole('heading',{name:'系统待接续资料处理',exact:true})).toBeVisible();await expect(page.locator('.journey-progress')).toContainText('系统待接续资料处理');await expect(page.getByText(mode==='metadata-off'?/当前正文接入尚未启用/:/当前已具备正文接入能力/).first()).toBeVisible();}
+ else if(mode==='body'){await expect(page.getByRole('heading',{name:'还需要补充信息',exact:true})).toBeVisible();await expect(page.getByRole('list',{name:'需要补充的资料'})).toContainText('请补充交接验收负责人。');await expect(page.locator('.journey-progress')).toContainText('等待你的回答');}
+ else await expect(page.getByRole('heading',{name:'资料处理状态待核对',exact:true})).toBeVisible();
+ const details=page.getByText('本次能做什么与完成标准',{exact:true}).locator('..');await expect(details).not.toHaveAttribute('open','');await expect(page.locator('.conversation-journey .conversation-message-time')).toHaveCount(0);expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);
+});
+test('late source observation cannot replace a newer question owner',async({page})=>{
+ const s=await fixture(page,true);s.journal.state.source=source;let release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/draft-assistance/invocations/initial',async route=>{await pending;await route.fulfill({json:{result:{...s.journal.state.draft,invocationId:'initial',contextId:'initial-context',aggregateVersion:5,inputSource:source,sourceInputObservation:{state:'METADATA_ONLY',invocationId:'initial',aggregateVersion:5,source,basis:'RECORDED_ADAPTER_CONTRACT'}}}})});
+ await page.goto('/work?conversation=adoption');await send(page,'验收负责人是项目经理');await expect.poll(()=>s.journal.state.draft.invocationId).toBe('adopted-1');release();await expect(page.getByRole('heading',{name:'有一点需要确认',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'系统待接续资料处理',exact:true})).toHaveCount(0);expect(s.calls).toHaveLength(1);expect(s.adoptions).toHaveLength(1);
 });

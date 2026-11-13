@@ -14,22 +14,30 @@ def current_snapshot():
     return _snapshot.get()
 
 
-def current_metadata():
-    value = current_snapshot()
-    return (
-        None
-        if value is None
-        else {
-            k: value[k]
-            for k in (
-                "conversationId",
-                "messageId",
-                "contextDigest",
-                "currentQuestionToken",
-                "target",
-            )
+def metadata_for_snapshot(value, *, include_source_branch=True):
+    if value is None:
+        return None
+    metadata = {
+        k: value[k]
+        for k in (
+            "conversationId",
+            "messageId",
+            "contextDigest",
+            "currentQuestionToken",
+            "target",
+        )
+    }
+    if include_source_branch:
+        current = value.get("input") or {}
+        metadata["sourceInputBranch"] = {
+            "currentQuestionType": current.get("currentQuestionType"),
+            "hasCurrentQuestion": bool(current.get("currentQuestion")),
         }
-    )
+    return metadata
+
+
+def current_metadata():
+    return metadata_for_snapshot(current_snapshot())
 
 
 @contextmanager

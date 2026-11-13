@@ -112,5 +112,5 @@ export async function logoutWorkbenchSession(){
  if(!response.ok)await decode(response);
 }
 
-export const readConversationUnderstandingCapability=()=>read<{conversationUnderstanding:boolean;conversationRelationRouting?:boolean;initialUnderstandingAdoption?:boolean}>("/draft-assistance/capabilities");
+export const readConversationUnderstandingCapability=()=>read<{conversationUnderstanding:boolean;conversationRelationRouting?:boolean;initialUnderstandingAdoption?:boolean;selectedSourceContext?:"METADATA_ONLY"|"BODY_SUPPORTED"|"UNAVAILABLE"}>("/draft-assistance/capabilities");
 export const readConversationUnderstandingResult=(conversation:string,message:string,key:string)=>read<DraftAssistanceResult>(`/conversations/${encodeURIComponent(conversation)}/understanding-results/${encodeURIComponent(message)}?${new URLSearchParams({requestKey:key})}`);

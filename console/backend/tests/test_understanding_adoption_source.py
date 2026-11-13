@@ -162,6 +162,16 @@ def test_explicit_authorized_source_supplement_is_exact_and_readback_only(adopte
     selected = select(e)
     path, value = answer(e)
     assert value["inputSource"]["source"] == selected
+    from agent_console.draft_assistance import DraftScope
+
+    recorded = e.draft.repository.get(
+        DraftScope.from_context(e.context), value["invocationId"]
+    )
+    assert recorded.conversation_context["sourceInputBranch"] == {
+        "currentQuestionType": "UNDERSTANDING",
+        "hasCurrentQuestion": True,
+    }
+    assert "currentQuestion" not in recorded.conversation_context["sourceInputBranch"]
     result = e.adoption_client.post(
         PREFIX + path, headers=e.adoption_headers, json={"requestKey": "answer"}
     )
@@ -362,3 +372,39 @@ def test_adoption_nested_source_read_completes_with_generation_writer_waiting(
     assert len(writers) == 1
     writers[0].join(2)
     assert not writers[0].is_alive() and entered.is_set()
+
+
+@pytest.mark.parametrize("adopted", ["NEEDS_DATA"], indirect=True)
+@pytest.mark.parametrize("legacy", [True, False])
+def test_branch_metadata_legacy_adoption_and_changed_branch_rejection(
+    adopted, monkeypatch, legacy
+):
+    from agent_console import conversation_relation_context as relation
+
+    e = adopted
+    select(e)
+    if legacy:
+        monkeypatch.setattr(
+            relation,
+            "current_metadata",
+            lambda: relation.metadata_for_snapshot(
+                relation.current_snapshot(), include_source_branch=False
+            ),
+        )
+    path, _ = answer(e)
+    application = e.adoption_client.app.state.understanding_adoption
+    if not legacy:
+        reader = application.reader
+
+        def changed(*args, **kwargs):
+            snapshot = reader(*args, **kwargs)
+            return {**snapshot, "input": {**snapshot["input"], "currentQuestion": ""}}
+
+        monkeypatch.setattr(application, "reader", changed)
+    result = e.adoption_client.post(
+        PREFIX + path, headers=e.adoption_headers, json={"requestKey": "answer"}
+    )
+    assert result.status_code == (200 if legacy else 409), result.text
+    if not legacy:
+        assert result.json()["reasonCode"] == "UNDERSTANDING_ADOPTION_QUESTION_CHANGED"
+    assert len(e.calls) == 1

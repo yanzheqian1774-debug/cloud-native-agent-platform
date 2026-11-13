@@ -1,0 +1,100 @@
+Base90e2387; inspection/design only, no actual platform operations, no UI fork.
+
+Verified current code
+- draft_assistance_api.py capabilities exposes conversationUnderstanding,
+  conversationRelationRouting, initialUnderstandingAdoption only. The latter
+  combines old v3-relation-adoption and source successor; it CANNOT prove body
+  support. Current frontend result has inputSource metadata but no body-delivery
+  evidence. NEEDS_DATA/dataNeeds text cannot determine who must act.
+- openai_responses_draft_adapter.py v3-relation-adoption strips originalContent;
+  v3-relation-adoption-source invokes understanding_source_body.provider_attachment.
+  Successor requires exact selected-source/current-question/READ snapshot facts.
+- Source successor is a separately configured service; workbench_bootstrap uses
+  conversation_source_adoption or conversation_adoption and retains history.
+  Its registered current adapter+available(service,context) can truthfully report
+  CURRENT capability. It does not prove an old invocation received source bytes.
+- Journey headline for all CLARIFY except NEEDS_CLARIFICATION says confirm source;
+  Progress all CLARIFY says waiting for your answer. Both overstate human action.
+
+Minimal additive G1 plan
+1. Extend existing authenticated capabilities GET (no new page/API/workflow) with
+   selectedSourceContext capability status: BODY_SUPPORTED / METADATA_ONLY /
+   UNAVAILABLE. Compute from actual selected service adapter and current existing
+   availability gate; no environment string in browser, no IDs/secret/config UI.
+   Missing field/GET failure means UNKNOWN, never interpreted as disabled.
+2. For current NEEDS_DATA with exact selected system source matching draft
+   inputSource metadata, show neutral '已选资料，系统处理待接续'. With authoritative
+   METADATA_ONLY capability add '系统尚未启用所选资料的正文接入；已保留资料选择，
+   当前无需重复上传或重新描述。' This describes CURRENT ability only, not historical
+   per-call delivery. Right rail '系统待处理', not reading/spinner/waiting for user.
+   BODY_SUPPORTED alone does not mean currently reading or previous body attached:
+   show '正在核对资料处理情况' only if a real GET observation is in flight; otherwise
+   '资料处理状态待核对'. No timer implies progress. No automatic model retry.
+3. Real body inclusion/user data gap requires per-invocation owner evidence.
+   Add read-only projection based on exact registered invocation profile + saved
+   server source/transport evidence; if original body delivery not persisted or
+   exact input cannot be proven, expose UNVERIFIED, never infer from model words.
+   Do not mutate old invocation/history. User-action prompt only if existing
+   owner actually requires source selection/no selected source, or future typed
+   authoritative user-input requirement; preserve model dataNeeds verbatim under
+   '本次回复提到的资料需求', without turning it into platform configuration tasks.
+   Current schema lacks typed origin for all NEEDS_DATA; universal classification
+   is a genuine remaining fact gap, not fixable with text matching.
+4. Keep F3 layout/components. Make completion criteria details collapsed by
+   default (Journey currently open={!execution}). Scope generic caveats in
+   conversation_capability.describe by schema; document review uses existing
+   criterion '章节存在不代表技术正确或获准上线', rather than sales improvement caveat.
+   Do not regex-filter backend model text or alter historical records.
+5. Journey progress identity is a status panel, not a newly recorded assistant
+   message. recordedUpdate only uses execution.events, therefore pre-execution
+   lacks timestamp. Add explicit status identity display with no absent-time
+   placeholder; preserve missing-time labels on actual persisted messages. Never
+   substitute current clock. If choosing real draft.submittedAt, label it as
+   request-submitted time, not latest status update.
+
+Checks for eventual implementation
+- capability absent/off/unavailable/on distinct; current enabled doesn't rewrite
+  old call's source delivery. No string matching, no client-created read evidence.
+- exact selected-source match required; changed/missing source stays unverified.
+- no source selection -> actual selection interaction; system backlog -> no user
+  blame/false reading; real request in flight only gets in-progress presentation.
+- preserve dataNeeds verbatim, UNKNOWN/permissions/adoption feedback precedence.
+- details default collapsed; document vs sales caveats; real message dates kept.
+- GET-only refresh: zero model/POST/new key. Existing request/call history unchanged.
+
+Order: current original-call body successor validation remains main priority.
+This small fact projection + existing F3 presentation follows it, not a new UI
+workstream and not a reason to repeat a successful model or reset its budget.
+
+IMPLEMENTED CANDIDATE
+Exact immutable invocation.snapshot already contains adapter_id/revision and
+profile_revision_id; it is not necessary to invent historical body-read facts.
+New read-only sourceInputObservation carries invocationId/aggregateVersion and
+source metadata. Only REAL_PROVIDER SUCCEEDED with matching snapshot/profile,
+terminal observation and exact CURRENT_QUESTION UNDERSTANDING source binding can
+classify known openai-responses-draft adapter versions. METADATA_ONLY means old
+C2 contract omitted originalContent; BODY_CONTEXT identifies the successor's
+validated input contract, NOT task completion or business completeness. Missing,
+synthetic, mismatched or future contracts are UNVERIFIED. No historical writes.
+
+Journey independently GETs original invocation; verifies id/context/version and
+source revision/digest/contentDigest against current owner before presentation.
+Late/read-failed observations cannot replace another owner; failures never retry
+models. Current capability is separate. Known metadata-only displays system
+pending; unverifiable displays state awaiting verification; BODY_CONTEXT still
+displays the model's original business questions under '还需要补充信息'.
+Permissions/UNKNOWN/adoption error presentation takes precedence. Requirements
+and limits default collapsed, document caveat no longer references business
+improvement, status panel hides absent timestamp while real message labels stay.
+
+PERSISTED BRANCH EVIDENCE FOLLOW-UP
+At original invocation creation, current_metadata derives only
+sourceInputBranch.currentQuestionType and hasCurrentQuestion from sealed snapshot
+input. No full question/body is retained. This additive conversationContext JSON
+fact needs no migration or model output schema/prompt change; contextDigest,
+target, token, old records and lifecycle transitions remain unchanged.
+Future BODY_CONTEXT additionally requires UNDERSTANDING + hasCurrentQuestion true.
+History without the fact stays UNVERIFIED. Adoption keeps strict whole-metadata
+comparison: only when actual has branch facts, reconstruct them independently
+from the current reader snapshot; legacy actual uses the original five fields.
+Never copy the actual branch into current proof. Read-chain comparisons unchanged.
