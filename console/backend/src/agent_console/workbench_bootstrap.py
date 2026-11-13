@@ -242,6 +242,23 @@ def build_workbench_composition(
         )
         team_targets = (TeamTargets(),)
 
+    fixed_work_path = None
+    if os.environ.get("FIXED_WORK_AUTHORING_ENABLED") == "true":
+        from .fixed_work_authoring import AuthoringPolicy
+        from .fixed_work_authoring_postgres import (
+            compatibility as fixed_work_compatibility,
+        )
+        from .workbench_fixed_work import (
+            fixed_work_operations as build_fixed_work_operations,
+        )
+
+        if team_repository is None:
+            raise ValueError("FIXED_WORK_TEAM_OWNER_REQUIRED")
+        fixed_work_path = os.environ.get("FIXED_WORK_AUTHORING_POLICY_PATH", "")
+        AuthoringPolicy.load(fixed_work_path)
+        with business_problems.problems.pool.connection() as connection:
+            fixed_work_compatibility(connection)
+
     capability_repository = None
     capability_targets = ()
     if os.environ.get("BUSINESS_CAPABILITIES_ENABLED") == "true":
@@ -986,6 +1003,15 @@ def build_workbench_composition(
                 *agent_operations(
                     agent_definitions,
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                ),
+                *(
+                    build_fixed_work_operations(
+                        fixed_work_path,
+                        foundation.grants.clock,
+                        WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                    )
+                    if fixed_work_path is not None
+                    else ()
                 ),
                 *employee_operations(
                     employee_definitions,

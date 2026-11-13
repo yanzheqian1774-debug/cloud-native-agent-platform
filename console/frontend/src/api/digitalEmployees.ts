@@ -583,3 +583,8 @@ export const listTeamOwnerCandidates=(signal?:AbortSignal)=>request<{items:TeamO
 
 export type ManagementActions={status?:'AVAILABLE'|'UNAVAILABLE';subjectId:string;tenantId:string;securityDomain:string;generation:number;recoveryEpoch:number;readAt:string;target:Record<string,string|number>|null;actions:Record<string,{authorized:boolean;lifecycleEligible:boolean}>;authorityGranted:false;executionStarted:false};
 export const getManagementCollectionActions=(kind:'teams'|'employees',signal?:AbortSignal)=>request<ManagementActions>(`${root}/${kind}/capabilities`,signal);
+
+const fixedWorkPath=(team:import('./fixedWorkDrafts').FixedTeam)=>`${root}/teams/${encodeURIComponent(team.teamId)}/revisions/${encodeURIComponent(team.revisionId)}/fixed-work-drafts`;
+export const listFixedWorkDrafts=(team:import('./fixedWorkDrafts').FixedTeam,cursor?:string,signal?:AbortSignal)=>request<import('./fixedWorkDrafts').FixedPage>(`${fixedWorkPath(team)}?${new URLSearchParams({pageSize:'25',...(cursor?{cursor}:{})})}`,signal);
+export const readFixedWorkDraft=(team:import('./fixedWorkDrafts').FixedTeam,work:string,revision:string,signal?:AbortSignal)=>request<import('./fixedWorkDrafts').FixedResult>(`${fixedWorkPath(team)}/${encodeURIComponent(work)}/revisions/${encodeURIComponent(revision)}`,signal);
+export const saveFixedWorkDraft=(team:import('./fixedWorkDrafts').FixedTeam,body:import('./fixedWorkDrafts').FixedCommand,principal:string,signal?:AbortSignal)=>command<import('./fixedWorkDrafts').FixedResult>(fixedWorkPath(team),body,principal,signal);

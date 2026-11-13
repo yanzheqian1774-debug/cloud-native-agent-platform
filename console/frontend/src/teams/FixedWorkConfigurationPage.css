@@ -1,0 +1,10 @@
+.f3-fixed-work .px-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:24px}
+.f3-fixed-work h1{margin:0 0 10px}.f3-fixed-work .eyebrow{color:var(--text-muted,#71839d);font-size:12px;letter-spacing:.08em}
+.f3-fixed-work .f3-team-card{margin-bottom:20px}.f3-fixed-work p{line-height:1.65}
+.f3-fixed-row{display:flex;justify-content:space-between;align-items:center;gap:24px;border-top:1px solid var(--border,#e2e8f2);padding:18px 0}
+.f3-fixed-row p{white-space:pre-wrap;overflow-wrap:anywhere}.f3-fixed-row small{color:var(--text-muted,#71839d)}
+.f3-fixed-editor label{display:flex;flex-direction:column;gap:8px;margin:18px 0;color:var(--text,#33445f);font-weight:600}
+.f3-fixed-editor input,.f3-fixed-editor textarea,.f3-fixed-editor select{box-sizing:border-box;width:100%;border:1px solid var(--border,#dce4f1);border-radius:8px;background:#fff;padding:10px 12px;font:inherit;color:inherit}
+.f3-fixed-editor textarea{min-height:120px;resize:vertical}.f3-fixed-editor :disabled{opacity:.7;cursor:default}
+.f3-fixed-schedule{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+@media(max-width:700px){.f3-fixed-work .px-heading,.f3-fixed-row{flex-direction:column;align-items:stretch}.f3-fixed-schedule{grid-template-columns:1fr;gap:0}.f3-fixed-work .f3-team-actions{flex-wrap:wrap}}
