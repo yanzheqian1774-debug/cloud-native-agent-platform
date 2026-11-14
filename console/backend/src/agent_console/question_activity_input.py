@@ -316,6 +316,19 @@ class QuestionActivityInput:
         capabilities = observe(
             a, call, source, selected["sourceSchema"], selected["_work"]
         )
+        observation = capabilities.get("state")
+        if observation not in {
+            "AUTHORIZED_MEMBER_DECLARATIONS_OBSERVED",
+            "NO_COMPATIBLE_VISIBLE_DECLARATIONS",
+        }:
+            return {
+                **base,
+                "state": "BLOCKED_CAPABILITY_READ_UNAVAILABLE"
+                if observation == "READ_UNAVAILABLE"
+                else "BLOCKED_CAPABILITY_UNVERIFIED",
+                "planningRequest": None,
+                "executionReady": False,
+            }
         required = {"READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"}
         available_operations = {op["operation"] for op in capabilities["operations"]}
         if not required <= available_operations:

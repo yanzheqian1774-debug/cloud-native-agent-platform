@@ -319,3 +319,58 @@ def test_source_directory_entry_uses_owner_authorization_and_hides_unavailable_s
             query={},
             handler=operation.handler,
         )
+
+
+@pytest.mark.parametrize(
+    "observation,operations,state,gaps",
+    [
+        ("READ_UNAVAILABLE", [], "BLOCKED_CAPABILITY_READ_UNAVAILABLE", False),
+        (
+            "UNVERIFIED",
+            ["READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"],
+            "BLOCKED_CAPABILITY_UNVERIFIED",
+            False,
+        ),
+        (
+            "NO_COMPATIBLE_VISIBLE_DECLARATIONS",
+            [],
+            "BLOCKED_MISSING_COMPATIBLE_TOOLS",
+            True,
+        ),
+        (
+            "AUTHORIZED_MEMBER_DECLARATIONS_OBSERVED",
+            ["READ_DATA", "ANALYZE_DATA", "RENDER_REPORT"],
+            "ACTIVITY_REQUEST_READY_FOR_GOVERNED_PLANNING",
+            False,
+        ),
+    ],
+)
+def test_preparation_preserves_observation_uncertainty(
+    automation, monkeypatch, observation, operations, state, gaps
+):
+    import agent_console.question_activity_input as module
+
+    a = automation
+    a.run()
+    monkeypatch.setattr(
+        module,
+        "observe",
+        lambda *args: {
+            "state": observation,
+            "operations": [
+                {"operation": op, "inputKinds": ["CONTEXT"], "outputKind": "CONTEXT"}
+                for op in operations
+            ],
+            "coverageComplete": False,
+        },
+    )
+    result = invoke(
+        a, "检查原资料", problem_id=a.e.p.semantics.target.problem.resource_id
+    )
+    assert result["state"] == state
+    assert ("gaps" in result) is gaps
+    assert result["modelCalls"] == 0 and result["executionStarted"] is False
+    assert result["originalQuestion"] == "检查原资料"
+    assert (result["planningRequest"] is not None) == state.startswith(
+        "ACTIVITY_REQUEST_READY"
+    )

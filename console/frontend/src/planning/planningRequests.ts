@@ -1,3 +1,4 @@
+import {preparationNotice} from './preparationNotice';
 import {modelResult,type ModelProgress} from '../api/modelStream';
 import {readWorkbenchSession} from "../api/businessWorkspace";
 import type {Proposal} from "./api";
@@ -12,6 +13,7 @@ export async function planningRequest<T>(path: string, body?: object,extraHeader
   const response = await fetch(`/api/workbench/v1/${path}`, {method: body ? "POST" : "GET", credentials: "same-origin", headers: {"Content-Type": "application/json", "X-CSRF-Token": session.csrfToken,...(progress?{Accept:"text/event-stream"}:{}),...extraHeaders}, ...(body ? {body: JSON.stringify(body)} : {})});
   if(progress)return modelResult<T>(response,progress,(status,reason)=>new Error(status===401?"会话已失效，请重新登录后读回原请求":status===422?"显式规划策略存在冲突或输入超出范围":status===409?"目标或请求状态已变化，请先读回原记录":`规划服务未能完成此操作，请核对权限与配置（${reason??status}）`));
   const value = await response.json();
+  if (!response.ok && path === 'question-activity-input' && preparationNotice(value.reasonCode)) throw new Error(preparationNotice(value.reasonCode)+'（'+value.reasonCode+'）');
   if (!response.ok) throw new Error(response.status === 401 ? "会话已失效，请重新登录后读回原请求" : response.status === 422 ? "显式规划策略存在冲突或输入超出范围" : response.status === 409 ? "目标或请求状态已变化，请先读回原记录" : `规划服务未能完成此操作，请核对权限与配置（${value.reasonCode ?? response.status}）`);
   return value.result as T;
 }

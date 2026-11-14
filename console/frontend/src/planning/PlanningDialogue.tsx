@@ -1,3 +1,4 @@
+import {activityInputFailure} from './preparationNotice';
 import {findReadRequestMarker} from './readRequestMarker';
 import {conversationActionHeaders,continuationQuery} from "../api/conversationActions";
 import {readWorkbenchSession} from "../api/businessWorkspace";
@@ -104,7 +105,7 @@ export function PlanningDialogue({problem, source, disabled=false, children, onS
         const activity=await planningRequest<ActivityInput>('question-activity-input',{question,problemId:problem,idempotencyKey:body.idempotency_key,...(chosenContext&&contextChoice?.question===question?{contextToken:chosenContext}:{})});
         if(latestLocator.current!==locator)return;
         if(activity.state==='NEEDS_BUSINESS_CONTEXT_CLARIFICATION'){setContextChoice({question,choices:activity.choices??[],selected:''});return;}
-        if(activity.state!=='ACTIVITY_REQUEST_READY_FOR_GOVERNED_PLANNING'||!activity.planningRequest)throw Error(activity.state==='BLOCKED_ACTION_OUTSIDE_READONLY_CONTEXT'?'本次请求包含已授权只读分析之外的行动，未开始执行。':activity.state==='BLOCKED_PROCESS_CONTEXT_NOT_AVAILABLE'?'尚未取得业务流程实例，不能虚构当前活动。':'当前未取得可读、已授权的业务来源，未开始规划或执行。');
+        if(activity.state!=='ACTIVITY_REQUEST_READY_FOR_GOVERNED_PLANNING'||!activity.planningRequest)throw Error(activityInputFailure(activity.state));
         if(activity.originalQuestion!==question||JSON.stringify(activity.planningRequest.target)!==JSON.stringify(input.target)||activity.planningRequest.idempotency_key!==body.idempotency_key)throw Error('本次提问与当前关注目标不一致，请先核对要办理的工作。');
         body={...Object.fromEntries(Object.entries(activity.planningRequest).filter(([,v])=>v!==null)),policy} as PlanningBody;
         setContextChoice(null);

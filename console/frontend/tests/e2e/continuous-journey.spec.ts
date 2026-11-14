@@ -29,6 +29,8 @@ async function setup(page:Page,mode='ready'){
   if(path.endsWith('/question-activity-input')){const b=req.postDataJSON();
    expect(b.problemId).toBe(semantics.target.problem.resource_id);
    if(mode==='clarification'&&!b.contextToken)return route.fulfill({json:{result:{state:'NEEDS_BUSINESS_CONTEXT_CLARIFICATION',planningRequest:null,choices:[{label:'本次合成供应商事项',contextToken:'a'.repeat(64)},{label:'另一项合成事项',contextToken:'b'.repeat(64)}]}}});
+   if(mode==='prepare-service')return route.fulfill({status:503,json:{reasonCode:'QUESTION_INPUT_SERVICE_UNAVAILABLE'}});
+   if(['READ_UNAVAILABLE','UNVERIFIED','MISSING_COMPATIBLE_TOOLS'].includes(mode))return route.fulfill({json:{result:{state:mode==='MISSING_COMPATIBLE_TOOLS'?'BLOCKED_MISSING_COMPATIBLE_TOOLS':'BLOCKED_CAPABILITY_'+mode,planningRequest:null,modelCalls:0,executionStarted:false}}});
    if(mode==='outside')return route.fulfill({json:{result:{state:'BLOCKED_ACTION_OUTSIDE_READONLY_CONTEXT',planningRequest:null}}});
    return route.fulfill({json:{result:{state:'ACTIVITY_REQUEST_READY_FOR_GOVERNED_PLANNING',originalQuestion:b.question,planningRequest:{target:mode==='wrong-target'?{...semantics.target,problem:{...semantics.target.problem,resource_id:'other'}}:semantics.target,answers:[b.question,'仅使用已授权合成来源'],policy:{schema_version:'planning-policy.v2',mode:'FREE',template:null,required_operations:[],prohibited_operations:[],business_acceptance_as_task:false},output_language:'zh-CN',idempotency_key:b.idempotencyKey,source_proposal:null,predecessor_invocation_id:null}}}})}
   if(path.endsWith('/preflight')){afterPreflight=true;return route.fulfill({json:{result:{}}});}
@@ -73,3 +75,11 @@ test('one grouped business clarification preserves the original question and nee
 for(const mode of ['wrong-target','outside'])test(`${mode} context cannot reach planning dispatch`,async({page})=>{const s=await setup(page,mode);await startNatural(page);await expect(page.getByRole('alert').filter({hasText:mode==='wrong-target'?'本次提问与当前关注目标不一致':'本次请求包含已授权只读分析之外的行动'})).toBeVisible();expect(count(s.writes,'invocations')).toBe(0);expect(count(s.writes,'confirmation/automatic')).toBe(0);expect(count(s.writes,'readonly-continuation')).toBe(0)});
 
 test('same conversation keeps the human question visible and technical context in the owner payload',async({page})=>{const s=await setup(page,'natural-conversation');s.unconfirm();await page.goto('/work/plan?problem='+encodeURIComponent(semantics.target.problem.resource_id)+'&returnConversation=same-c');await page.getByLabel('描述本次希望办理的分析').fill('分析合成供应商');await page.getByRole('button',{name:'开始本次办理',exact:true}).click();await expect(page).toHaveURL(/work\/planning\/continuous-fixture/);await expect(page).toHaveURL(/returnConversation=same-c/);expect(s.humanMessages).toEqual(['明确请求当前问题的规划建议：分析合成供应商']);expect(count(s.writes,'invocations')).toBe(1)});
+
+for(const mode of ['READ_UNAVAILABLE','UNVERIFIED','MISSING_COMPATIBLE_TOOLS','prepare-service'])test(`preparation observation ${mode} preserves original question before model`,async({page})=>{
+ const s=await setup(page,mode);await startNatural(page);
+ const notice=mode==='MISSING_COMPATIBLE_TOOLS'?'已核实的执行资源尚缺少本次所需工具':mode==='prepare-service'?'方案准备服务暂不可用':'不能据此判断缺少工具';
+ await expect(page.getByRole('alert').filter({hasText:notice})).toBeVisible();
+ await expect(page.getByLabel('描述本次希望办理的分析')).toHaveValue('分析合成供应商');
+ expect(count(s.writes,'question-activity-input')).toBe(1);expect(count(s.writes,'preflight')).toBe(0);expect(count(s.writes,'invocations')).toBe(0);expect(count(s.writes,'readonly-continuation')).toBe(0);
+});
