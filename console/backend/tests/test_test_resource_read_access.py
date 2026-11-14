@@ -292,3 +292,86 @@ def test_http_protects_identity_csrf_and_key_only_payload(read_policy):
             ).fetchone()["n"]
             == 1
         )
+
+
+def test_expired_same_successor_concurrent_read_only_and_old_receipt_immutable(
+    read_policy,
+):
+    import hashlib
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+
+    a, g, context, policy, run = read_policy
+    first = run()
+    with a.repository.pool.connection() as c:
+        prior = c.execute(
+            "SELECT row_to_json(g) value FROM authorization_admin.grants g "
+            "WHERE request_id=%s",
+            (first["items"][0]["requestId"],),
+        ).fetchone()["value"]
+        execution_tables = [
+            r["tablename"]
+            for r in c.execute(
+                "SELECT tablename FROM pg_tables "
+                "WHERE schemaname='execution_authority' ORDER BY tablename"
+            )
+        ]
+        commands = {
+            name: c.execute(
+                "SELECT md5(row_to_json(t)::text) h FROM execution_authority."
+                + name
+                + " t ORDER BY 1"
+            ).fetchall()
+            for name in execution_tables
+        }
+    clock = g.clock
+    g.clock = lambda: clock() + timedelta(minutes=3)
+    assert run()["items"][0]["state"] == "EXPIRED"
+    key = (
+        "read-renewal:"
+        + hashlib.sha256(
+            json.dumps([context.principal_id, "original", policy.digest, None]).encode()
+        ).hexdigest()
+    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: run(key), range(2)))
+    assert results[0] == results[1] == run(key)
+    assert results[0]["items"][0]["state"] == "APPROVED"
+    assert results[0]["items"][0]["requestId"] != first["items"][0]["requestId"]
+    with a.repository.pool.connection() as c:
+        assert (
+            c.execute(
+                "SELECT row_to_json(g) value FROM authorization_admin.grants g "
+                "WHERE request_id=%s",
+                (first["items"][0]["requestId"],),
+            ).fetchone()["value"]
+            == prior
+        )
+        assert (
+            c.execute(
+                "SELECT count(*) n FROM authorization_admin.grant_decisions"
+            ).fetchone()["n"]
+            == 2
+        )
+        assert [
+            r["tablename"]
+            for r in c.execute(
+                "SELECT tablename FROM pg_tables "
+                "WHERE schemaname='execution_authority' ORDER BY tablename"
+            )
+        ] == execution_tables
+        assert {
+            name: c.execute(
+                "SELECT md5(row_to_json(t)::text) h FROM execution_authority."
+                + name
+                + " t ORDER BY 1"
+            ).fetchall()
+            for name in execution_tables
+        } == commands
+        assert {
+            r["action"]
+            for r in c.execute(
+                "SELECT action FROM authorization_admin.grants WHERE request_id=%s",
+                (results[0]["items"][0]["requestId"],),
+            )
+        } == {"READ_RESOURCE"}

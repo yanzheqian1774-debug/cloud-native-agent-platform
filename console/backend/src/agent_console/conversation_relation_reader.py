@@ -148,14 +148,33 @@ def reader(application, authorizer, business_problems, actions):
                         "SELECT record FROM execution_authority.prepared_run_progress WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s",
                         (*records.scope(context), p.run_id),
                     ).fetchone()
-                    running = (
-                        run
-                        and run["record"].get("state") == "RUNNING"
-                        and not run["record"].get("cancellation_request_id")
+                    if not run:
+                        raise ConversationError(
+                            "CONVERSATION_ROUTING_CONTEXT_UNAVAILABLE", 503
+                        )
+                    recorded_state = run["record"].get("state")
+                    cancellation = run["record"].get("cancellation_request_id")
+                    stage = (
+                        "DONE"
+                        if recorded_state == "SUCCEEDED"
+                        else "CANCEL_REQUESTED"
+                        if cancellation and recorded_state == "RUNNING"
+                        else recorded_state
+                        if recorded_state
+                        in {
+                            "PENDING",
+                            "RUNNING",
+                            "FAILED",
+                            "CANCELLED",
+                            "CANCEL_REQUESTED",
+                            "RECOVERY_REQUIRED",
+                        }
+                        else "UNKNOWN"
                     )
-                    return value, bool(running), p.run_id
+                    running = recorded_state == "RUNNING" and not cancellation
+                    return value, running, p.run_id, stage
 
-                progress, running, run_id = authorizer.execute(
+                progress, running, run_id, effective_stage = authorizer.execute(
                     context,
                     (
                         ExactGrant(
@@ -170,6 +189,9 @@ def reader(application, authorizer, business_problems, actions):
                     query={},
                     handler=native,
                 )
+                # The journal is a durable orchestration checkpoint, not the
+                # execution lifecycle authority. Never rewrite its old facts.
+                current["stage"] = effective_stage
                 questions = (
                     [
                         q

@@ -183,8 +183,24 @@ class WorkbenchOwnerAuthorization:
                 "EMPLOYEE", "CREATE", "employee:collection"
             ),
         }
+        directory_read = operation == "LIST_CURRENT_WORK"
+        if directory_read:
+            from .workbench_current_work_query import CurrentWorkQuery
+
+            if grants or path or payload:
+                raise AuthorityError("AUTHORIZATION_NOT_FOUND")
+            CurrentWorkQuery.model_validate(query)
+            # Identity probe only; never yields a LIST decision or broadens the
+            # legacy business-problem list. The handler checks every exact READ.
+            observations[operation] = ExactGrant(
+                "BUSINESS_PROBLEM", "LIST", "business-problem:collection"
+            )
         observation = observations.get(operation)
-        if observation is not None and (grants or path or query or payload):
+        if (
+            observation is not None
+            and not directory_read
+            and (grants or path or query or payload)
+        ):
             raise AuthorityError("AUTHORIZATION_NOT_FOUND")
         if not grants and observation is None:
             raise AuthorityError("AUTHORIZATION_NOT_FOUND")

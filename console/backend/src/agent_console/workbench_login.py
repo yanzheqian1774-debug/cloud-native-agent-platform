@@ -83,22 +83,22 @@ def login_document(
                 '<label for="username">账号</label><input '
                 'id="username" name="username" '
                 'autocomplete="username" maxlength="64" required '
-                'placeholder="输入测试账号" value="'
+                'placeholder="输入账号" value="'
                 + html.escape(username[:64], quote=True)
                 + '">'
                 '<label for="password">密码</label><input '
                 'id="password" type="password" name="password" '
                 'autocomplete="current-password" maxlength="256" '
-                'required placeholder="输入本机领取的密码">'
+                'required placeholder="输入密码">'
                 '<label class="show-password"><input '
                 'id="show-password" type="checkbox">显示密码</label>'
             )
             + template[end:]
         )
         template = template.replace(
-            "当前入口：可信问题工作台", "当前入口：本地隔离测试环境"
+            "当前入口：可信问题工作台", "登录环境：本地测试环境"
         )
-        template = template.replace("使用现有可信身份机制", "使用独立测试账号登录")
+        template = template.replace("凭据登录</h3>", "账号密码登录</h3>")
         template = template.replace(
             "请使用管理员通过正式渠道提供的有效凭据。凭据过期时联系管理员恢复身份。",
             "请从本机安全领取文件获取账号密码。账号与登录会话分别管理；可见资源与操作范围以当前账号权限为准。忘记密码或账号停用请联系管理员。",
@@ -112,7 +112,7 @@ def login_document(
         )
     if urlsplit(safe_return(destination)).path == "/authorization-admin":
         template = template.replace(
-            "当前入口：本地隔离测试环境" if accounts else "当前入口：可信问题工作台",
+            "登录环境：本地测试环境" if accounts else "当前入口：可信问题工作台",
             "当前入口：独立授权审批 · 保留原对象链接",
         ).replace("登录并继续", "登录并返回原审批对象")
     return template.replace("{{nonce}}", html.escape(nonce, quote=True)).replace(

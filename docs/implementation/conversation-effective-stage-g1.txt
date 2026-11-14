@@ -1,0 +1,5 @@
+G1: current relation context effective execution stage
+Scope: read-only projection in conversation_relation_reader. No migration, new endpoint, model call, lifecycle write, grant change or historical journal/confirmation rewrite.
+Within existing exact EXECUTION READ and resources READ handler, read prepared progress from same transaction, require real record; map SUCCEEDED to DONE, preserve known other execution states, unknown values to UNKNOWN. Current question target remains available only for exact RUNNING without cancellation. No record/read failure refuses context rather than claiming completion.
+Tests: real reader control flow with controlled owner/read ports, stale RUNNING journal with success/failure/cancelled/unknown; outstanding question on completed owner never target; current running question unchanged; missing progress/no READ deny; subsequent messages share effective stage without model calls.
+G1 internal read projection only. Existing lifecycle authority and frozen records unchanged. Root performs actual authenticated GET verification.

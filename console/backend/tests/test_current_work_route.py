@@ -3,7 +3,6 @@
 from dataclasses import replace
 
 import pytest
-from agent_console.authority_contracts import ExactGrant
 from agent_console.workbench_bff import PREFIX, WorkbenchBffPolicy, create_workbench_bff
 from agent_console.workbench_current_work import operations
 from agent_console.workbench_owner_authorization import WorkbenchOwnerError
@@ -27,7 +26,7 @@ def client_for(handler=None):
     return TestClient(app, base_url="https://console.example"), authorizer
 
 
-def test_route_requires_login_and_exact_problem_collection_grant():
+def test_route_requires_login_and_defers_to_exact_owner_reads():
     client, authorizer = client_for()
     response = client.get(PREFIX + "/current-work")
     assert response.status_code == 401
@@ -36,9 +35,7 @@ def test_route_requires_login_and_exact_problem_collection_grant():
     response = client.get(PREFIX + "/current-work?scopeFilter=initiated&pageSize=20")
     assert response.status_code == 200
     assert response.json()["result"]["query"]["scopeFilter"] == "initiated"
-    assert authorizer.calls[0][1] == (
-        ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
-    )
+    assert authorizer.calls[0][1] == ()
 
 
 @pytest.mark.parametrize(

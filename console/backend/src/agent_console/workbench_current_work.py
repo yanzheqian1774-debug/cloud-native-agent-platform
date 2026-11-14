@@ -1,7 +1,5 @@
 """Authenticated F3 task directory, assembled from existing owner facts."""
 
-from .authority_contracts import ExactGrant
-from .business_problem_authorization import problem_resource
 from .development_administrator import for_call
 from .workbench_bff import PREFIX, WorkbenchOperation
 from .workbench_current_work_attribution import in_scope, requester
@@ -96,9 +94,7 @@ def operations(cursors):
             path=PREFIX + "/current-work",
             request_model=None,
             query_model=CurrentWorkQuery,
-            grant_builder=lambda context, path, payload, query: (
-                ExactGrant("BUSINESS_PROBLEM", "LIST", problem_resource()),
-            ),
+            grant_builder=lambda context, path, payload, query: (),
             handler=CurrentWorkDirectory(cursors),
         ),
     )

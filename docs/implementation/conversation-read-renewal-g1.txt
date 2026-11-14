@@ -1,0 +1,108 @@
+Original-conversation READ preparation renewal — minimal G1 implementation design
+Read-only source review; no runtime/DB/model/grant changes performed.
+
+Observed source boundary
+1. ConsoleShell retains TestResourceAccess for the same identity/scope. It does not
+   remount for a later phase of an already open conversation.
+2. TestResourceAccess effect keys only identity/retry; sessionStorage remembers one
+   policy/selection key. prepare() deliberately recovers that original grant request,
+   whose expiry is bounded by original request.created_at + TTL. Reusing an expired
+   request cannot renew it. Current UI requires manual '重新准备已过期资源'.
+3. Existing conversation history-access validates exact original work/adoption; before
+   execution, targets include problem/source/plan READ, not all selected skill/employee
+   resources. It cannot be assumed to resolve all OWNED_BUSINESS_READ_DENIED cases.
+4. TestReadPolicy already bounds subjects/tenant/domain, exact target digests, current
+   policy window/service issuer and READ-only actions. prepare validates snapshots and
+   target registry, current REVOKED and historical DENIED before original-owner writes.
+   Do not replace any of these with client-side assumptions.
+
+Proposed net change (no migration/model/schema change)
+A. Extract current TestResourceAccess request/key coordination into one shared client
+   helper, retaining old status/prepare API, identity checks, selection marker and
+   pending promise dedup. Shell and original-conversation continuation use the SAME
+   helper/key, not two permission stacks. Existing policy remains only authority.
+B. A completed, matching original receipt with one or more EXPIRED items permits at
+   most ONE automatic renewal per ensure call. Recheck current session and status;
+   require unchanged principal/scope/policyDigest/selectionDigest. Derive a stable
+   successor key from original key + exact policy/selection (sha256, <=160 chars),
+   persist unresolved pointer before POST, and keep that key across refresh/failure.
+   Never mutate the old request or extend original receipt; owner appends new audited
+   request under the unchanged current policy and exact snapshots. Concurrent callers
+   recover same successor, not independent random renewals.
+C. No automatic successor for 401/403/storage error/timeout/malformed receipt, REVOKED,
+   DENIED, policy unavailable or policy/selection change. A selection change preserves
+   current explicit newer-data choice; auto renewal must not choose a newer resource.
+   Mixed denied/expired receipt stays PARTIAL; conservatively do not auto-renew it.
+   A second EXPIRED response stops PARTIAL (policy/issuer deadline may have ended).
+D. Call ensure once on original conversation entry, before history-access/readback,
+   and immediately before existing explicit business continuation actions. It is not
+   a 10-second polling renewal. Dedup concurrent shell/conversation requests. No new
+   resource target comes from the browser, journal text or error strings.
+E. Existing explicit continuation first performs bounded READ preparation and then
+   uses its original status/receipt gate. No generic error-driven recovery was added.
+   Do NOT automatically repeat a failed business
+   POST, send another message, invoke relation/model, create work or START. Existing
+   same-key explicit continuation and exact owner absence/receipt gates remain intact.
+   UNKNOWN business outcomes stay UNKNOWN and read-only after permissions improve.
+F. UI states are ordinary '正在核对已有资料的读取状态' / '部分资料暂不可读取，已有工作保留'.
+   User never needs to visit another directory. No configuration repair question.
+   Denied/unavailable cannot be rendered as effective/complete; retain current work.
+
+Important limits
+- Existing test policy may not contain every exact resource needed by current work.
+  In that case preparation remains partial; never infer new targets from standing
+  business scope or add USE/START/EVALUATE. Root's diagnosis must identify actual
+  missing target; this client fix cannot expand a policy.
+- test prepare may issue a first READ only where existing exact policy already
+  authorizes it. Automatic EXPIRED renewal itself is tied to an actual prior receipt.
+- No model runtime or budget changes. No automatic retry of correction or execution.
+- Mid-operation expiry can still race; the business owner remains authoritative.
+
+Validation matrix before integration
+Client controlled browser:
+  existing same conversation / expired old receipt -> one deterministic successor
+  -> exact owner readback, zero model/message/CREATE/START POSTs;
+  shell + conversation concurrent ensure -> same one request;
+  renewal response lost -> refresh same key, no extra successor;
+  denied/revoked/403/unknown/malformed receipt -> no new key, truthful partial;
+  identity/domain change -> stale response ignored and no cross-user request;
+  policy/selection changed -> no auto first/new-version grant;
+  second EXPIRED -> no loop; ordinary effective case -> no renewal;
+  prior UNKNOWN model/execute remains read-only; explicit same-key continuation
+  starts only under its original owner gates after successful read preparation.
+Owner isolated PG (reuse existing test_resource_read fixture):
+  original exact approved receipt expires; distinct deterministic successor produces
+  current READ while original receipt/expiry immutable; repeat/concurrent successor
+  one decision; formal surrender and denied request do not restore; foreign scope and
+  snapshot mismatch refuse; expired policy/service issuer refuses; no non-READ grants,
+  model ledger or execution table changes. No real platform test here.
+
+Suggested scope: shared client helper + TestResourceAccess + one original-conversation
+preparation entry/continuation coordinator; use existing on-demand history-access.
+Do not broadly insert recovery/retry around every API call. No new permission owner,
+new persisted schema or user navigation prerequisite is needed.
+
+Implementation evidence / limits
+- Unknown outstanding preparation pins its original policy/key across refresh; a
+  changed policy does not silently create a new request. Renewal marker clears only
+  after fully effective/approved readback. Latest session observation wins in shell.
+- Client invokes the existing whole-policy preparation API, not an invented subset.
+  Partial/unknown inventory stays visible but never becomes work admission.
+  Existing exact status/owner gates decide current work READ and continuation.
+- browser-r3: 14 controlled READ browser cases PASS (21.6s, includes build).
+- journey-browser-r3: 11 controlled journey cases PASS (23.0s, includes build).
+- owner-pg: existing 6 cases passed; added concurrency fixture initially referenced
+  absent Native tables and failed. owner-pg-r2 fixes only the assertion inventory:
+  added concurrent successor case PASS (3.30s), compares existing execution tables.
+  This fixture does not install Native dispatch and is not physical execution proof.
+- Full frontend lint-r3 passed before final unknown-policy/event-order refinement;
+  final lint pending. No actual runtime/model/DB action.
+- Screenshot-injected POST failures are not evidence of a product READ defect.
+  Layout changes only relocate existing history errors and retain pause stages.
+
+Review correction: whole-policy availability is not exact-work admission. Partial
+or unknown prepare results remain visible and retain original preparation key, but
+original status/readback and owner permissions decide this work. Four controlled
+browser cases PASS (18.7s inclbuild): unrelated DENIED/REVOKED and unknown prepare
+permit explicit same-plan owner continuation; required READ refusal at exact owner
+blocks POST. No auto business retry, new message or model call.

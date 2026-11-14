@@ -95,7 +95,6 @@ def test_directory_ordinary_exact_reads_revocation_and_cross_domain(
     row["questions"][0].update(answered=True, answerDigest="a" * 64)
     monkeypatch.setattr(directory, "read_current_work_snapshot", lambda *a, **kw: [row])
     exact = {
-        ExactGrant("BUSINESS_PROBLEM", "LIST", "business-problem:collection"),
         ExactGrant(
             "BUSINESS_PROBLEM",
             "READ",
@@ -181,6 +180,9 @@ def test_directory_ordinary_exact_reads_revocation_and_cross_domain(
         client.cookies.set(SESSION_COOKIE, secret.value)
         path = PREFIX + "/prepared-executions/" + p.digest
         directory_path = PREFIX + "/current-work?scopeFilter=visible"
+        # No collection LIST was requested. The real ordinary owner still
+        # checks the current session and both exact READs for the only row.
+        assert not any(g.action == "LIST" for g in exact)
         response = client.get(directory_path)
         assert response.status_code == 200, response.text
         value = response.json()["result"]
@@ -235,14 +237,59 @@ def test_directory_ordinary_exact_reads_revocation_and_cross_domain(
             client.get(directory_path + "&state=answered").json()["result"]["total"]
             == 0
         )
+        # A different authenticated account sees no row/count without exact
+        # run+problem READ, even though the controlled snapshot contains it.
+        other = login(e.routing_sessions, "demo324")
+        client.cookies.set(SESSION_COOKIE, other.value)
+        empty = client.get(directory_path)
+        assert empty.status_code == 200, empty.text
+        assert empty.json()["result"]["items"] == []
+        assert empty.json()["result"]["total"] == 0
+        assert not any(empty.json()["result"]["counts"].values())
+        client.cookies.set(SESSION_COOKIE, secret.value)
+        with e.repo.connection_scope() as c:
+            run_grant = c.execute(
+                "SELECT grant_id FROM authorization_admin.grants WHERE subject_principal_id=%s "
+                "AND owner='EXECUTION' AND action='READ' AND exact_resource=%s",
+                (e.reviewer.principal_id, "governed-execution:prepared:" + p.digest),
+            ).fetchone()["grant_id"]
+        grants.revoke_grant(
+            e.reviewer,
+            GrantRevocationCommand(
+                run_grant, "USER_SURRENDER", "surrender-run", surrender=True
+            ),
+        )
+        empty = client.get(directory_path)
+        assert empty.status_code == 200, empty.text
+        assert empty.json()["result"]["total"] == 0
+        assert empty.json()["result"]["items"] == []
         # A foreign-scope stored session cannot inherit the original grants.
+        for column, original in (
+            ("security_domain", e.reviewer.scope.security_domain),
+            ("tenant_id", e.reviewer.scope.tenant_id),
+        ):
+            with e.repo.connection_scope() as c:
+                c.execute(
+                    "UPDATE browser_identity.sessions SET "
+                    + column
+                    + "='foreign' WHERE session_id=%s",
+                    (session.session_id,),
+                )
+            foreign = client.get(directory_path)
+            assert foreign.status_code in (401, 403, 404), foreign.text
+            with e.repo.connection_scope() as c:
+                c.execute(
+                    "UPDATE browser_identity.sessions SET "
+                    + column
+                    + "=%s WHERE session_id=%s",
+                    (original, session.session_id),
+                )
         with e.repo.connection_scope() as c:
             c.execute(
-                "UPDATE browser_identity.sessions SET security_domain='foreign' WHERE session_id=%s",
+                "UPDATE browser_identity.sessions SET issued_at=now()-interval '2 hours', last_seen_at=now()-interval '2 hours', idle_expires_at=now()-interval '1 hour', absolute_expires_at=now()-interval '1 hour' WHERE session_id=%s",
                 (session.session_id,),
             )
-        foreign = client.get(directory_path)
-        assert foreign.status_code in (401, 403, 404), foreign.text
+        assert client.get(directory_path).status_code in (401, 403, 404)
         # Active READ for another version cannot substitute for the original reference.
         assert snapshot(e) == before
     assert e.route_calls == [] and e.dispatches == []

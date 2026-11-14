@@ -123,3 +123,50 @@ test('known completed publication can prepare new selection without changing pri
   selection='c'.repeat(64);await page.reload();await expect.poll(()=>writes.length).toBe(3);
   expect(writes[2].idempotencyKey).not.toBe(first.idempotencyKey);expect(writes[2].expectedSelectionDigest).toBe(selection);
 });
+
+for(const outcome of ['success','second-expired','lost','revoked','denied','unknown','selection-changed'])test(`automatic exact expired READ renewal: ${outcome}`,async({page})=>{
+ const keys:string[]=[],business:string[]=[];let selection='b'.repeat(64),statusReads=0;
+ await page.route('**/api/**',async route=>{
+  const p=new URL(route.request().url()).pathname;
+  if(p.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:tester',tenantId:'test',securityDomain:'isolated'},session:{},csrfToken:'test-token'}});
+  if(p.endsWith('/test-resource-access/status')){statusReads++;if(outcome==='selection-changed'&&statusReads>1)selection='c'.repeat(64);return route.fulfill({json:{result:{available:true,policyDigest:'a'.repeat(64),selectionDigest:selection}}})}
+  if(p.endsWith('/test-resource-access/prepare')){
+   keys.push(route.request().postDataJSON().idempotencyKey);
+   if(outcome==='lost'&&keys.length===2)return route.abort('failed');
+   let state=keys.length===1?'EXPIRED':'APPROVED';
+   if(outcome==='second-expired')state='EXPIRED';
+   if(outcome==='revoked')state='REVOKED';if(outcome==='denied')state='DENIED';if(outcome==='unknown')state='UNKNOWN';
+   return route.fulfill({json:{result:{policyDigest:'a'.repeat(64),selectionDigest:selection,items:[{state}]}}});
+  }
+  if(route.request().method()!=='GET')business.push(p);
+  return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
+ });
+ await page.goto('/help');
+ if(['success','second-expired','lost'].includes(outcome)){
+  await expect.poll(()=>keys.length).toBe(2);expect(keys[0]).not.toBe(keys[1]);
+  expect(keys[1]).toMatch(/^published:[a-f0-9]{64}:[a-f0-9]{64}$/);
+  if(outcome==='lost')await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();
+  else if(outcome==='second-expired')await expect(page.getByRole('button',{name:'重新准备已过期资源'})).toBeVisible();
+  else await expect(page.getByRole('heading',{name:'帮助中心',exact:true})).toBeVisible();
+  const renewed=keys[1];await page.reload();await expect.poll(()=>keys.length).toBe(3);expect(keys[2]).toBe(renewed);
+  await expect(page.getByRole('heading',{name:'帮助中心',exact:true})).toBeVisible();expect(new Set(keys).size).toBe(2);
+ }else{
+  if(outcome==='selection-changed')await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();
+  else await expect(page.getByText(/有 1 项测试资源暂不可读取/)).toBeVisible();
+  expect(keys).toHaveLength(1);
+ }
+ expect(business).toEqual([]);
+});
+
+test('unknown original policy does not become a new automatic request after policy changes',async({page})=>{
+ let policy='a'.repeat(64);const keys:string[]=[];
+ await page.route('**/api/**',route=>{
+  const p=new URL(route.request().url()).pathname;
+  if(p.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:tester',tenantId:'test',securityDomain:'isolated'},session:{},csrfToken:'test-token'}});
+  if(p.endsWith('/test-resource-access/status'))return route.fulfill({json:{result:{available:true,policyDigest:policy}}});
+  if(p.endsWith('/test-resource-access/prepare')){keys.push(route.request().postDataJSON().idempotencyKey);return route.abort('failed')}
+  return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
+ });
+ await page.goto('/help');await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();expect(keys).toHaveLength(1);
+ policy='b'.repeat(64);await page.reload();await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();expect(keys).toHaveLength(1);
+});

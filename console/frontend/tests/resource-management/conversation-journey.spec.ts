@@ -501,6 +501,7 @@ for(const mode of ['saved-absent','saved-unknown','live-absent'] as const)test(`
  });
  await page.goto('/work?conversation=new');await expect(page.getByRole('heading',{name:'执行准备暂停',exact:true})).toBeVisible();await expect.poll(()=>reads).toBe(1);
  const alert=page.getByRole('alert').filter({hasText:'暂不需要补充资料'});await expect(alert).toBeVisible();
+ const before=await alert.evaluate(node=>Boolean(node.compareDocumentPosition(Array.from(document.querySelectorAll('summary')).find(item=>item.textContent==='查看已完成的办理记录')!)&Node.DOCUMENT_POSITION_FOLLOWING));expect(before).toBe(true);
  const stages=page.getByRole('list',{name:'暂停的办理阶段'});await expect(stages.locator('[data-state=done]')).toHaveCount(2);await expect(stages.locator('[aria-current]')).toHaveCount(0);await expect(stages.locator('[data-state=current]')).toHaveCount(0);const paused=stages.locator('[data-state=paused]');await expect(paused).toHaveCount(1);await expect(paused).toHaveText('3准备资源 · 暂停');await expect(paused).toBeVisible();if(mode==='saved-unknown'){await expect(stages).not.toContainText('尚未开始');await expect(stages).toContainText('执行检查 · 待核实')}else await expect(stages).toContainText('执行检查 · 尚未开始');
  if(mode==='saved-unknown'){await expect(alert).toContainText('是否已经启动尚待确认');await expect(alert).not.toContainText('检查尚未开始')}
  else await expect(alert).toContainText('检查尚未开始');
@@ -518,4 +519,46 @@ test('execution preparation receipt wording follows returned receipt only',async
  expect(executionPreparationFeedback('RUNNING','ONTOLOGY_EXECUTOR_BINDING_MISMATCH',true)).toBeUndefined();
  expect(executionPreparationFeedback('EXECUTE','NETWORK_UNKNOWN',false,true)).toBeUndefined();
  expect(executionPreparationFeedback('EXECUTE','ONTOLOGY_EXECUTOR_BINDING_MISMATCH',false)?.detail).not.toContain('检查尚未开始');
+});
+
+test('original saved execution waits for exact READ renewal without business replay',async({page})=>{
+ const s=await fixture(page);const keys:string[]=[],business:string[]=[];let histories=0;
+ s.journal={version:4,state:{key:'saved-read-work',question:prompt,phase:'EXECUTE',pending:'execute',error:'Error: ONTOLOGY_EXECUTOR_BINDING_MISMATCH',messages:[{id:'user:q',text:prompt}],log:[],problem:{business_problem_id:'p'},confirmation:{digest:'b'.repeat(64),plan:{plan_id:'saved-plan',version:2}}}};
+ await page.route('**/api/workbench/v1/conversations/capabilities',route=>route.fulfill({json:{result:{enabled:true,historyReadPreparation:true}}}));
+ await page.route('**/api/workbench/v1/test-resource-access/**',async route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{result:{available:true,policyDigest:'a'.repeat(64)}}});
+  keys.push(route.request().postDataJSON().idempotencyKey);
+  return route.fulfill({json:{result:{policyDigest:'a'.repeat(64),items:[{state:keys.length===1?'EXPIRED':'APPROVED'}]}}});
+ });
+ await page.route('**/api/workbench/v1/conversations/new/history-access',async route=>{histories++;expect(new Set(keys).size).toBe(2);return route.fulfill({json:{result:{available:true,items:[{state:'EFFECTIVE'}]}}})});
+ await page.route('**/api/workbench/v1/planning-v2/saved-plan/readonly-continuation**',route=>{if(route.request().method()!=='GET')business.push('START');return route.fulfill({status:403,json:{reasonCode:'ACCESS_DENIED'}})});
+ await page.route('**/draft-assistance/invocations',route=>{business.push('MODEL');return route.abort()});
+ await page.goto('/work?conversation=new');
+ await expect(page.getByRole('heading',{name:'执行准备暂停',exact:true})).toBeVisible();
+ expect(new Set(keys).size).toBe(2);expect(histories).toBeGreaterThan(0);expect(business).toEqual([]);expect(s.modelCalls).toBe(0);
+ await expect(page.getByRole('button',{name:'继续原方案执行'})).toHaveCount(0);
+ expect(s.messages).toHaveLength(0);expect(s.journal.version).toBe(4);
+});
+
+for(const mode of ['unrelated-denied','unrelated-revoked','preparation-unknown','required-denied'])test(`inventory is not exact work admission: ${mode}`,async({page})=>{
+ const s=await fixture(page),digest='b'.repeat(64),keys:string[]=[];let reads=0,posts=0;
+ s.journal={version:8,state:{key:'original-question',question:prompt,phase:'EXECUTE',pending:'execute',error:'Error: GRANT_REQUEST_NOT_FOUND',messages:[{id:'user:q',text:prompt}],log:[],confirmation:{digest,plan:{plan_id:'original-plan',version:2}}}};
+ await page.route('**/test-resource-access/**',route=>{
+  if(route.request().method()==='GET')return route.fulfill({json:{result:{available:true,policyDigest:'a'.repeat(64)}}});
+  keys.push(route.request().postDataJSON().idempotencyKey);
+  if(mode==='preparation-unknown')return route.abort();
+  return route.fulfill({json:{result:{policyDigest:'a'.repeat(64),items:[{state:'EFFECTIVE'},{state:mode==='unrelated-revoked'?'REVOKED':'DENIED'}]}}});
+ });
+ await page.route('**/planning-v2/original-plan/readonly-continuation*',route=>{
+  if(route.request().method()==='POST'){posts++;expect(route.request().postDataJSON()).toEqual({version:2});return route.fulfill({json:{result:{receipt:{sourcePlanId:'original-plan',sourcePlanVersion:2,sourcePlanDigest:digest,subject:'human:development-admin',preparationDigest:'c'.repeat(64),executionStarted:true}}}})}
+  reads++;if(mode==='required-denied'&&reads>1)return route.fulfill({status:403,json:{reasonCode:'OWNED_BUSINESS_READ_DENIED'}});
+  return route.fulfill({status:404,json:{reasonCode:'READONLY_CONTINUATION_NOT_FOUND'}});
+ });
+ await page.route('**/prepared-executions/**',route=>route.fulfill({status:404,json:{reasonCode:'ISOLATED_EXECUTION_VIEW_NOT_PROVIDED'}}));
+ await page.goto('/work?conversation=new');await page.getByRole('button',{name:'核对执行状态',exact:true}).click();
+ await expect(page.getByRole('button',{name:'继续原方案执行',exact:true})).toBeVisible();expect(posts).toBe(0);
+ await page.getByRole('button',{name:'继续原方案执行',exact:true}).click();
+ if(mode==='required-denied'){await expect(page.getByText('Error: OWNED_BUSINESS_READ_DENIED',{exact:true})).toBeVisible();expect(posts).toBe(0);expect(s.journal.version).toBe(8)}
+ else{await expect.poll(()=>s.journal.state?.phase).toBe('RUNNING');expect(posts).toBe(1)}
+ expect(reads).toBe(2);expect(new Set(keys).size).toBe(1);expect(s.modelCalls).toBe(0);expect(s.messages).toHaveLength(0);
 });
