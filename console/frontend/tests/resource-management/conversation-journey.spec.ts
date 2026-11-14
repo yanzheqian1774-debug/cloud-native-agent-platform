@@ -489,3 +489,33 @@ for(const observation of ['READ_UNAVAILABLE','UNVERIFIED'])test(`source ${observ
  await page.goto('/work?conversation=new');await expect(page.getByRole('button',{name:'使用生产交接测试资料'})).toBeDisabled();await expect(page.getByText(/缺少兼容的执行工具/)).toHaveCount(0);await expect(page.getByText(observation==='READ_UNAVAILABLE'?'资料可读取，但当前无法读取所需能力，暂不能核实自动处理条件。':'资料可读取，自动处理能力尚未核实。',{exact:false})).toBeVisible();expect(s.modelCalls).toBe(0);
  await page.reload();await expect(page.getByRole('button',{name:'使用生产交接测试资料'})).toBeDisabled();expect(s.modelCalls).toBe(0);
 });
+
+for(const mode of ['saved-absent','saved-unknown','live-absent'] as const)test(`execution binding preparation ${mode} preserves evidence without retry`,async({page},testInfo)=>{
+ const s=await fixture(page),digest='b'.repeat(64);let reads=0,posts=0;
+ const oldLog='资源核验完成，正在执行分析并生成结果。';
+ s.journal={version:8,state:{key:'binding-case',question:prompt,phase:mode==='live-absent'?'RESOURCES':'EXECUTE',pending:mode==='live-absent'?undefined:'execute',error:mode==='live-absent'?undefined:'Error: ONTOLOGY_EXECUTOR_BINDING_MISMATCH',messages:[{id:'user:q',text:prompt}],log:mode==='live-absent'?[]:[oldLog],confirmation:{digest,plan:{plan_id:'binding-plan',version:2}},draft:{state:'SUCCEEDED',draft:{description:'已保存的检查目标'}}}};
+ await page.route('**/planning-v2/binding-plan/resource-preparation',route=>route.fulfill({json:{result:{state:'READY',resources:[]}}}));
+ await page.route('**/planning-v2/binding-plan/readonly-continuation*',route=>{
+  if(route.request().method()==='POST'){posts++;return route.fulfill({status:409,json:{reasonCode:'ONTOLOGY_EXECUTOR_BINDING_MISMATCH'}})}
+  reads++;return route.fulfill({status:mode==='saved-unknown'?403:404,json:{reasonCode:mode==='saved-unknown'?'ACCESS_DENIED':'READONLY_CONTINUATION_NOT_FOUND'}});
+ });
+ await page.goto('/work?conversation=new');await expect(page.getByRole('heading',{name:'执行准备暂停',exact:true})).toBeVisible();await expect.poll(()=>reads).toBe(1);
+ const alert=page.getByRole('alert').filter({hasText:'暂不需要补充资料'});await expect(alert).toBeVisible();
+ const stages=page.getByRole('list',{name:'暂停的办理阶段'});await expect(stages.locator('[data-state=done]')).toHaveCount(2);await expect(stages.locator('[aria-current]')).toHaveCount(0);await expect(stages.locator('[data-state=current]')).toHaveCount(0);const paused=stages.locator('[data-state=paused]');await expect(paused).toHaveCount(1);await expect(paused).toHaveText('3准备资源 · 暂停');await expect(paused).toBeVisible();if(mode==='saved-unknown'){await expect(stages).not.toContainText('尚未开始');await expect(stages).toContainText('执行检查 · 待核实')}else await expect(stages).toContainText('执行检查 · 尚未开始');
+ if(mode==='saved-unknown'){await expect(alert).toContainText('是否已经启动尚待确认');await expect(alert).not.toContainText('检查尚未开始')}
+ else await expect(alert).toContainText('检查尚未开始');
+ if(mode==='saved-absent')await page.screenshot({path:testInfo.outputPath('execution-preparation-paused.png'),fullPage:true});
+ await expect(page.getByText('Error: ONTOLOGY_EXECUTOR_BINDING_MISMATCH',{exact:true})).toBeHidden();await alert.getByText('技术详情',{exact:true}).click();await expect(alert.getByText('Error: ONTOLOGY_EXECUTOR_BINDING_MISMATCH',{exact:true})).toBeVisible();
+ await page.getByText('查看已完成的办理记录',{exact:true}).click();await expect(page.getByText(oldLog,{exact:true})).toHaveCount(0);await expect(page.getByText('资源核验完成，正在核对执行启动条件。',{exact:true})).toBeVisible();
+ if(mode!=='live-absent')expect(s.journal.state?.log).toEqual([oldLog]);
+ expect(posts).toBe(mode==='live-absent'?1:0);expect(s.modelCalls).toBe(0);
+ await page.reload();await expect.poll(()=>reads).toBe(2);await expect(page.getByRole('heading',{name:'执行准备暂停',exact:true})).toBeVisible();expect(posts).toBe(mode==='live-absent'?1:0);expect(s.modelCalls).toBe(0);
+});
+
+test('execution preparation receipt wording follows returned receipt only',async()=>{
+ const {executionPreparationFeedback,executionReceiptLog}=await import('../../src/problems/executionPreparationFeedback');
+ expect(executionReceiptLog(true)).toContain('启动回执已返回');expect(executionReceiptLog(false)).not.toContain('启动回执');
+ expect(executionPreparationFeedback('RUNNING','ONTOLOGY_EXECUTOR_BINDING_MISMATCH',true)).toBeUndefined();
+ expect(executionPreparationFeedback('EXECUTE','NETWORK_UNKNOWN',false,true)).toBeUndefined();
+ expect(executionPreparationFeedback('EXECUTE','ONTOLOGY_EXECUTOR_BINDING_MISMATCH',false)?.detail).not.toContain('检查尚未开始');
+});

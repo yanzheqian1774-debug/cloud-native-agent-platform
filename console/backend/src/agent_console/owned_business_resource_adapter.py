@@ -17,6 +17,7 @@ class OwnedResourceWork(WorkScope):
     admissionPolicyDigest: str
     businessScope: Any
     historyRead: bool = False
+    ontologyCorrection: dict | None = None
 
 
 def derive_work(
@@ -52,6 +53,7 @@ def derive_work(
         admissionPolicyDigest=binding.policy_digest,
         businessScope=binding.scope,
         historyRead=history,
+        ontologyCorrection=getattr(binding, "ontology_correction", None),
     )
 
 
@@ -91,6 +93,15 @@ def require_plan(work, plan, *, check_references=True):
     if not isinstance(work, OwnedResourceWork):
         return
     from .planning_source_change import approved_source
+
+    if work.ontologyCorrection is not None:
+        ref = ExactReference.model_validate(work.ontologyCorrection["originalPlan"])
+        if (plan.plan_id, str(plan.version), plan.digest) != (
+            ref.resource_id,
+            ref.revision_id,
+            ref.digest,
+        ):
+            raise AuthorityError("OWNED_BUSINESS_CORRECTION_PLAN_MISMATCH")
 
     if (
         plan.semantics.target.problem != work.problem
@@ -226,6 +237,13 @@ def require_preparation(work, preparation):
         raise AuthorityError("OWNED_BUSINESS_HISTORY_NOT_EXECUTABLE")
     if preparation.semantics.target.problem != work.problem:
         raise AuthorityError("OWNED_BUSINESS_PREPARATION_TARGET_MISMATCH")
+    if work.ontologyCorrection is not None:
+        ref = ExactReference.model_validate(work.ontologyCorrection["originalPlan"])
+        if (
+            preparation.plan_id != ref.resource_id
+            or preparation.plan_version != int(ref.revision_id) + 1
+        ):
+            raise AuthorityError("OWNED_BUSINESS_CORRECTION_PLAN_MISMATCH")
     require_reference(work, "knowledge", preparation.source_snapshot)
     for participant in preparation.participants:
         require_reference(work, "employee", participant.definition)
@@ -304,6 +322,18 @@ def authorize_dispatch(owner, connection, command, context):
             <= datetime.now(UTC)
         ):
             return False
+        if receipt.get("ontologyActionCorrection") != work.ontologyCorrection:
+            return False
+        if work.ontologyCorrection is not None:
+            ref = ExactReference.model_validate(work.ontologyCorrection["originalPlan"])
+            if (
+                receipt.get("sourcePlanId"),
+                str(receipt.get("sourcePlanVersion")),
+                receipt.get("sourcePlanDigest"),
+            ) != (ref.resource_id, ref.revision_id, ref.digest) or receipt[
+                "executionPlan"
+            ]["plan"].get("predecessor_digest") != ref.digest:
+                return False
         require_preparation(work, preparation)
         return True
     except (AuthorityError, ValueError):

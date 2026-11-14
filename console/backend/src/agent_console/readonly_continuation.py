@@ -576,6 +576,8 @@ class ReadonlyContinuation:
             }
             if owned_resources.evidence(work):
                 record["ownedBusiness"] = owned_resources.evidence(work)
+                if work.ontologyCorrection is not None:
+                    record["ontologyActionCorrection"] = work.ontologyCorrection
             if association:
                 record["capabilitySource"] = association
             c.execute(

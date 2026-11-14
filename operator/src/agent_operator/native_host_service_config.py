@@ -97,6 +97,7 @@ class Configuration:
         allowed = required | {
             "NATIVE_LOOP_RUNTIME_FILE",
             "NATIVE_DURABLE_WAIT_CONFIGURATION",
+            "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
         }
         if (
             not isinstance(value["policyFiles"], dict)

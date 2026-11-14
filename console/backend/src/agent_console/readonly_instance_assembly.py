@@ -28,6 +28,26 @@ def ensure_aggregate(authority, kind, value):
         raise ValueError("EXACT_RUNTIME_BINDING_CONFLICT")
 
 
+def assembly_seed(scope, plan_digest, employee_digest, groups):
+    """Shared exact assembly identity for preparation and absence checks."""
+    refs = {kind: values[0] for kind, values in groups.items()}
+    return canonical_digest(
+        {
+            "scope": [scope.namespace, scope.security_domain],
+            "planDigest": plan_digest,
+            "employee": employee_digest,
+            "resources": (
+                {k: v.model_dump(mode="json") for k, v in refs.items()}
+                if all(len(values) == 1 for values in groups.values())
+                else {
+                    k: [v.model_dump(mode="json") for v in values]
+                    for k, values in groups.items()
+                }
+            ),
+        }
+    )
+
+
 def assemble(
     authority,
     connection,
@@ -195,20 +215,8 @@ def _assemble(
         case=case,
         sales_v2_candidate=sales_v2_candidate,
     )
-    seed = canonical_digest(
-        {
-            "scope": [scope.namespace, scope.security_domain],
-            "planDigest": plan_digest,
-            "employee": definition["employeeDefinitionDigest"],
-            "resources": (
-                {k: v.model_dump(mode="json") for k, v in refs.items()}
-                if all(len(values) == 1 for values in groups.values())
-                else {
-                    k: [v.model_dump(mode="json") for v in values]
-                    for k, values in groups.items()
-                }
-            ),
-        }
+    seed = assembly_seed(
+        scope, plan_digest, definition["employeeDefinitionDigest"], groups
     )
     instance_ids = {
         role: stable_id("prepared-readonly-instance", seed, role)

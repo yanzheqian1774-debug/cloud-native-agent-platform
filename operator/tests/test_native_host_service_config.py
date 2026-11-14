@@ -183,3 +183,21 @@ def test_preparation_roundtrip_pins_optional_wait_file(
         wait.write_text("changed")
         with pytest.raises(ValueError, match="PINNED_SOURCE_CHANGED"):
             config.verify()
+
+
+def test_optional_ontology_correction_must_be_pinned(configured, monkeypatch, tmp_path):
+    path, value = configured
+    candidate = tmp_path / "correction.json"
+    write(candidate, {"controlled": "correction"})
+    monkeypatch.setenv("OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY", str(candidate))
+    with pytest.raises(ValueError, match="POLICY_BINDING_REQUIRED"):
+        Configuration(path)
+    value["policyFiles"]["OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY"] = hashlib.sha256(
+        candidate.read_bytes()
+    ).hexdigest()
+    write(path, value)
+    config = Configuration(path)
+    config.verify()
+    write(candidate, {"controlled": "changed"})
+    with pytest.raises(ValueError, match="PINNED_SOURCE_CHANGED"):
+        config.verify()

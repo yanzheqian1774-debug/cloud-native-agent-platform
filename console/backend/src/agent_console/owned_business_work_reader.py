@@ -40,6 +40,7 @@ class OwnedBusinessBinding:
     problem: ExactReference
     expires_at: datetime
     history_only: bool = False
+    ontology_correction: dict | None = None
 
 
 class OwnedBusinessWorkReader:
@@ -188,7 +189,16 @@ class OwnedBusinessWorkReader:
             "CONTEXT_REVOKED",
         )
 
-    def work(self, c, context, problem, *, source_digest=None, history=False):
+    def work(
+        self,
+        c,
+        context,
+        problem,
+        *,
+        source_digest=None,
+        history=False,
+        _apply_correction=True,
+    ):
         require(not self.retained_read_only or history, "HISTORY_ONLY")
         p, now = self.policy, datetime.now(UTC)
         require(isinstance(problem, ExactReference), "EXACT_PROBLEM_REQUIRED")
@@ -421,7 +431,7 @@ class OwnedBusinessWorkReader:
         )
         expiry = min(p.expiresAt, datetime.fromisoformat(r["expiresAt"]))
         require(history or now < expiry, "EXPIRED")
-        return OwnedBusinessBinding(
+        result = OwnedBusinessBinding(
             stored["admission_id"],
             stored["record_digest"],
             p.digest,
@@ -434,3 +444,9 @@ class OwnedBusinessWorkReader:
             expiry,
             history,
         )
+
+        if _apply_correction:
+            from .ontology_action_correction import project
+
+            return project(self, c, context, result)
+        return result

@@ -959,6 +959,20 @@ def build_workbench_composition(
             is None
         ):
             raise ValueError("CONVERSATION_ROUTING_ADMISSION_REQUIRED")
+        correction_routes = ()
+        correction_path = os.environ.get("OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY")
+        if correction_path:
+            from .ontology_action_correction import operations as correction_operations
+            from .ontology_action_correction_policy import CorrectionPolicy
+            from .ontology_action_correction_postgres import (
+                migrate as migrate_corrections,
+            )
+
+            CorrectionPolicy.load(correction_path)
+            if owned_business is None or not owned_business.policy.enabled:
+                raise ValueError("ONTOLOGY_CORRECTION_OWNED_BUSINESS_REQUIRED")
+            migrate_corrections(foundation.repository)
+            correction_routes = correction_operations(owned_business, correction_path)
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -1007,6 +1021,7 @@ def build_workbench_composition(
                 *runtime_trace_routes,
                 *resource_automation_routes,
                 *continuation_routes,
+                *correction_routes,
                 *directory_routes,
                 *current_work_routes,
                 *ontology_operations,

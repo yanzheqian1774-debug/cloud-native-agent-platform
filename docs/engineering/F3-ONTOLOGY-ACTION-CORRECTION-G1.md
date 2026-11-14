@@ -1,0 +1,31 @@
+# Original work ontology action correction (G1)
+
+## Problem and boundary
+Published document rules r1 retain exact v4 executor actions while the original standing work already authorizes exact v7 skill/employee. A successful model plan must not be repeated or replaced to repair that configuration mismatch. The strict preparation validator correctly rejects it.
+
+Implement an internal, default-off, append-only correction owner on existing PostgreSQL. No CRD, public execution lifecycle, trusted plan-origin or budget contract changes. Migration 0072 is reserved by root. Preserve original admission, policy, successful model, plan and historical UNKNOWN. Root alone publishes the ontology successor and activates production.
+
+## Design
+- Original active policy remains authoritative. An explicit private correction policy pins original admission/problem/approved plan and old/new document binding. It is authorization input, not proof of compatibility or a grant.
+- Correction owner reuses current owned-work validation and current original PLAN READ/PREPARE/APPROVE plus original/new ontology READ/USE. Original subject must match. It locks in existing Plan owner order, then admission correction lock; no source/model mutation.
+- Read actual published old/new ontology. Remove only action tuple fields for equality comparison; source mappings, rule definitions, scope and all other business content must match. New action set must exactly cover original operations with original authorized v7 skill and installed v7 executor id/revision/configuration digest. Never accept an arbitrary published resource or executable action.
+- Check authoritative execution/preparation/continuation/instance receipts and original plan state under existing owner lock. Absence of one table is insufficient. Any execution/partial/UNKNOWN ambiguity fails closed; committed assembly facts may only be recognized by their existing exact owner receipt and never silently erased. Implementation must establish this boundary before permitting correction.
+- Append immutable correction receipt keyed by original admission and exact plan, with canonical request digest. Same request reads same receipt; conflicting correction fails. Projection replaces only documentRules after current original owner validation; original facts remain immutable and current READ/USE and revocation are still checked by downstream owners.
+- Integrate the shared reader in BFF/Native via current composition (default off). No history_only promotion. Corrected binding provenance must remain in preparation/receipt, available after restart.
+
+## Validation
+Isolated PG: published ontology and real current grants/owner plus immutable correction; wrong source/rules/mapping/action/subject/digest denied; revoked/expired grants denied; no execution vs partial/UNKNOWN distinct; same-key concurrency and rollback; original admission/model/plan/budget unchanged. Existing readonly preparation validates corrected exact tuples and can reuse original plan/key. No production model or runtime operations.
+
+## Completed implementation boundary
+The original Plan transaction lock precedes the owned admission lock. The current Plan head must still be the exact policy-pinned original revision. Readonly assembly, execution-successor confirmation and continuation share that Plan transaction. Direct PREPARE requires an already approved execution successor; the original planning revision cannot satisfy PREPARED_EXECUTION_SUCCESSOR_REQUIRED. The absence gate also rejects derived instances, execution plans, prepared candidates, preparations, runs, dispatch and partial command receipts. Existing or ambiguous partial effects are rejected, never repaired by this owner.
+
+Projection carries an explicit correction receipt/policy digest and exact original Plan reference. require_plan rejects another Plan/revision; preparation requires the exact next execution revision and worker receipt validation checks its predecessor digest and original source Plan. The original admission digest remains unchanged. Historical reads retain the original binding and do not become execution authority.
+
+Native configuration treats OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY as optional: legacy absence remains supported, ambient presence without a startup file pin is rejected, and changed pinned bytes fail. BFF and manager must receive the same policy; reprepare startup pins before executing corrected work. No automatically issued correction POST or replay.
+
+## Verification evidence and deployment
+Final isolated PostgreSQL tests: two tests passed in 43.29 seconds, with actual original resource/ontology publication, grant owners, Plan/READY owner, readonly preparation/START/coordinator records and fresh worker authorization. Covers same-key concurrency, conflicting key, cross subject, partial/UNKNOWN rejection, rollback, original-record and budget preservation, exact Plan rejection, independent reader, formal USE surrender and historical readback. Transport is controlled; no real model call, physical Native process or durable-wait lifecycle was rerun. Additional 64 adapter/startup/config/policy tests passed in 2.18 seconds; Ruff and diff whitespace checks passed. Earlier failing fixture/SQL attempts remain in evidence rather than counted as passes.
+
+Migration 0072 creates only immutable correction facts and its dedicated checksum registry when the optional policy is configured; root owns actual backup/migration/deployment. It does not change existing authority migrationPath. New policy configuration is not a grant: current old/new ontology READ and USE, original PLAN READ/PREPARE/APPROVE and problem READ are required. The existing independent resource issuer may decide those exact READ/USE requests under original standing scope and expiry; no human click or administrator bypass is introduced. The owner returns one append-only receipt and does not change model, budget, Plan, original admission or old UNKNOWN records.
+
+Future configuration publication should run verify_actions against the selected exact document skill and published ontology before activation. The helper is reusable for this offline composition check; this package does not claim a general policy-publication controller was added.

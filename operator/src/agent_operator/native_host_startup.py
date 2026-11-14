@@ -117,6 +117,7 @@ class StartupObservation:
                     "NATIVE_DISPATCH_CONTINUATION_POLICY",
                     "OWNED_BUSINESS_ADMISSION_POLICY",
                     "NATIVE_DURABLE_WAIT_CONFIGURATION",
+                    "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
                 }
             )
             path = os.environ.get(env, "")
@@ -142,6 +143,7 @@ class StartupObservation:
                     "NATIVE_DISPATCH_CONTINUATION_POLICY",
                     "OWNED_BUSINESS_ADMISSION_POLICY",
                     "NATIVE_DURABLE_WAIT_CONFIGURATION",
+                    "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
                 )
             )
         )

@@ -51,6 +51,7 @@ def prepare(manifest_path, state_directory, output, *, enabled=False, max_hosts=
             for name in (
                 "NATIVE_LOOP_RUNTIME_FILE",
                 "NATIVE_DURABLE_WAIT_CONFIGURATION",
+                "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
             )
             if os.environ.get(name)
         ),
