@@ -267,6 +267,20 @@ class WorkflowDefinitionService:
         record["lifecycleState"] = "PUBLISHED"
         return self._replace(record, expected, "REVISION_PUBLISHED", actor, draft)
 
+    def review_policy(self, scope, identity, actor, expected, digest, proof):
+        from .workflow_policy_review import review_policy
+
+        return review_policy(self, scope, identity, actor, expected, digest, proof)
+
+    def publish_policy(
+        self, scope, identity, actor, expected, digest, review_id, proof
+    ):
+        from .workflow_policy_review import publish_policy
+
+        return publish_policy(
+            self, scope, identity, actor, expected, digest, review_id, proof
+        )
+
     def successor(self, scope, resource_id, actor, expected):
         record = self._load(scope, resource_id)
         self._expected(record, expected)

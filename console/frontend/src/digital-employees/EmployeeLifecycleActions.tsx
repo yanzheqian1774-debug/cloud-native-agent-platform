@@ -1,3 +1,4 @@
+import {publishedTestResourcesChanged} from '../components/testResourcePreparation';
 import {useManagementActions} from '../management/useManagementActions';
 import { useEffect, useRef, useState } from "react";
 import {
@@ -93,6 +94,7 @@ export function EmployeeLifecycleActions({
       const stages=['DRAFT','VALIDATED','APPROVED','PUBLISHED'];
       if(!Number.isInteger(definition.aggregateVersion)||(definition.aggregateVersion??0)<=frozen.command.expectedVersion||stages.indexOf(definition.lifecycleState??'')<stages.indexOf(targetState[frozen.action]))throw Error('LIFECYCLE_RESULT_UNCONFIRMED');
       const result:EmployeeCommandResult={resourceKind:definition.resourceKind,employeeDefinitionId:definition.employeeDefinitionId,employeeDefinitionRevisionId:definition.employeeDefinitionRevisionId,employeeDefinitionDigest:definition.employeeDefinitionDigest,aggregateVersion:definition.aggregateVersion!,lifecycleState:definition.lifecycleState!};
+      if(frozen.action==='PUBLISH')window.dispatchEvent(new Event(publishedTestResourcesChanged));
       sessionStorage.removeItem(markerKey(frozen.principalKey));setLatest(result);setFrozen(null);setUnknown(false);setCommandFailed(false);setMessage('已读回当前修订状态；原命令没有重发，此读取不代替原提交回执。');onReadback(definition,result);
     }catch{if(turn===generation.current)setMessage('原操作仍未核实；保留原记录，只读取，不重复提交。')}
     finally{inFlight.current=false;if(turn===generation.current)setBusy(false)}
@@ -169,6 +171,7 @@ export function EmployeeLifecycleActions({
       const checked=await getWorkbenchSession(controller.signal);
       if(turn!==generation.current)return;
       if(workbenchPrincipalKey(checked)!==frozen.principalKey||result.resourceKind!==item.resourceKind||result.employeeDefinitionId!==item.employeeDefinitionId||result.employeeDefinitionRevisionId!==item.employeeDefinitionRevisionId||result.employeeDefinitionDigest!==item.employeeDefinitionDigest||result.aggregateVersion!==frozen.command.expectedVersion+1||result.lifecycleState!==targetState[frozen.action])throw new DigitalEmployeeRequestError('EMPLOYEE_RECEIPT_MISMATCH',503,true);
+      if(frozen.action==='PUBLISH')window.dispatchEvent(new Event(publishedTestResourcesChanged));
       sessionStorage.removeItem(markerKey(frozen.principalKey));
       setLatest(result);
       setFrozen(null);

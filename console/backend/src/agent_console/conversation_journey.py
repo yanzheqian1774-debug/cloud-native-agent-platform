@@ -5,6 +5,7 @@ import json
 
 from psycopg.types.json import Jsonb
 
+from .fixed_work_sources_postgres import conversation_mode
 from .private_conversation import ConversationError
 from .request_timing import measured
 
@@ -34,7 +35,11 @@ def install(app, service, safe):
                 "tenant_id=%s AND security_domain=%s AND conversation_id=%s",
                 (*service.scope(ctx), identity),
             ).fetchone()
-        return row or {"version": 0, "state": None}
+            mode = conversation_mode(c, ctx, identity)
+        return {
+            **(row or {"version": 0, "state": None}),
+            **({"fixedWorkSource": mode} if mode else {}),
+        }
 
     def save(ctx, identity, body):
         if len(json.dumps(body.state).encode()) > 262144:
@@ -55,7 +60,12 @@ def install(app, service, safe):
                 "SET version=excluded.version,state=excluded.state,updated_at=now()",
                 (*service.scope(ctx), identity, version, Jsonb(body.state)),
             )
-        return {"version": version, "state": body.state}
+            mode = conversation_mode(c, ctx, identity)
+        return {
+            "version": version,
+            "state": body.state,
+            **({"fixedWorkSource": mode} if mode else {}),
+        }
 
     @app.get("/api/workbench/v1/conversations/{identity}/journey")
     def get(request: Request, identity: str):

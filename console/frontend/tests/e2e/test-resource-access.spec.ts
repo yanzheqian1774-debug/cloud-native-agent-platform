@@ -170,3 +170,23 @@ test('unknown original policy does not become a new automatic request after poli
  await page.goto('/help');await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();expect(keys).toHaveLength(1);
  policy='b'.repeat(64);await page.reload();await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();expect(keys).toHaveLength(1);
 });
+
+for(const unresolved of [false,true])test(`publication refresh observes new selection without retargeting unresolved=${unresolved}`,async({page})=>{
+ let selection='b'.repeat(64);const writes:{idempotencyKey:string;expectedSelectionDigest:string}[]=[];
+ await page.route('**/api/workbench/v1/**',async route=>{
+  const path=new URL(route.request().url()).pathname;
+  if(path.endsWith('/session'))return route.fulfill({json:{schemaVersion:'workbench-session.v1',principal:{principalId:'human:tester',tenantId:'test',securityDomain:'isolated'},session:{expiresAt:'2099-01-01T00:00:00Z',idleExpiresAt:'2099-01-01T00:00:00Z'},csrfToken:'test-token'}});
+  if(path.endsWith('/test-resource-access/status'))return route.fulfill({json:{result:{available:true,policyDigest:'a'.repeat(64),selectionDigest:selection}}});
+  if(path.endsWith('/test-resource-access/prepare')){const body=route.request().postDataJSON();writes.push(body);if(unresolved)return route.abort('failed');return route.fulfill({json:{result:{policyDigest:'a'.repeat(64),selectionDigest:body.expectedSelectionDigest,items:[{state:'APPROVED'}]}}});}
+  return route.fulfill({status:404,json:{reasonCode:'NOT_FOUND'}});
+ });
+ await page.goto('/help');await expect.poll(()=>writes.length).toBe(1);
+ if(unresolved)await expect(page.getByRole('button',{name:'核对原请求'})).toBeVisible();
+ else await expect(page.getByRole('heading',{name:'帮助中心',exact:true})).toBeVisible();
+ selection='c'.repeat(64);await page.evaluate(()=>window.dispatchEvent(new Event('published-test-resources-changed')));
+ if(unresolved){await expect(page.getByRole('button',{name:'读取新版资料'})).toBeVisible();expect(writes).toHaveLength(1);}
+ else{await expect.poll(()=>writes.length).toBe(2);expect(writes[1].idempotencyKey).toContain('published:'+selection+':');expect(writes[1].idempotencyKey).not.toBe(writes[0].idempotencyKey);}
+ await page.reload();await expect(page.getByRole('heading',{name:'帮助中心',exact:true})).toBeVisible();
+ if(unresolved){await expect(page.getByRole('button',{name:'读取新版资料'})).toBeVisible();expect(writes).toHaveLength(1);}
+ else{await expect.poll(()=>writes.length).toBe(3);expect(writes[2].idempotencyKey).toBe(writes[1].idempotencyKey);}
+});

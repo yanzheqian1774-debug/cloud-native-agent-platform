@@ -265,7 +265,9 @@ def test_migration_rejects_missing_immutable_trigger(fixture):
 
 
 @pytest.mark.parametrize("mode", ["cycles", "unknown", "budget_full"])
-def test_normal_planning_claim_proposal_original_budget_and_replay(fixture, mode):
+def test_normal_planning_claim_proposal_original_budget_and_replay(
+    fixture, mode, first_event="slot:1"
+):
     """Actual planning/PG budget owners; provider/model resolution and Problem input are controlled fixtures."""
     import json
 
@@ -389,15 +391,15 @@ def test_normal_planning_claim_proposal_original_budget_and_replay(fixture, mode
     runtime = ServicePlanningRuntime(
         service, reader, lambda: f.current[0], enabled=True
     )
-    prepared = runtime.begin(f.context, "slot:1", prepare_only=True)
+    prepared = runtime.begin(f.context, first_event, prepare_only=True)
     assert prepared["admission"]["ready"] and provider.calls == 0
     if mode == "budget_full":
         from agent_console.draft_assistance import DraftAssistanceError
 
         with pytest.raises(DraftAssistanceError, match="PROVIDER_BUDGET_EXHAUSTED"):
-            runtime.begin(f.context, "slot:1")
+            runtime.begin(f.context, first_event)
         assert (
-            runtime.begin(f.context, "slot:1")["result"]["technical_status"]
+            runtime.begin(f.context, first_event)["result"]["technical_status"]
             == "OUTCOME_UNKNOWN"
         )
         assert provider.calls == 0
@@ -416,7 +418,7 @@ def test_normal_planning_claim_proposal_original_budget_and_replay(fixture, mode
                 == 0
             )
         return
-    result = runtime.begin(f.context, "slot:1")
+    result = runtime.begin(f.context, first_event)
     if second_unknown:
         assert result["result"]["technical_status"] == "OUTCOME_UNKNOWN"
         with pytest.raises(AuthorityError, match="PREVIOUS_OUTCOME_UNRESOLVED"):
@@ -440,7 +442,7 @@ def test_normal_planning_claim_proposal_original_budget_and_replay(fixture, mode
     assert result["result"]["technical_status"] == "SUCCEEDED"
     assert result["result"]["kind"] == "VALID_SUGGESTION"
     assert provider.calls == 1
-    assert runtime.begin(f.context, "slot:1")["result"] == result["result"]
+    assert runtime.begin(f.context, first_event)["result"] == result["result"]
     assert provider.calls == 1
     with f.repository.pool.connection() as c:
         c.row_factory = dict_row
@@ -469,6 +471,8 @@ def test_normal_planning_claim_proposal_original_budget_and_replay(fixture, mode
             == 1
         )
 
+    if mode == "bound_once":
+        return  # One real bound model-owner call; no second due window fabricated.
     with pytest.raises(AuthorityError, match="PREVIOUS_CYCLE_AWAITS_CONTINUATION"):
         runtime.begin(f.context, "slot:2")
     assert provider.calls == 1

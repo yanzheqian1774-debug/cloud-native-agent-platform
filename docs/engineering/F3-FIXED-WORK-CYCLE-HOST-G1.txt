@@ -1,0 +1,60 @@
+Fixed-work cycle host and records follow-up, default off
+Parent candidate: 0070 SHA781c8c949ca3cc0766eb541369fab79ea2157267c1ad5bc8418696fc4ca8f3de.
+Scope: continue the original F3 fixed-work goal. This is not a new generic scheduler or an alternative execution owner. No actual service/config/model operation is authorized by this document.
+
+Reuse points verified from current source:
+1. ServicePlanningRuntime.begin -> original PlanningSuggestionService.begin; immutable 0070 event preparation and original invocation/budget facts. Existing exact service identity/current grants are required independently of configuration.
+2. PlanningSuggestionService.read(..., settle_receipt=False) reads the exact invocation without settlement mutation. Never convert missing invocation after a preparation into a fresh begin automatically; retain preparation and report review required.
+3. PlanningApplication.confirm(principal, proposal_id, revision, digest, expected_plan_version=0, key) records BUSINESS_APPROVAL through existing exact APPROVE authority, proposal target validation and command replay. It does not require or manufacture HUMAN_REVIEWED. A host can only invoke this under independently granted exact APPROVE, never infer that grant from its work configuration.
+4. ResourceAutomation.__call__ uses existing exact Plan/current resource permissions and its separately configured decision issuer. Its prepared result must be READY; otherwise stop at the actual resource result. Same stable key on re-entry, no synthetic READY.
+5. ServiceCycleContinuation.continue_once -> original ReadonlyContinuation -> preparation/START/coordinator, all in original caller transaction. 0069 receipt and original START are atomic. No model is called in this transaction. Actual Native hosts remain managed by native_host_service{,_config,_discovery,_state}.py after a genuine Run exists.
+6. Reuse native_host_service_state.private_directory/lock for local singleton lifecycle only. Those local files do not establish service identity, approval, Task terminal state or dispatch rights. No modification to the existing Native manager's lifecycle semantics.
+
+Crash/state table to implement:
+- No 0070 preparation + current due event + all current authority: exactly one normal begin; original owner protects claim/ledger. Out-of-window slots are not backfilled.
+- Preparation exists + no invocation: preparation review required; never select a new event/key to bypass it.
+- Invocation RUNNING/UNKNOWN/unsettled: read-only observation; no begin, no approval, no START. Stop advancing other slots for that work.
+- Invocation FAILED: retain original failure, no same-event re-call. A later independently bounded slot is permitted only if original budget is settled and no unresolved effect remains.
+- Invocation SUCCEEDED/VALID_SUGGESTION: exact proposal/digest from saved result, not latest proposal. Read/replay the stable original confirm command under its current owner authority. Missing APPROVE is waiting for approval, not model failure.
+- Confirmed proposal + resource checks pending/denied: preserve exact plan, do not rerun model. Re-enter only existing resource command at its same key.
+- START/receipt response lost: read exact 0069 receipt and current EXECUTION READ. Existing continuation without matching trigger receipt is review required. Never infer absence from a generic404.
+- Receipt exists: read exact original Run/progress owner. UNKNOWN/recovery required blocks subsequent cycle; technical model success is not fixed-work completion.
+- Cancellation: disabling policy/credential prevents new actions at original owner checks. Stop host cooperatively; already dispatched Native work stays governed by its existing cancellation owner. Do not rewrite Run or release reservation from host exit.
+
+Event delivery:
+Schedule slots are derived from persisted exact work revision + UTC slot, reject DST ambiguity and missing times. Only preauthorized bounded event windows can dispatch. External events must supply one of those exact event identities; event payload cannot choose resource/subject/model. Same work/event uniqueness spans service identities in0070. A duplicate delivery is receipt discovery, not a new command. Existing work revision change requires separate current policy binding.
+
+Frontend next interface:
+Add a bounded work activity projection under the same exact team/work page. TEAM READ plus exact work binding permits viewing configuration; execution details additionally require each actual EXECUTION READ. Do not expose another service's provider identifiers or costs. Return stable event/run IDs with actual stages; UI uses existing task detail route and returns to same team/work. No 'automatic running' label based solely on a saved TriggerDraft or enabled local process. Display not enabled until actual composition exists and independently approved service policy is active.
+
+Remaining implementation gates, not user decisions:
+- Dedicated composition must use a real SERVICE_CREDENTIAL context and original budget ledger, existing published model binding and independent resource decision issuer. No local Human account fabrication.
+- Host and activity projection are a follow-up to frozen0070; their tests must prove second due event waits for first actual terminal state and replay after each transaction boundary produces no new model/Run.
+- Initial natural-language work still requires exact confirmed business Problem/Criteria. The existing initial understanding browser/account owner is not silently bypassed. Template/standing interpretation of new business scopes remains a separate explicit adapter, not implied by current save endpoint.
+
+Implementation increment (isolated, not frozen):
+- fixed_work_cycle_host.py: per-event original-owner steps, saved invocation read uses settle_receipt=False. Missing saved invocation does not fall back to begin. Original confirm and resource operations keep exact APPROVE; original continuation keeps READ/START.
+- operator fixed_work_cycle_service.py: explicit run(stop,observe) loop, no constructor/startup effects; reuses native_host_service_state machine-local private lock with distinct fixed-cycle name bound to DB fingerprint+tenant/domain+work. Polls saved or currently due approved events, no missed-slot backfill. Known previous-work preparation guards become WAITING_PREVIOUS_WORK; other errors stop rather than retry writes. Configuration digest change requires a new explicitly composed process. Never rewrites cancellation or old UNKNOWN.
+- workbench_fixed_work_activity.py: new GET only, fixed exact team/work/revision; delegates existing authoring READ policy first, then filters each receipt by current exact EXECUTION READ before progress lookup. Bounded recent50, no provider identifiers, raw model text, authority issuance, total hidden-record counts or automatic-enabled inference. Existing expired service START is not required for this business-reader GET. Requires current authoring READ and exact execution READ.
+- bootstrap FIXED_WORK_ACTIVITY_ENABLED defaults off and requires authoring enabled + existing0069 compatible schema (no migrate). Host is not started by this flag.
+- activity UI follows current team/work digest and principal, invalidates late session reads, clears stale result after failed refresh. Preview shows the user's literal instructions and explicit schedule fields plus saved-before/after differences; it does NOT claim the instruction has been semantically interpreted into an approved executable plan.
+
+Current evidence:
+controlled-host.log6PASS; host-activity-pure.log10PASS (overlap host6); cycle-service-pure.log5PASS.
+host-pg-r1.log1PASS7.57s: actual original model/Plan/resource/START/coordinator owners, controlled provider, no Native worker effects; injected after-enqueue rollback, new host object original event replay one model/one Run.
+two-cycle-pg-r1.logUNKNOWN branchPASS, cancelled fixture failed due incorrect use of permit_effect after cancellation (owner correctly refused); correction uses existing stop_prepared_before_effect owner.
+two-cycle-cancel-r2.log1PASS9.10s: original request_cancel + Native owner immutable no-effect stop receipt produce CANCELLED, second independently bounded event produces second model/Run, new host object replay returns same second receipt. No direct SQL progress updates. This is not two successful business outcomes, no real provider or Kubernetes, and a fresh host object is not a physical process restart acceptance.
+Remaining before package closure: process lifecycle checks, complete current frontend lint/build/browser, exact activity integration negatives, bounded result-return navigation, packaging net increment against frozen dependencies. Real deployment and periodic business acceptance remain root-only.
+
+Independent approval follow-up (default off, current isolated candidate):
+ServiceCyclePlanApproval uses the existing ResourceAutomation independent issuer
+and GrantAdministrationService. It verifies the exact saved successful model
+proposal, its original event preparation and original budget settlement on the
+caller connection, then requests only exact Plan READ/PREPARE/APPROVE under the
+existing work policy. Configuration alone does not create a grant. The current
+service credential, requestability, issuer and policy expiry are still required.
+Plan lock precedes work lock, matching existing resource/continuation order.
+Approval and original confirmation share one caller transaction; no Human review
+fact is created. No new migration or alternative approval ledger is introduced.
+The initial tests that pre-granted generated Plan IDs do not prove this new path;
+its new real-owner isolated tests remove those grants: independent-approval-pg-r1.log, 2 PASS in 18.79s. Both UNKNOWN blocking and original-owner CANCELLED then second approved slot pass; controlled provider only, no actual platform effects.

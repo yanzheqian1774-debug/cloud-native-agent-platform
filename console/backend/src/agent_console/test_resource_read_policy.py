@@ -113,7 +113,14 @@ class TestReadPolicy(BaseModel):
         path = Path(path)
         if not path.is_absolute():
             raise AuthorityError("TEST_READ_POLICY_CONFIGURATION_INVALID")
-        return cls.model_validate_json(path.read_text())
+        raw = path.read_text()
+        import json
+
+        kind = json.loads(raw).get("schemaVersion")
+        model = (
+            PublishedTestReadPolicy if kind == "test-resource-read-policy.v2" else cls
+        )
+        return model.model_validate_json(raw)
 
     @property
     def digest(self):
@@ -158,3 +165,36 @@ class TestReadPolicy(BaseModel):
         for target in self.targets:
             grants._validate_requestable(target.purpose, (target.grant,))
         return issuer, min(self.expiresAt, verified.credential_expires_at)
+
+
+class PublishedResourceSelector(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["skill", "employee"]
+    logicalId: str = Field(min_length=1, max_length=200)
+    anchorRevision: str = Field(min_length=1, max_length=200)
+    anchorDigest: str = Field(pattern="^[a-f0-9]{64}$")
+    purpose: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def exact_creator(self):
+        prefix = "skill-definition:" if self.kind == "skill" else "employee-definition:"
+        if not self.logicalId.startswith(prefix) or any(
+            c in self.logicalId for c in "*%/\\"
+        ):
+            raise ValueError("TEST_READ_SELECTOR_INVALID")
+        return self
+
+
+class PublishedTestReadPolicy(TestReadPolicy):
+    schemaVersion: Literal["test-resource-read-policy.v2"]
+    publishedResources: tuple[PublishedResourceSelector, ...] = Field(
+        default=(), max_length=2
+    )
+
+    @model_validator(mode="after")
+    def unique_selectors(self):
+        if len({(x.kind, x.logicalId) for x in self.publishedResources}) != len(
+            self.publishedResources
+        ):
+            raise ValueError("TEST_READ_SELECTOR_INVALID")
+        return self

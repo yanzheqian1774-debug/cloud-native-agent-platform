@@ -124,6 +124,10 @@ class ServiceCycleContinuation:
                 and receipt["subject"] == context.principal_id
                 and receipt["executionStarted"] is True
             )
+            if policy.schemaVersion == "fixed-work-service-planning.v2":
+                from .fixed_work_bound_source import require_bound_preparation
+
+                require_bound_preparation(c, policy, receipt)
             actual = c.execute(
                 "SELECT result FROM execution_authority.prepared_resource_commands WHERE namespace=%s AND security_domain=%s AND actor_id=%s AND command_key=%s",
                 (*identity[:3], key),

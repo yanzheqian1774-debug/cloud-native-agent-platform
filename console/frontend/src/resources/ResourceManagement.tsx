@@ -1,3 +1,4 @@
+import {publishedTestResourcesChanged} from '../components/testResourcePreparation';
 import {workbenchPrincipalKey} from '../api/digitalEmployees';
 import {createPortal} from 'react-dom';
 import {useEffect,useRef,useState} from 'react';
@@ -106,6 +107,7 @@ export function ResourceManagement({kind,onChanged,onDetailChange,onDirectoryCha
   if(currentParams.get('managedResource')!==result.identity||followEditedDraft){
    currentParams.set('managedResource',result.identity);if(followEditedDraft)currentParams.set('viewRevision',current.currentDraftRevisionId!);setParams(currentParams,{replace:true});
   }
+  if(['publish','publish-tested'].includes(intent.action))window.dispatchEvent(new Event(publishedTestResourcesChanged));
   setMode(null);setTools([]);onChanged();return current;
  }
  async function submit(action:string,extra:Record<string,unknown>={},resource=selected){

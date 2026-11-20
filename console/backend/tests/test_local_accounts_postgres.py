@@ -38,9 +38,15 @@ PASSWORD = "test-only-account-password-324"
 
 @pytest.fixture
 def setup():
-    name = "accounts324_" + uuid4().hex
-    with psycopg.connect(URL, autocommit=True) as admin:
-        admin.execute(f'CREATE DATABASE "{name}"')
+    from fixed_work_dedicated_database import clean, require_empty, selected
+
+    dedicated = selected(URL)
+    if dedicated:
+        require_empty(URL)
+    name = dedicated or "accounts324_" + uuid4().hex
+    if not dedicated:
+        with psycopg.connect(URL, autocommit=True) as admin:
+            admin.execute(f'CREATE DATABASE "{name}"')
     repo = PostgresAuthorityRepository(
         URL.rsplit("/", 1)[0] + "/" + name, migration_path=MIGRATION
     )
@@ -137,13 +143,16 @@ def setup():
         yield repo, generation, service, reader
     finally:
         repo.close()
-        with psycopg.connect(URL, autocommit=True) as admin:
-            admin.execute(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname=%s",
-                (name,),
-            )
-            admin.execute(f'DROP DATABASE "{name}"')
+        if dedicated:
+            clean(URL)
+        else:
+            with psycopg.connect(URL, autocommit=True) as admin:
+                admin.execute(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE datname=%s",
+                    (name,),
+                )
+                admin.execute(f'DROP DATABASE "{name}"')
 
 
 def login(service, user="demo324", password=PASSWORD):

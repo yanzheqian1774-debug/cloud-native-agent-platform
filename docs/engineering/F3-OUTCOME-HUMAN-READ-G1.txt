@@ -1,0 +1,16 @@
+G1 / 8c0c8d9 / read-only Human decision projection
+Product decision: keep accepted tab unconnected; ACK means 已核阅，仍待处理,
+DISAGREE means 对结果有异议. Neither is deliverable acceptance or business solved.
+Existing prepared GET retains all exact execution/evaluation/snapshot/criterion/output
+READ checks. Optional humanReview separately requires current HUMAN_CONFIRMATION READ
+on exact preparation. Same transaction queries immutable confirmation + original
+reviewed evaluation/snapshot + current outcome successor; validates canonical digests,
+row/record actor/decision/authority, scope/run/prep/evaluation ancestry. No grant/write.
+Unavailable, absent, corrupt or forbidden records do not imply nobody reviewed.
+UI stage details display readable decision/reason, actor and exact IDs folded into
+existing details. No new confirmation action, model, START, lifecycle or migration.
+Tests: real original ACK owner readback/replay, denied/revoked current read, missing
+record, tampered digest/actor/scope via controlled SELECT response (immutable DB facts
+never edited); browser ACK/DISAGREE/unknown and zero writes/accepted unchanged.
+Gap: formal deliverable acceptance distinct from business problem resolution remains
+unimplemented. Existing synthetic CONFIRM_PROBLEM_SOLVED prohibition unchanged.

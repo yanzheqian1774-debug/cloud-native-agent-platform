@@ -1,5 +1,6 @@
 """Narrow existing service grants; configuration never issues authority."""
 
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -73,7 +74,15 @@ class ServicePlanningPolicy(BaseModel):
         try:
             if not p.is_absolute() or p.stat().st_mode & 0o077:
                 raise ValueError("private absolute policy required")
-            return cls.model_validate_json(p.read_text())
+            raw = p.read_text()
+            document = json.loads(raw)
+            if not isinstance(document, dict):
+                raise ValueError("policy object required")
+            if document.get("schemaVersion") == "fixed-work-service-planning.v2":
+                from .fixed_work_bound_policy import BoundServicePlanningPolicy
+
+                return BoundServicePlanningPolicy.model_validate_json(raw)
+            return cls.model_validate_json(raw)
         except (OSError, ValueError) as exc:
             raise AuthorityError("FIXED_WORK_SERVICE_POLICY_UNAVAILABLE") from exc
 

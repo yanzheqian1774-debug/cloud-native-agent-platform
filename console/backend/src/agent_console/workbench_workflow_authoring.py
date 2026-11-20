@@ -78,7 +78,7 @@ class WorkflowAuthoringTargets:
         )
 
 
-def authoring_operations(service, services):
+def authoring_operations(service, services, *, policy_publication_enabled=False):
     author = WorkflowAuthoring(service, WorkflowReferenceChecker(services))
 
     def grants(context, path, payload, query):
@@ -165,7 +165,12 @@ def authoring_operations(service, services):
                     "READ",
                     f"workflow:{record['workflowDefinitionId']}:{revision['revisionId']}",
                 )
-            return bound.project(record)
+            projected = bound.project(record)
+            if policy_publication_enabled:
+                from .workbench_workflow_policy import capability
+
+                projected["policyPublicationAvailable"] = capability(call, True)
+            return projected
         except WorkflowDefinitionFailure as exc:
             raise WorkbenchOwnerError(exc.reason, exc.status) from exc
         except (WorkflowDefinitionRepositoryError, PostgresError) as exc:

@@ -184,6 +184,10 @@ class ServicePlanningRegistry:
             == (True,) * len(grants),
             "FIXED_WORK_SERVICE_GRANTS_REQUIRED",
         )
+        if policy.schemaVersion == "fixed-work-service-planning.v2":
+            from .fixed_work_bound_source import require_bound_source
+
+            require_bound_source(c, context, policy, saved, authority, kwargs)
         return now
 
     @staticmethod

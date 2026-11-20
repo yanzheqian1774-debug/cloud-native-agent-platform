@@ -1,3 +1,4 @@
+import {publishedTestResourcesChanged} from '../components/testResourcePreparation';
 import {SelectedUpgradeDifference} from './SelectedUpgradeDifference';
 import {useEffect,useRef,useState} from 'react';
 import {getEmployeeDefinition,getWorkbenchSession,workbenchPrincipalKey} from '../api/digitalEmployees';
@@ -31,7 +32,7 @@ export function SelectedResourceUpgrade({resource,candidates,candidatesReady=tru
   if(!/^[a-f0-9]{64}$/.test(result.reviewDigest)||!Array.isArray(result.preview?.employees)||!Array.isArray(result.preview?.capabilities))throw Error();setSelection(input);setPreviewBasis(basis);setPreview(result);
  }catch{setMessage('暂不能生成发布预览。请核对当前版本、已有草稿、验证依据及权限；已选对象保持不变。')}finally{running.current=false;setBusy(false)}}
  async function refreshDetails(){if(!onUpgradeRefresh||refreshing)return;setRefreshing(true);setDetailMessage('正在读取发布后的详情…');try{await onUpgradeRefresh();setDetailMessage('发布后的资源详情已更新。')}catch{setDetailMessage('整批已发布，部分详情暂未读取。可再次读取详情，不会重新发布。')}finally{setRefreshing(false)}}
- function complete(value:UpgradeReceipt,record:Pending){const valid=verifiedReceipt(value,record.command);setReceipt(valid);setPending(null);void refreshDetails();setMessage('整批已发布。历史引用与未选对象保持不变。');try{sessionStorage.removeItem(storageKey(record.principal))}catch{/* A retained receipt-query record is safe: it cannot resubmit. */}}
+ function complete(value:UpgradeReceipt,record:Pending){const valid=verifiedReceipt(value,record.command);setReceipt(valid);window.dispatchEvent(new Event(publishedTestResourcesChanged));setPending(null);void refreshDetails();setMessage('整批已发布。历史引用与未选对象保持不变。');try{sessionStorage.removeItem(storageKey(record.principal))}catch{/* A retained receipt-query record is safe: it cannot resubmit. */}}
  async function submit(){if(blocked||running.current||!preview||!previewCurrent||!selection||pending||storageBroken)return;running.current=true;setBusy(true);const record:Pending={principal,command:{...selection,commandId:'selected-upgrade:'+crypto.randomUUID(),reviewDigest:preview.reviewDigest,reason:'确认按预览整批发布选定版本'}};try{
   try{sessionStorage.setItem(storageKey(principal),JSON.stringify(record))}catch{setStorageBroken(true);setMessage('无法保存提交记录，本次没有发送。请恢复浏览器存储后再试。');return}setPending(record);setMessage('正在提交，等待发布回执…');
   const result=await upgradeRequest<{receipt:UpgradeReceipt}>('submit',record.command,principal);complete(result.receipt,record);

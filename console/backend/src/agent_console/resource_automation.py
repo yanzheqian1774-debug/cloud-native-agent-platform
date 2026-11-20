@@ -167,7 +167,15 @@ class ResourceAutomation:
             )
 
     def decide(
-        self, call, members, key, work, issuer, *, purpose="RESOURCE_PREPARATION"
+        self,
+        call,
+        members,
+        key,
+        work,
+        issuer,
+        *,
+        purpose="RESOURCE_PREPARATION",
+        request_key=None,
     ):
         if isinstance(work, owned_resources.OwnedResourceWork):
             if work.historyRead:
@@ -207,7 +215,8 @@ class ResourceAutomation:
             GrantRequestCommand(
                 purpose,
                 members,
-                "d11-request:"
+                request_key
+                or "d11-request:"
                 + canonical_digest([key, [vars_grant(g) for g in members]]),
             ),
         )

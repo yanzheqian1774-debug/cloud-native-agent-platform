@@ -404,6 +404,15 @@ class PreparedExecutionOwner:
                     key,
                 ).fetchone()
                 outcome = row["record"] if row else None
+        from .prepared_human_decision_read import read_human_decision
+
+        human_review = (
+            read_human_decision(
+                call.connection, app.principal, call.authority, p, outcome
+            )
+            if outcome
+            else {"status": "UNAVAILABLE"}
+        )
         events = call.connection.execute(
             "SELECT version,record,created_at FROM execution_authority.prepared_run_events WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s ORDER BY version",
             key,
@@ -436,6 +445,7 @@ class PreparedExecutionOwner:
             "progress": progress.model_dump(mode="json") if progress else None,
             "artifacts": artifacts,
             "outcome": outcome,
+            "humanReview": human_review,
             "admission": admission,
             "resourceUses": usage,
             "events": events,

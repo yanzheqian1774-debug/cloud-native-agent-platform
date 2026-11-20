@@ -37,6 +37,8 @@ def drive(
     *,
     expected_definitions,
     sales_v2_candidate=False,
+    exact_run_id=None,
+    expected_runs=1,
 ):
     assert native.load_checkpoint().state.value == "POSTGRES_ACTIVE"
     reader = a.automation.grants.authorization
@@ -150,9 +152,27 @@ def drive(
         assert work.evaluate_terminal() == {"evaluated": 0, "blocked": 0}
         assert len(kubernetes.tasks) == task_count
         with native.pool.connection() as c:
-            outcome = c.execute(
-                "SELECT record FROM product_outcome.outcomes LIMIT 1"
-            ).fetchone()["record"]
+            if exact_run_id is None:
+                outcome = c.execute(
+                    "SELECT record FROM product_outcome.outcomes LIMIT 1"
+                ).fetchone()["record"]
+                artifact_count = c.execute(
+                    "SELECT count(*) n FROM execution_authority.run_artifacts"
+                ).fetchone()["n"]
+            else:
+                exact = (a.e.scope.namespace, a.e.scope.security_domain, exact_run_id)
+                outcomes = c.execute(
+                    "SELECT record FROM product_outcome.outcomes WHERE namespace=%s "
+                    "AND security_domain=%s AND workflow_run_id=%s",
+                    exact,
+                ).fetchall()
+                assert len(outcomes) == 1
+                outcome = outcomes[0]["record"]
+                artifact_count = c.execute(
+                    "SELECT count(*) n FROM execution_authority.run_artifacts "
+                    "WHERE namespace=%s AND security_domain=%s AND workflow_run_id=%s",
+                    exact,
+                ).fetchone()["n"]
             summary = {
                 "isolatedEngineeringOnly": True,
                 "kubernetesPort": "EXPLICIT_FIXTURE",
@@ -162,9 +182,7 @@ def drive(
                 "runs": c.execute(
                     "SELECT count(*) n FROM execution_authority.workflow_runs"
                 ).fetchone()["n"],
-                "artifacts": c.execute(
-                    "SELECT count(*) n FROM execution_authority.run_artifacts"
-                ).fetchone()["n"],
+                "artifacts": artifact_count,
                 "employeeDefinitions": c.execute(
                     "SELECT count(*) n FROM digital_employee_definition.definitions"
                 ).fetchone()["n"],
@@ -242,7 +260,7 @@ def drive(
                             default=str,
                         )
                     )
-        assert summary["runs"] == 1
+        assert summary["runs"] == expected_runs
         assert summary["artifacts"] == task_count
         assert summary["employeeDefinitions"] == expected_definitions
         summary["longEmployeeDefinitionsUnchangedAfterFixtureSetup"] = True

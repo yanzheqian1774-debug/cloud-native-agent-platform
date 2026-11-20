@@ -5,6 +5,7 @@ type Receipt={policyDigest:string;selectionDigest?:string;items:{state:string}[]
 type Status={available:boolean;policyDigest?:string;selectionDigest?:string};
 const pending=new Map<string,Promise<ResourceAccessState>>();
 const prefix='/api/workbench/v1/test-resource-access';
+export const publishedTestResourcesChanged='published-test-resources-changed';
 export const resourceAccessChanged='conversation-resource-read-preparation';
 async function json<T>(path:string,init?:RequestInit):Promise<T>{
  const response=await fetch(prefix+path,{credentials:'same-origin',signal:AbortSignal.timeout(init?.method==='POST'?60000:15000),...init});
@@ -71,10 +72,11 @@ async function prepare(scope:string):Promise<ResourceAccessState>{
 }
 
 /** Shared by shell and conversation. No model, work creation, or execution endpoint. */
-export async function ensureTestResourceAccess(identity:string,expectedPrincipal?:unknown):Promise<ResourceAccessState>{
+export async function ensureTestResourceAccess(identity:string,expectedPrincipal?:unknown,afterPublication=false):Promise<ResourceAccessState>{
  const session=await readWorkbenchSession();
  const scope=JSON.stringify(session.principal);
  if(session.principal.principalId!==identity||(expectedPrincipal&&scope!==JSON.stringify(expectedPrincipal)))throw Error('IDENTITY_CHANGED');
+ if(afterPublication&&pending.has(scope)){await pending.get(scope);return ensureTestResourceAccess(identity,expectedPrincipal);}
  let request=pending.get(scope);
  if(!request){request=prepare(scope);pending.set(scope,request);void request.finally(()=>pending.delete(scope)).catch(()=>{})}
  const result=await request;

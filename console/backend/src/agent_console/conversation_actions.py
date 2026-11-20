@@ -502,6 +502,14 @@ def original_action(request, ctx, action, payload, invoke):
     service = getattr(request.app.state, "conversation_actions", None)
     if not service or not identity or not conversation:
         raise ConversationError("CONVERSATIONS_DISABLED", 404)
+    if action == "DRAFT":
+        from .draft_assistance_api import BeginDraftAssistance
+
+        # Match IntentCommand's persisted canonical payload, including defaults.
+        # The original route may omit the false conversationRouting field.
+        payload = BeginDraftAssistance.model_validate(payload).model_dump(
+            mode="json", exclude_none=True
+        )
     service.claim(ctx, conversation, identity, action, payload)
     # A failure after claim is conservative UNKNOWN unless the original route
     # explicitly returns a pre-effect validation/authorization failure.

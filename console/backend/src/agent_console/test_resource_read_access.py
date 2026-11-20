@@ -105,9 +105,12 @@ def prepare(policy, grants, context, connection, key, expected_selection_digest=
     grants._validate_idempotency_key(key)
     issuer, lifetime = policy.authenticate(grants, context)
     from .ontology_published_read import lineage_block, resolve, validate_selection_key
+    from .published_test_resources import lineage_block as resource_lineage_block
 
     selected = (
-        resolve(policy, context, connection) if policy.publishedOntologyIds else None
+        resolve(policy, context, connection)
+        if (policy.publishedOntologyIds or getattr(policy, "publishedResources", ()))
+        else None
     )
     if selected:
         validate_selection_key(key, expected_selection_digest, selected)
@@ -135,7 +138,13 @@ def prepare(policy, grants, context, connection, key, expected_selection_digest=
         ):
             raise AuthorityError("TEST_READ_POLICY_TARGET_UNAVAILABLE")
         blocked = (
-            lineage_block(connection, context, target.resource)
+            (
+                lineage_block(connection, context, target.resource)
+                if target.owner == "BUSINESS_ONTOLOGY"
+                else resource_lineage_block(
+                    connection, context, target.resource, policy, bound.generation
+                )
+            )
             if target.resource in dynamic
             else None
         )
@@ -269,7 +278,10 @@ def install_test_read_access(policy, grants, authorizer):
 
                 selection = (
                     resolve(policy, context, connection)
-                    if policy.publishedOntologyIds
+                    if (
+                        policy.publishedOntologyIds
+                        or getattr(policy, "publishedResources", ())
+                    )
                     else None
                 )
                 return {

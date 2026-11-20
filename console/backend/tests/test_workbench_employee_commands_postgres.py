@@ -221,9 +221,15 @@ def insert_dynamic_grant(
 @pytest.fixture
 def employee_workbench():
     original = DATABASE_URL or ""
-    database_name = f"impl310_employee_{uuid.uuid4().hex}"
+    from fixed_work_dedicated_database import clean, require_empty, selected
+
+    dedicated = selected(original)
+    if dedicated:
+        require_empty(original)
+    database_name = dedicated or f"impl310_employee_{uuid.uuid4().hex}"
     admin = psycopg.connect(original, autocommit=True)
-    admin.execute(f'CREATE DATABASE "{database_name}"')
+    if not dedicated:
+        admin.execute(f'CREATE DATABASE "{database_name}"')
     database_url = original.rsplit("/", 1)[0] + f"/{database_name}"
     authority = None
     agents = None
@@ -345,12 +351,16 @@ def employee_workbench():
             authority.close()
         if agents is not None:
             agents.pool.close()
-        admin.execute(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=%s",
-            (database_name,),
-        )
-        admin.execute(f'DROP DATABASE "{database_name}"')
+        if not dedicated:
+            admin.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                "WHERE datname=%s",
+                (database_name,),
+            )
+            admin.execute(f'DROP DATABASE "{database_name}"')
         admin.close()
+        if dedicated:
+            clean(original)
 
 
 def login(client: TestClient, credential: str) -> str:

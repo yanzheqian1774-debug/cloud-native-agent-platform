@@ -5,9 +5,10 @@ export type WorkflowTask={taskId:string;name:string;dependsOn:string[];inputs:st
 export const hasSkillOperationBindings=(task:WorkflowTask)=>Boolean(task.skillOperationBindings?.length);
 export const referenceSupportsBinding=(task:WorkflowTask,binding:SkillOperationBinding)=>task.references.some(reference=>reference.kind==="SKILL"&&reference.resourceId===binding.skillId&&reference.revisionId===binding.skillRevisionId&&reference.digest===binding.skillDigest);
 export type WorkflowContent={description:string;tasks:WorkflowTask[];inputs:string[];outputs:string[];runtimeProfile:ExactReference};
-export type WorkflowRevision={revisionId:string;predecessorRevisionId:string|null;state:string;digest:string;content:WorkflowContent;createdAt:string};
+export type WorkflowRevision={revisionId:string;predecessorRevisionId:string|null;state:string;digest:string;content:WorkflowContent;createdAt:string;publicationBasis?:WorkflowPolicyReview};
 export type WorkflowDefinition={workflowDefinitionId:string;name:string;aggregateVersion:number;lifecycleState:string;currentDraftRevisionId:string|null;publishedRevisionId:string|null;revisions:WorkflowRevision[];reviews:Array<{reviewId:string;digest:string}>;relationships:unknown[];consumers:unknown[]};
-export type WorkflowProjection={definition:WorkflowDefinition;productProjection:Record<string,unknown>;technicalProjection:Record<string,unknown>};
+export type WorkflowPolicyReview={schemaVersion:'workflow-policy-review.v1';reviewId:string;revisionId:string;digest:string;actor:string;reviewedAt:string;policyBasis:{type:'DEVELOPMENT_ADMINISTRATOR';issuer:string;authorityGeneration:number;commandDigest:string}};
+export type WorkflowProjection={definition:WorkflowDefinition;productProjection:Record<string,unknown>;technicalProjection:Record<string,unknown>;policyPublicationAvailable?:boolean};
 export class WorkflowDefinitionRequestError extends Error{reasonCode:string;status:number;constructor(reasonCode:string,status:number){super(reasonCode);this.reasonCode=reasonCode;this.status=status}}
 export type WorkflowControlledState="validation error"|"denied"|"not found"|"conflict"|"stale"|"backend unavailable"|"partial"|"retryable"|"recovery required"|"unsupported";
 export const workflowControlledState=(error:WorkflowDefinitionRequestError):WorkflowControlledState=>error.status===403?"denied":error.status===404?"not found":error.status===409?(error.reasonCode.includes("STALE")?"stale":"conflict"):error.status===422?"validation error":error.status===501?"unsupported":error.status>=500?"backend unavailable":"retryable";
@@ -27,10 +28,14 @@ export const editWorkflowDefinition=(definition:WorkflowDefinition,content:Workf
 export const validateWorkflowDefinition=(id:string,expectedVersion:number)=>trustedWorkflowAuthoring?submitWorkflowCommand({action:"validate",workflowId:id,expectedVersion}):request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/validation`,{method:"POST",body:JSON.stringify({expectedVersion})});
 export const reviewWorkflowDefinition=(id:string,expectedVersion:number,digest:string,reason:string)=>{if(!reason.trim())return Promise.reject(new WorkflowDefinitionRequestError("WORKFLOW_REVIEW_REASON_REQUIRED",400));return trustedWorkflowAuthoring?submitWorkflowCommand({action:"review",workflowId:id,expectedVersion,digest,reason:reason.trim()}):request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/reviews`,{method:"POST",body:JSON.stringify({expectedVersion,digest,decision:"APPROVE",reason:reason.trim()})})};
 export const publishWorkflowDefinition=(id:string,expectedVersion:number,digest:string,reviewId:string)=>trustedWorkflowAuthoring?submitWorkflowCommand({action:"publish",workflowId:id,expectedVersion,digest,reviewId}):request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/publications`,{method:"POST",body:JSON.stringify({expectedVersion,digest,reviewId})});
+export const publishWorkflowByPolicy=(id:string,expectedVersion:number,digest:string)=>{
+ if(!trustedWorkflowAuthoring)return Promise.reject(new WorkflowDefinitionRequestError('WORKFLOW_POLICY_PUBLICATION_DISABLED',403));
+ return submitWorkflowCommand({action:'policy-publish',workflowId:id,expectedVersion,digest});
+};
 export const successorWorkflowDefinition=(id:string,expectedVersion:number)=>trustedWorkflowAuthoring?submitWorkflowCommand({action:"successor",workflowId:id,expectedVersion}):request<WorkflowProjection>(`${root}/${encodeURIComponent(id)}/successors`,{method:"POST",body:JSON.stringify({expectedVersion})});
 export const compareWorkflowRevisions=(id:string,left:string,right:string)=>trustedWorkflowAuthoring?trustedRead<Record<string,unknown>>(`/workflows/${encodeURIComponent(id)}/comparison?${new URLSearchParams({leftRevisionId:left,rightRevisionId:right})}`):request<Record<string,unknown>>(`${root}/${encodeURIComponent(id)}/comparison?${new URLSearchParams({leftRevisionId:left,rightRevisionId:right})}`);
 
-type WorkflowCommand={action:'create'|'edit'|'validate'|'review'|'publish'|'successor';commandKey?:string;workflowId?:string;expectedVersion?:number;name?:string;content?:WorkflowContent;digest?:string;reason?:string;reviewId?:string};
+type WorkflowCommand={action:'create'|'edit'|'validate'|'review'|'publish'|'successor'|'policy-publish';commandKey?:string;workflowId?:string;expectedVersion?:number;name?:string;content?:WorkflowContent;digest?:string;reason?:string;reviewId?:string};
 type PendingWorkflowCommand={principal:string;command:WorkflowCommand};
 const pendingKey='workflow-authoring-pending-v1';
 const pendingCommand=():PendingWorkflowCommand|null=>{try{return JSON.parse(sessionStorage.getItem(pendingKey)??'null')}catch{throw new WorkflowDefinitionRequestError('WORKFLOW_PENDING_RECORD_UNREADABLE',409)}};
@@ -47,7 +52,7 @@ async function trustedRead<T>(path:string,expectedPrincipal?:string):Promise<T>{
 export async function recoverWorkflowCommand():Promise<WorkflowProjection>{
  const pending=pendingCommand();if(!pending)throw new WorkflowDefinitionRequestError('WORKFLOW_PENDING_RECORD_NOT_FOUND',404);
  const command=pending.command;
- const receipt=await trustedRead<{commandKey:string;workflowId:string;action:string}>('/workflows/commands/'+encodeURIComponent(command.commandKey!)+ '?' +new URLSearchParams({action:command.action,...(command.workflowId?{workflowId:command.workflowId}:{})}),pending.principal);
+ const receipt=await trustedRead<{commandKey:string;workflowId:string;action:string}>((command.action==='policy-publish'?'/workflows/policy-publications/':'/workflows/commands/')+encodeURIComponent(command.commandKey!)+ '?' +new URLSearchParams({...((command.action!=='policy-publish')?{action:command.action}:{}),...(command.workflowId?{workflowId:command.workflowId}:{})}),pending.principal);
  if(receipt.commandKey!==command.commandKey||receipt.action!==command.action||(command.workflowId&&receipt.workflowId!==command.workflowId))throw new WorkflowDefinitionRequestError('WORKFLOW_RECEIPT_MISMATCH',409);
  const result=await trustedRead<WorkflowProjection>('/workflows/'+encodeURIComponent(receipt.workflowId)+'/authoring',pending.principal);
  sessionStorage.removeItem(pendingKey);return result;
@@ -67,7 +72,7 @@ async function dispatchWorkflowCommand(pending:PendingWorkflowCommand,preserveUn
  const signal=AbortSignal.timeout(30_000),session=await getWorkbenchSession(signal),{principal,command}=pending;
  if(workbenchPrincipalKey(session)!==principal)throw new WorkflowDefinitionRequestError('WORKFLOW_IDENTITY_CHANGED',409);
  try{
-  const response=await fetch('/api/workbench/v1/workflows/commands',{method:'POST',credentials:'same-origin',signal,headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify(command)});
+  const response=await fetch(command.action==='policy-publish'?'/api/workbench/v1/workflows/policy-publications':'/api/workbench/v1/workflows/commands',{method:'POST',credentials:'same-origin',signal,headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':session.csrfToken},body:JSON.stringify(command)});
   const body=await response.json().catch(()=>null);
   if(!response.ok){
    if(!preserveUnknown&&response.status<500)sessionStorage.removeItem(pendingKey);

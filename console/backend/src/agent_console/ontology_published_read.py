@@ -67,6 +67,22 @@ def resolve(policy, context, connection):
             unavailable.append({"resource": target.resource, "state": "NOT_PUBLISHED"})
             continue
         targets.append(target)
+    from .published_test_resources import select
+
+    for spec in sorted(
+        getattr(policy, "publishedResources", ()), key=lambda x: (x.kind, x.logicalId)
+    ):
+        target = select(connection, context, spec)
+        manifest.append(
+            [
+                spec.model_dump(mode="json"),
+                target.model_dump(mode="json") if target else "NOT_PUBLISHED",
+            ]
+        )
+        if target:
+            targets.append(target)
+        else:
+            unavailable.append({"resource": spec.logicalId, "state": "NOT_PUBLISHED"})
     return PublishedSelection(
         canonical_digest([policy.digest, *scope, context.principal_id, manifest]),
         tuple(targets),

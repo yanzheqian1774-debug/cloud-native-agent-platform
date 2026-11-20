@@ -1,7 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 const digest=(i:number)=>i.toString(16).padStart(64,'0');
 async function fixture(page:Page){
- const s={count:1,complete:true,deny:false,failPage:false,changeScope:false,principal:'human:alice',history:true,historyCount:1,historyComplete:true,wrongRun:false,wrongProblem:false,reads:[] as string[],writes:[] as string[]};
+ const s={humanReview:undefined as Record<string,unknown>|undefined,count:1,complete:true,deny:false,failPage:false,changeScope:false,principal:'human:alice',history:true,historyCount:1,historyComplete:true,wrongRun:false,wrongProblem:false,reads:[] as string[],writes:[] as string[]};
  await page.route('**/api/**',async route=>{
   const req=route.request(),u=new URL(req.url()),p=u.pathname;s.reads.push(p+u.search);
   if(req.method()!=='GET'){s.writes.push(p);return route.abort()}
@@ -21,7 +21,7 @@ async function fixture(page:Page){
   const journey=p.match(/\/conversations\/c(\d+)\/journey$/);if(journey)return ok({state:{execution:digest(Number(journey[1]))}});
   const links=p.match(/\/conversations\/c(\d+)\/work-links$/);if(links)return ok({conversation:{conversation_id:'c'+links[1]},links:[{readable:true,target:{problemId:'p'+links[1],executionDigest:digest(Number(links[1]))}}]});
   const native=p.match(/\/prepared-executions\/([0-9a-f]+)\/native-progress$/);if(native){if(s.deny)return route.fulfill({status:403,json:{reasonCode:'DENIED'}});return ok({questions:[{questionKey:native[1],questionDigest:'b'.repeat(64),question:'请确认规范 '+parseInt(native[1],16),expiresAt:'2099-01-01',answer:s.history?'已选择生产规范':null,expired:false}]})}
-  const execution=p.match(/\/prepared-executions\/([0-9a-f]+)$/);if(execution){if(s.deny)return route.fulfill({status:404,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});return ok({digest:execution[1],workflowRunId:s.wrongRun?'wrong':'run:'+parseInt(execution[1],16),executionStarted:true,admission:{state:'ADMITTED'},outcome:null,preparation:{plan_version:1,plan_id:'plan',source_snapshot:{resource_id:'source',revision_id:'r1',digest:'c'.repeat(64)},participants:[],semantics:{title:'检查',tasks:[],target:{problem:{resource_id:s.wrongProblem?'wrong':'p'+parseInt(execution[1],16),revision_id:'r1',digest:'a'.repeat(64)}}}},progress:{state:s.history?'SUCCEEDED':'RUNNING',tasks:[]},artifacts:[],events:[],resourceUses:[]})}
+  const execution=p.match(/\/prepared-executions\/([0-9a-f]+)$/);if(execution){if(s.deny)return route.fulfill({status:404,json:{reasonCode:'AUTHORIZATION_NOT_FOUND'}});return ok({digest:execution[1],workflowRunId:s.wrongRun?'wrong':'run:'+parseInt(execution[1],16),executionStarted:true,admission:{state:'ADMITTED'},humanReview:s.humanReview,outcome:s.humanReview?.status==='READABLE'?{confirmationId:'confirmation',businessResolution:'UNDETERMINED'}:null,preparation:{plan_version:1,plan_id:'plan',source_snapshot:{resource_id:'source',revision_id:'r1',digest:'c'.repeat(64)},participants:[],semantics:{title:'检查',tasks:[],target:{problem:{resource_id:s.wrongProblem?'wrong':'p'+parseInt(execution[1],16),revision_id:'r1',digest:'a'.repeat(64)}}}},progress:{state:s.history?'SUCCEEDED':'RUNNING',tasks:[]},artifacts:[],events:[],resourceUses:[]})}
   return ok({items:[],enabled:false});
  });return s;
 }
@@ -45,4 +45,12 @@ test('page failure does not masquerade as complete outcome list',async({page})=>
 });
 test('account change discards outcomes before content reads',async({page})=>{
  const s=await fixture(page);s.changeScope=true;await page.goto('/outcomes?filter=stage');await expect(page.getByRole('heading',{name:'当前工作暂不可读'})).toBeVisible();expect(s.reads.filter(p=>p.includes('/prepared-executions/'))).toEqual([]);expect(s.writes).toEqual([]);
+});
+
+for(const decision of ['ACKNOWLEDGE_UNDETERMINED','DISAGREE','UNAVAILABLE','NOT_RECORDED'])test('stage human review is not acceptance '+decision,async({page})=>{
+ const s=await fixture(page);s.humanReview=['UNAVAILABLE','NOT_RECORDED'].includes(decision)?{status:decision}:{status:'READABLE',digest:'d'.repeat(64),createdAt:'2026-11-20T00:00:00Z',decision:{confirmationId:'confirmation',evaluationId:'evaluation',evaluationDigest:'e'.repeat(64),reviewedSnapshotId:'snapshot',reviewedSnapshotDigest:'f'.repeat(64),actorId:'human:original-reviewer',authorityBasis:'original-authority',decision,reason:'仍需核对实际业务证据'}};
+ await page.goto('/outcomes?filter=stage');await page.getByRole('button',{name:'阅读成果与依据',exact:true}).click();await page.getByRole('button',{name:'成果与记录',exact:true}).click();
+ const review=page.getByRole('region',{name:'人工核阅记录'});
+ if(['UNAVAILABLE','NOT_RECORDED'].includes(decision)){await expect(review).toContainText('不能据此判断是否已有人核阅');await expect(review).not.toContainText('无人审阅')}else{await expect(review).toContainText(decision==='DISAGREE'?'对结果有异议':'已核阅，仍待处理');await expect(review).toContainText('不代表交付物已接受');await expect(review.getByText('human:original-reviewer',{exact:true})).toBeHidden();await review.getByText('查看核阅来源与准确记录',{exact:true}).click();await expect(review.getByText('human:original-reviewer',{exact:true})).toBeVisible()}
+ await page.getByRole('button',{name:'返回成果与记录',exact:true}).click();await page.getByRole('button',{name:'已确认成果',exact:true}).click();await expect(page.getByText('成果验收状态尚未接通。',{exact:false})).toBeVisible();expect(s.writes).toEqual([]);expect(s.reads.filter(p=>p.endsWith('/problems'))).toEqual([]);
 });

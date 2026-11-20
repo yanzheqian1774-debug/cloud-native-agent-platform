@@ -247,6 +247,33 @@ def build_workbench_composition(
         team_targets = (TeamTargets(),)
 
     fixed_work_path = None
+    fixed_work_preview_enabled = (
+        os.environ.get("FIXED_WORK_NATURAL_PREVIEW_ENABLED") == "true"
+    )
+    if (
+        fixed_work_preview_enabled
+        and os.environ.get("FIXED_WORK_AUTHORING_ENABLED") != "true"
+    ):
+        raise ValueError("FIXED_WORK_PREVIEW_AUTHORING_REQUIRED")
+    from .workbench_fixed_work import FixedWorkAuthoringOwner
+    from .workbench_fixed_work_preview import fixed_work_preview_operations
+
+    fixed_work_activity_enabled = False
+    fixed_work_activity_read_enabled = (
+        os.environ.get("FIXED_WORK_ACTIVITY_READ_ENABLED") == "true"
+    )
+    if (
+        fixed_work_activity_read_enabled
+        and os.environ.get("FIXED_WORK_ACTIVITY_ENABLED") != "true"
+    ):
+        raise ValueError("FIXED_WORK_ACTIVITY_READ_REQUIRES_ACTIVITY")
+    from .fixed_work_activity_read import fixed_work_activity_read_operations
+
+    if (
+        os.environ.get("FIXED_WORK_ACTIVITY_ENABLED") == "true"
+        and os.environ.get("FIXED_WORK_AUTHORING_ENABLED") != "true"
+    ):
+        raise ValueError("FIXED_WORK_ACTIVITY_AUTHORING_REQUIRED")
     if os.environ.get("FIXED_WORK_AUTHORING_ENABLED") == "true":
         from .fixed_work_authoring import AuthoringPolicy
         from .fixed_work_authoring_postgres import (
@@ -262,6 +289,14 @@ def build_workbench_composition(
         AuthoringPolicy.load(fixed_work_path)
         with business_problems.problems.pool.connection() as connection:
             fixed_work_compatibility(connection)
+        if os.environ.get("FIXED_WORK_ACTIVITY_ENABLED") == "true":
+            from .fixed_work_trigger_postgres import compatible as trigger_compatible
+            from .workbench_fixed_work import FixedWorkAuthoringOwner
+            from .workbench_fixed_work_activity import fixed_work_activity_operations
+
+            with business_problems.problems.pool.connection() as connection:
+                trigger_compatible(connection)
+            fixed_work_activity_enabled = True
 
     capability_repository = None
     capability_targets = ()
@@ -362,6 +397,7 @@ def build_workbench_composition(
         WorkflowAuthoringTargets,
         authoring_operations,
     )
+    from .workbench_workflow_policy import policy_publication_operations
 
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
@@ -973,6 +1009,34 @@ def build_workbench_composition(
                 raise ValueError("ONTOLOGY_CORRECTION_OWNED_BUSINESS_REQUIRED")
             migrate_corrections(foundation.repository)
             correction_routes = correction_operations(owned_business, correction_path)
+        fixed_work_source_owner = None
+        fixed_work_source_routes = ()
+        if os.environ.get("FIXED_WORK_SOURCE_ENABLED") == "true":
+            if (
+                fixed_work_path is None
+                or owned_business is None
+                or not owned_business.policy.enabled
+            ):
+                raise ValueError("FIXED_WORK_SOURCE_OWNERS_REQUIRED")
+            if os.environ.get("F3_CONVERSATION_PLANNING_ENABLED") != "true":
+                raise ValueError("FIXED_WORK_SOURCE_CONVERSATION_REQUIRED")
+            from .fixed_work_sources_postgres import compatible as source_compatible
+            from .workbench_fixed_work_source import (
+                FixedWorkSourceOwner,
+                source_operations,
+            )
+
+            # Installation explicitly migrates 0073; startup only verifies it.
+            with business_problems.problems.pool.connection() as connection:
+                source_compatible(connection)
+            fixed_work_source_owner = FixedWorkSourceOwner(
+                FixedWorkAuthoringOwner(fixed_work_path, foundation.grants.clock),
+                owned_business,
+                business_problems.problems,
+            )
+            fixed_work_source_routes = source_operations(
+                fixed_work_source_owner, enabled=True
+            )
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,
@@ -1022,6 +1086,7 @@ def build_workbench_composition(
                 *resource_automation_routes,
                 *continuation_routes,
                 *correction_routes,
+                *fixed_work_source_routes,
                 *directory_routes,
                 *current_work_routes,
                 *ontology_operations,
@@ -1079,6 +1144,41 @@ def build_workbench_composition(
                     if fixed_work_path is not None
                     else ()
                 ),
+                *(
+                    fixed_work_preview_operations(
+                        FixedWorkAuthoringOwner(
+                            fixed_work_path,
+                            foundation.grants.clock,
+                            WorkbenchCursorCodec(
+                                foundation.continuation_owner.signing_key
+                            ),
+                        ),
+                        enabled=True,
+                    )
+                    if fixed_work_preview_enabled
+                    else ()
+                ),
+                *(
+                    fixed_work_activity_operations(
+                        FixedWorkAuthoringOwner(
+                            fixed_work_path, foundation.grants.clock
+                        ),
+                        enabled=True,
+                    )
+                    if fixed_work_activity_enabled
+                    else ()
+                ),
+                *(
+                    fixed_work_activity_read_operations(
+                        FixedWorkAuthoringOwner(
+                            fixed_work_path, foundation.grants.clock
+                        ),
+                        resource_automation,
+                        enabled=True,
+                    )
+                    if fixed_work_activity_read_enabled
+                    else ()
+                ),
                 *employee_operations(
                     employee_definitions,
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
@@ -1131,7 +1231,24 @@ def build_workbench_composition(
                 ),
                 *(workflow_operations(workflows) if workflows is not None else ()),
                 *(
-                    authoring_operations(workflows, prepared_resource_services)
+                    authoring_operations(
+                        workflows,
+                        prepared_resource_services,
+                        policy_publication_enabled=os.environ.get(
+                            "WORKFLOW_POLICY_PUBLICATION_ENABLED"
+                        )
+                        == "true",
+                    )
+                    if workflows is not None and prepared_resource_services
+                    else ()
+                ),
+                *(
+                    policy_publication_operations(
+                        workflows,
+                        prepared_resource_services,
+                        enabled=os.environ.get("WORKFLOW_POLICY_PUBLICATION_ENABLED")
+                        == "true",
+                    )
                     if workflows is not None and prepared_resource_services
                     else ()
                 ),
@@ -1200,6 +1317,12 @@ def build_workbench_composition(
                 else {}
             ),
         )
+        if fixed_work_source_owner is not None:
+            actions = getattr(application.state, "conversation_actions", None)
+            if actions is None:
+                raise ValueError("FIXED_WORK_SOURCE_CONVERSATION_REQUIRED")
+            fixed_work_source_owner.conversations = actions.records
+            application.state.fixed_work_source_owner = fixed_work_source_owner
         if resource_automation is not None:
             resource_automation.capability_contract_reader = getattr(
                 application.state, "capability_execution_contract_reader", None
