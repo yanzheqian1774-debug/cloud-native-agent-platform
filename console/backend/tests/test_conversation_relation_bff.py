@@ -268,7 +268,11 @@ def test_parallel_profile_single_call_and_exact_retained_read_without_journal_wr
         json={},
     )
     assert renewed.status_code == 200, renewed.text
-    assert renewed.json()["result"]["items"][0]["state"] == "APPROVED"
+    # Work-history targets also contain already-effective reads; ordering does
+    # not identify the expired invocation whose exact GET is checked below.
+    renewal_states = [item["state"] for item in renewed.json()["result"]["items"]]
+    assert "APPROVED" in renewal_states
+    assert set(renewal_states) <= {"APPROVED", "EFFECTIVE"}
     refreshed = e.route_client.get(PREFIX + path, params={"requestKey": "independent"})
     assert refreshed.status_code == 200, refreshed.text
     assert len(e.route_calls) == 1 and e.dispatches == []

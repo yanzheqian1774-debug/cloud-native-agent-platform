@@ -7,7 +7,7 @@ for(const state of ['matched','digest-mismatch','history-only','partial','denied
  await page.goto('/skills');const entry=page.getByRole('link',{name:'编辑',exact:true});
  if(state==='matched'||state==='partial'){
   await expect(entry).toBeVisible();await expect(page.getByRole('heading',{name:'本账号创建的配置',exact:true}))[state==='matched'?'toBeHidden':'toBeVisible']();
-  await entry.click();await expect(page.getByRole('region',{name:'当前资源配置',exact:true})).toBeVisible();await page.getByRole('button',{name:'继续修改草稿',exact:true}).click();await expect(page.getByLabel('用途说明',{exact:true})).toHaveValue(base.revisions[0].content.description);await page.getByRole('button',{name:'← 返回目录',exact:true}).click();await expect(entry).toBeVisible();
+  await entry.click();await expect(page.getByRole('region',{name:'当前资源配置',exact:true})).toBeVisible();await page.getByRole('button',{name:'编辑草稿',exact:true}).click();await expect(page.getByLabel('用途说明',{exact:true})).toHaveValue(base.revisions[0].content.description);await page.getByRole('button',{name:'返回来源',exact:true}).click();await expect(entry).toBeVisible();
  }else{await expect(page.getByRole('region',{name:state==='denied'||state==='scope-mismatch'?'资源配置状态':'技能创建与配置',exact:true})).toBeVisible();await expect(entry).toHaveCount(0);if(state!=='denied'&&state!=='scope-mismatch')await expect(page.getByRole('heading',{name:'本账号创建的配置',exact:true})).toBeVisible();}
  expect(writes).toEqual([]);
 });

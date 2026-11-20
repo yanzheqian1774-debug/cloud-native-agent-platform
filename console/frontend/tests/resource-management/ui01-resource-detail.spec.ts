@@ -7,6 +7,7 @@ async function fixture(page:Page,mode='normal'){
  const readable=mode==='product-copy'?[{...items[0],revisionId:'skill-revision-business-example-20261113-r1',createdAt:'2026-11-13T01:20:00Z'},{...items[0],revisionId:'skill-revision-business-example-20261113-r2',isCurrentPublished:false,isCurrentDraft:true}]:mode.startsWith('history')?[...items,{...items[0],revisionId:'revision:old',digest:'c'.repeat(64),isCurrentPublished:false},{...items[0],identity:'skill:unrelated',revisionId:'revision:unrelated'}]:items;
  await page.route('**/api/workbench/v1/**',async route=>{
   const r=route.request(),u=new URL(r.url());if(r.method()!=='GET'){writes.push(r.method()+u.pathname);return route.abort()}
+  if(u.pathname.endsWith('/draft-assistance/capabilities'))return route.fulfill({json:{result:{conversationUnderstanding:false,conversationRelationRouting:false,initialUnderstandingAdoption:false}}});
   if(u.pathname.endsWith('/session'))return route.fulfill({json:session});
   if(u.pathname.endsWith('/conversations/capabilities'))return route.fulfill({json:{result:{enabled:true}}});
   if(u.pathname.endsWith('/conversations/'+conversation))return route.fulfill({json:{result:{conversation:{conversation_id:conversation,title:'原会话',version:1,created_at:'2026-11-06'},messages:[],links:[]}}});
@@ -62,7 +63,7 @@ test('F3 readonly business tabs keep exact identity behind evidence and never gr
  await expect(page.getByRole('tab',{name:'概览',exact:true})).toHaveAttribute('aria-selected','true');
  await expect(page.getByRole('tab')).toHaveCount(3);
  await expect(page.getByRole('heading',{name:'固定版本',exact:true})).toHaveCount(0);
- await expect(page.getByRole('button',{name:'修改当前发布内容',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'创建修改草稿',exact:true})).toHaveCount(0);
  await expect(page.getByRole('navigation',{name:'本页可读资源'})).toBeHidden();
  await page.screenshot({path:info.outputPath('f3-readonly-overview.png')});
  await page.getByRole('tab',{name:'概览',exact:true}).focus();await page.keyboard.press('ArrowRight');

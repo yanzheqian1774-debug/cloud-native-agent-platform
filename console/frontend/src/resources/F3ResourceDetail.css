@@ -84,3 +84,7 @@
 .resource-detail-return .f3-directory-secondary{font-size:12px;align-self:center;color:#7486a3}
 .resource-directory-detail .f3-read-business>details>summary{cursor:pointer;color:#7486a3}
 @media(max-width:700px){.resource-directory-workspace>.resource-directory-detail:has(.f3-read-business){padding:8px}.resource-directory-detail .f3-read-business .f3-detail-facts{gap:16px}}
+.f3-operation-nav{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px;border-bottom:1px solid #e2e8f0;padding-bottom:10px}
+.f3-operation-nav button[aria-current=page]{color:#2459ba;background:#edf3ff;border-color:#b8cff4}
+.rm-saved-test-summary{padding:10px 0;border-bottom:1px solid #e2e8f0;overflow-wrap:anywhere}
+.rm-saved-test-summary h4{margin:0 0 6px}.rm-saved-test-summary p{margin:0 0 6px}

@@ -1,0 +1,32 @@
+Result summary consistency — bounded presentation G1 (base aa64536fbb96)
+
+Confirmed source defect: CurrentWorkDirectoryF3.summary reads legacy
+missingSections/incompleteSections even when the saved report has typed ruleResult.
+Those legacy arrays combine UNKNOWN/CONFLICT, while DocumentRuleResultView renders
+four actual statuses. PreparedExecutionPanel header unconditionally claims ongoing
+automatic updates. DocumentRuleResultView puts the full ontology revision ID in the
+main result body despite an existing provenance disclosure.
+
+Implementation: reuse reportRuleResult and ruleCounts for task-detail/list summary;
+never synthesize typed findings from legacy arrays. If typed data is malformed,
+retain generic saved-artifact information, not legacy fallback or zero categories.
+Keep legacy reports without ruleResult readable with their original section semantics.
+A shared conservative rule conclusion explains identified issues are insufficient
+for claiming overall requirements met; no inference of business approval. Move exact
+rule revision into existing provenance details, retaining all IDs/digests. Prepared
+panel terminal header says saved records/read-only refresh; active and unreadable
+states remain distinct. No polling/owner/model/artifact/authorization mutation.
+
+Tests: controlled existing task-detail fixture with one of each four statuses and
+legacy aggregates 1 missing/2 incomplete, top/body equality, disclosure hides long
+rule ID until opened, no writes/model; malformed typed data not legacy fallback;
+legacy regression unchanged; terminal and running header distinction. Pure shared
+summary checks for empty/unrecognized statuses and inaccessible/source-mismatch
+artifacts. Frontend lint/build and focused browser checks, screenshot evidence.
+No schema/API/execution lifecycle change. Root owns actual installation/acceptance.
+
+Validation terminal: browser-r1.log 8 focused cases PASS20.8s including production
+build; full frontend lint PASS. Four-category task detail screenshot inspected, F3
+layout unchanged, exact revision remains available only in existing disclosure.
+Fixture has no original conversation link, so its warning is a controlled fixture
+limitation, not a new production failure. No real provider/model/database action.

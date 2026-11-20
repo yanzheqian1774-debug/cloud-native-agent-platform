@@ -1,3 +1,5 @@
+import {readOutcomeDirectory} from './currentOutcomeReadback';
+import {reportRuleResult,ruleCounts,ruleBusinessConclusion} from './documentRuleSummary';
 import {readExactDirectoryResource} from '../api/resourceDirectory';
 import {exactDefinitionHref} from '../resources/definitionJourney';
 import {readAttentionDirectory} from './currentAttentionReadback';
@@ -24,8 +26,9 @@ function questionLabel(question:string){
 }
 function workState(w:CurrentWork,now:number){return w.execution.progress?.state==='RUNNING'&&!w.questionsReadable?'进展待核实':pendingQuestions(w,now).length?'待你补充':states[w.execution.progress?.state??'']??'状态待读取'}
 function summary(w:CurrentWork){
+ const rules=reportRuleResult(w.execution);if(rules)return `文档规则核对：${ruleCounts(rules)}。${ruleBusinessConclusion(rules)}`;
  const readable=w.execution.artifacts.filter(a=>a.contentAccess==='AUTHORIZED'&&artifactMatchesSource(a.content??'',w.execution.preparation.source_snapshot));
- for(const a of readable){try{const r=JSON.parse(a.content??'');if(r.operation==='RENDER_REPORT'&&r.documentReview&&Array.isArray(r.documentReview.missingSections)&&Array.isArray(r.documentReview.incompleteSections))return `文档检查发现 ${r.documentReview.missingSections.length} 项缺失、${r.documentReview.incompleteSections.length} 项待补充；可阅读报告与原文依据。`}catch{/* Malformed content never becomes a result. */}}
+ for(const a of readable){try{const r=JSON.parse(a.content??'');if(r.operation==='RENDER_REPORT'&&r.documentReview&&!Object.hasOwn(r.documentReview,'ruleResult')&&Array.isArray(r.documentReview.missingSections)&&Array.isArray(r.documentReview.incompleteSections))return `文档检查发现 ${r.documentReview.missingSections.length} 项缺失、${r.documentReview.incompleteSections.length} 项待补充；可阅读报告与原文依据。`}catch{/* Malformed content never becomes a result. */}}
  return w.execution.artifacts.length?`已有 ${w.execution.artifacts.length} 份保存产物，其中 ${readable.length} 份已核对读取权限与来源；可查看记录和适用范围。`:'尚未形成可交付产物，当前进度与输入记录可追溯。';
 }
 const updated=(w:CurrentWork)=>[...w.execution.events.map(e=>e.created_at),...w.execution.artifacts.map(a=>a.created_at)].filter(v=>Number.isFinite(Date.parse(v))).sort().at(-1)??'';
@@ -40,7 +43,7 @@ export function CurrentWorkDirectory({outcomes=false,attention=false}:{outcomes?
  const restore=useRef<{top:number;digest:string}|null>(null),main=useRef<HTMLElement>(null);
  useEffect(()=>{if(selected)return;const controller=new AbortController();let live=true,timer:ReturnType<typeof setTimeout>|undefined;const expired=()=>{live=false;setData(null);setError('登录已失效，请重新登录后读取。')};window.addEventListener('workbench-session-expired',expired);
   const progress=(value:Awaited<ReturnType<typeof readCurrentWork>>)=>{if(live)setData(previous=>previous&&!previous.loading?previous:value)};
-  const read=attentionDirectory?readAttentionDirectory(progress,controller.signal,handledDirectory):readCurrentWork(progress,controller.signal,{includeCompletedQuestions:attention});
+  const read=outcomes&&import.meta.env.VITE_CURRENT_WORK_DIRECTORY_ENABLED==='true'?readOutcomeDirectory(progress,controller.signal):attentionDirectory?readAttentionDirectory(progress,controller.signal,handledDirectory):readCurrentWork(progress,controller.signal,{includeCompletedQuestions:attention});
   void read.then(value=>{if(live){setData(value);setError('');if(pendingDirectory||value.works.some(w=>!terminalWork.has(w.execution.progress?.state??'')))timer=setTimeout(()=>{if(live&&document.visibilityState==='visible')setVersion(v=>v+1)},10000)}}).catch(e=>{if(live){setData(null);setError(e instanceof Error?e.message:'当前工作读取失败')}});
   return()=>{live=false;controller.abort();if(timer)clearTimeout(timer);window.removeEventListener('workbench-session-expired',expired)};
  },[version,attention,outcomes,selected,pendingDirectory,attentionDirectory,handledDirectory]);

@@ -40,6 +40,9 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
     a = automation
     assert a.run()["state"] == "READY"
     if a.automation.sales_v2_candidate:
+        from dataclasses import replace
+
+        from agent_console.business_problem_domain import CriterionType, canonical_bytes
         from agent_console.sales_gross_profit_evaluation import criterion_candidate
         from psycopg.types.json import Jsonb
 
@@ -51,10 +54,32 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                 strict=True,
             ):
                 criterion = criterion_candidate(check)
+                original = next(
+                    value
+                    for value in a.e.app.problems.list_criterion_revisions(
+                        a.e.scope,
+                        a.e.p.semantics.target.problem.resource_id,
+                        authorized=True,
+                        connection=c,
+                    )
+                    if value.revision_id == identity
+                )
+                # Fixture adaptation must retain the domain integrity contract.
+                updated = replace(
+                    original,
+                    criterion_type=CriterionType(criterion["criterion_type"]),
+                    measurement=criterion["measurement"],
+                    required_evidence_kinds=tuple(criterion["required_evidence_kinds"]),
+                    evaluator_type=criterion["evaluator_type"],
+                    evaluator_version=criterion["evaluator_version"],
+                    applicability=criterion["applicability"],
+                    digest="",
+                )
                 c.execute(
                     "UPDATE business_problem_authority.criterion_revisions "
                     "SET criterion_type=%s,measurement=%s,required_evidence_kinds=%s,"
-                    "evaluator_type=%s,evaluator_version=%s,applicability=%s "
+                    "evaluator_type=%s,evaluator_version=%s,applicability=%s,digest=%s,"
+                    "canonical_bytes=%s "
                     "WHERE revision_id=%s",
                     (
                         criterion["criterion_type"],
@@ -63,8 +88,31 @@ def test_readonly_continuation_queues_one_run_and_get_replay_never_dispatches_ag
                         criterion["evaluator_type"],
                         criterion["evaluator_version"],
                         Jsonb(criterion["applicability"]),
+                        updated.digest,
+                        canonical_bytes(updated.digest_contract()),
                         identity,
                     ),
+                )
+                reread = next(
+                    value
+                    for value in a.e.app.problems.list_criterion_revisions(
+                        a.e.scope,
+                        a.e.p.semantics.target.problem.resource_id,
+                        authorized=True,
+                        connection=c,
+                    )
+                    if value.revision_id == identity
+                )
+                assert reread == updated
+                stored = c.execute(
+                    "SELECT digest,canonical_bytes FROM "
+                    "business_problem_authority.criterion_revisions "
+                    "WHERE revision_id=%s",
+                    (identity,),
+                ).fetchone()
+                assert stored["digest"] == updated.digest
+                assert bytes(stored["canonical_bytes"]) == canonical_bytes(
+                    updated.digest_contract()
                 )
     if pending:
         from test_policy_pending_binding import (

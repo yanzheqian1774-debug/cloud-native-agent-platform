@@ -1,0 +1,6 @@
+G0 bounded test correction — base aa64536fbb96, 2026-11-20
+Scope: four failures from outcomes-summary-root-r1-commit.log; no production change.
+1 history-access sorts expanded exact work/read targets. First item is not necessarily the expired invocation. Assert all items are EFFECTIVE or APPROVED, at least one actual renewal, and original exact invocation GET succeeds without dispatch.
+2 D12 explicitly records ledger_policy_rows_unchanged, understanding_cost_cap_unchanged and development_call_cap. Assert these current facts, original configuration, and actual budget policy/reservation/settlement rows unchanged. Do not restore the obsolete broader budget_limits_unchanged claim.
+3 immutable context requests reject SQL mutation by design. Keep trigger enabled and assert rejected mutation leaves original row intact. Inject changed read result only at shared reader request_row boundary and require exact CONTEXT_BINDING_CHANGED for current/history reads. This separately proves storage immutability and defensive reader comparison, without corrupting persisted audit.
+Validation: four targeted tests in fixture-created random accounts324 databases on named disposable container/127.0.0.1:53428 only. No real 64330, provider, deployment or full suite. Ruff and diff checks. Root owns history tests, planning owns sales.

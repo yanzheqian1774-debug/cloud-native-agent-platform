@@ -1,0 +1,9 @@
+F3 resource test clarity G1 (base aa64536)
+Scope: frontend presentation only; published/viewed/maintenance revision identities remain actual owner fields. No version numbering invented. Exact identifiers/content/digests remain expandable. Source relationships display only persisted references.
+One secondary navigation replaces duplicated maintenance buttons/select. Main three F3 tabs and independent history remain. Direct testing retains heading/back/current maintenance target. Published modification creates successor; existing draft edits original handler.
+Single test selection shared by list/detail; current exact latest default, explicit historical valid result preserved. Saved case input/expected joined by exact testId, missing data stated; summaries plus full record disclosure. Contract sample tests do not prove actual business/model execution.
+No backend, permissions, publication lifecycle or model changes. Controlled browser fixtures only; root exclusively actual integration/acceptance.
+
+R2 integration review correction:
+Adapt shared resourceDetailNavigation to the single current-content navigation and update only Skill/MCP consumers (DefinitionManagement labels remain unchanged). Run the complete affected management paths, not only local visual cases: prepared skill maintenance, failed test publication rejection, exact employee return, creation/edit, card maintenance, MCP publication, unknown command recovery/history/reload.
+Saved case binding: current owner savedTests contain testId/input/expected but no revision fields. The immutable testResult binds testId to revisionId/revisionDigest. The summary therefore requires a unique result identity and exact stored revision/digest, plus exactly one matching saved testId; optional explicit case revision fields must agree. Missing/duplicate/mismatched case is shown unavailable. This is a read projection, not new execution/publication validation or invented case revision.

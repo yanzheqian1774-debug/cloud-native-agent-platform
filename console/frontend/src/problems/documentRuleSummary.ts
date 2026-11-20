@@ -9,6 +9,9 @@ export function documentRuleResult(value:unknown):RuleResult|null{
  return value as RuleResult;
 }
 export function ruleCounts(result:RuleResult){return Object.entries(ruleStatusLabels).map(([code,label])=>`${result.findings.filter(f=>f.status===code).length} 项${label}`).join(' · ')}
+export function ruleBusinessConclusion(result:RuleResult){
+ return result.findings.some(f=>f.status!=='SATISFIED')?'已识别需要处理的问题，现有结果不足以判定整体满足要求。':result.businessConclusion==='UNDETERMINED'?'现有结果不足以判定整体满足要求；业务结论尚无法确定。':'本次适用规则均已匹配，不代表整体业务要求或审批已经通过。';
+}
 export function ruleFindingsSummary(result:RuleResult){
  const issues=result.findings.filter(f=>f.status!=='SATISFIED').map(f=>{
   const subject=typeof f.field==='string'&&f.field?f.field:typeof f.section==='string'&&f.section?f.section:`检查项「${f.ruleName}」`;
@@ -22,4 +25,4 @@ export function reportRuleResult(view:ExecutionView){
  return null;
 }
 
-export function documentBusinessSummary(view:ExecutionView){const r=reportRuleResult(view);return r?ruleFindingsSummary(r)+(r.businessConclusion==='UNDETERMINED'?'业务结论尚无法确定；核对执行已完成。':''):null}
+export function documentBusinessSummary(view:ExecutionView){const r=reportRuleResult(view);return r?ruleFindingsSummary(r)+ruleBusinessConclusion(r):null}

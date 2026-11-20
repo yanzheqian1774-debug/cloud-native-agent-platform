@@ -73,7 +73,7 @@ test('lost lifecycle response survives reload and reads state without replaying 
  const {extra}=await fixture(page);await page.goto(href());await page.getByRole('button',{name:/^校验修订/}).click();extra.loseNext=true;await page.getByRole('button',{name:'确认提交',exact:true}).click();await expect(page.getByRole('button',{name:'读取原修订状态',exact:true})).toBeEnabled();await page.reload();await expect(page.getByRole('button',{name:'读取原修订状态',exact:true})).toBeEnabled();await page.getByRole('button',{name:'读取原修订状态',exact:true}).click();await expect(page.getByRole('button',{name:/^批准修订/})).toBeEnabled();expect(extra.posts).toHaveLength(1);
 });
 test('selected historical maintenance result remains separate from current publication evidence',async({page})=>{
- const {state}=await fixture(page);await page.goto('/skills?'+new URLSearchParams({managedResource:skillId,resourceTab:'使用追溯'}));const records=page.getByRole('article',{name:'维护测试使用记录'});await expect(records.getByRole('button',{name:'查看维护测试结果',exact:true})).toHaveCount(2);await records.getByRole('row').filter({hasText:'旧维护用例'}).getByRole('button').click();await expect(page.getByRole('combobox',{name:'查看配置内容'})).toHaveValue('测试');await expect(page.getByText('正在查看历史修订的维护测试结果，不计入当前版本发布依据。',{exact:true})).toBeVisible();await expect(page.getByLabel('本次真实测试结果')).toContainText('旧维护用例');expect(state.posts).toEqual([]);
+ const {state}=await fixture(page);await page.goto('/skills?'+new URLSearchParams({managedResource:skillId,resourceTab:'使用追溯'}));const records=page.getByRole('article',{name:'维护测试使用记录'});await expect(records.getByRole('button',{name:'查看维护测试结果',exact:true})).toHaveCount(2);await records.getByRole('row').filter({hasText:'旧维护用例'}).getByRole('button').click();await expect(page.getByRole('navigation',{name:'当前配置内容'}).getByRole('button',{name:'测试',exact:true})).toHaveAttribute('aria-current','page');await expect(page.getByText('正在查看历史修订的维护测试结果，不计入当前版本发布依据。',{exact:true})).toBeVisible();await expect(page.getByLabel('所选契约样例结果')).toContainText('旧维护用例');expect(state.posts).toEqual([]);
 });
 for(const mode of ['valid','overview','professional','invalid-section','duplicate-section','wrong-member','external-back','duplicate-ref'])test('exact referring Employee resource return '+mode,async({page})=>{
  const {state,original}=await fixture(page);original.members=original.members.filter(m=>m.kind!=='MCP');original.members.find(m=>m.kind==='SKILL')!.revisionId='revision:2';original.members.find(m=>m.kind==='SKILL')!.digest='b'.repeat(64);if(mode==='wrong-member')original.members.find(m=>m.kind==='SKILL')!.revisionId='revision:foreign';
@@ -217,7 +217,7 @@ for(const mode of ['denied','wrong-parent','withdrawn'])test('authoring '+mode+'
  });
  await page.goto(href().replace('employeeView=professional&','')+'&employeeEdit=edit');
  if(mode==='withdrawn')await expect(page.getByText('当前发布：已撤销',{exact:true})).toBeVisible();
- else {await expect(page.getByRole('button',{name:'维护当前定义',exact:true})).toBeDisabled();await expect(page.getByLabel('职能职责',{exact:true})).toHaveCount(0)}
+ else {await expect(page.getByText('正在查看的版本不是已核实的当前修改版本，原内容仍保留。',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'维护当前定义',exact:true})).toBeHidden();await expect(page.getByLabel('职能职责',{exact:true})).toHaveCount(0)}
  expect(extra.posts).toHaveLength(0);
 });
 

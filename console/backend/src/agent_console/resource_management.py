@@ -13,6 +13,7 @@ from .authority_contracts import AuthorityError, ExactGrant
 from .resource_automation import ResourceAutomation
 from .resource_automation_policy import AutomationPolicy
 from .resource_use_domain import canonical_digest
+from .skill_mcp_repository import SkillMcpNotFound
 from .skill_mcp_schemas import ResourceContent
 from .skill_mcp_service import SkillMcpFailure
 from .workbench_business_problem import OwnerPrincipal
@@ -749,6 +750,8 @@ def install_management(manager, authorizer):
                     return {"result": operation(call)}
                 except SkillMcpFailure as exc:
                     raise WorkbenchOwnerError(exc.reason, exc.status) from exc
+                except SkillMcpNotFound as exc:
+                    raise WorkbenchOwnerError("RESOURCE_NOT_FOUND", 404) from exc
 
         root = PREFIX + "/resource-management/{kind}"
 

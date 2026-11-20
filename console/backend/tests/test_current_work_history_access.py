@@ -4,6 +4,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from agent_console.execution_preparation_postgres import PreparedExecutionStore
 from agent_console.grant_administration_application import GrantRevocationCommand
 from agent_console.workbench_bff import PREFIX
 from psycopg.types.json import Jsonb
@@ -41,6 +42,7 @@ def work(e):
         }
     )
     with e.repo.connection_scope() as c:
+        PreparedExecutionStore(c).migrate()
         c.execute(
             "CREATE TABLE execution_authority.prepared_candidates(namespace text,security_domain text,digest text,record jsonb,prepared_by text,PRIMARY KEY(namespace,security_domain,digest))"
         )

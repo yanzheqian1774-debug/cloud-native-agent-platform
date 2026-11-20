@@ -32,6 +32,10 @@ def test_admin_draft_admission_is_current_audited_and_has_no_resource_requests(
         before = c.execute(
             "SELECT count(*) n FROM authorization_admin.grant_requests"
         ).fetchone()["n"]
+        budget_before = {
+            table: c.execute(f"SELECT * FROM draft_provider_budget.{table}").fetchall()
+            for table in ("policies", "reservations", "settlements")
+        }
     result = authorization.resolve(context, invocation)
     assert result.state is AuthorizationState.ALLOWED
     assert result.request_decision_id.startswith("development-role:")
@@ -40,7 +44,11 @@ def test_admin_draft_admission_is_current_audited_and_has_no_resource_requests(
     assert state["status"] == "ACTIVE"
     assert state["request"]["subject_id"] == context.principal_id
     assert state["decision"]["issuer_id"] == "policy:development-administrator:D12"
-    assert state["decision"]["record"]["budget_limits_unchanged"] is True
+    decision = state["decision"]["record"]
+    assert decision["ledger_policy_rows_unchanged"] is True
+    assert decision["understanding_cost_cap_unchanged"] is True
+    assert decision["development_call_cap"] == 100
+    assert decision["request"] == state["request"]["record"]
     assert state["request"]["record"]["configuration"] == env.limits
     from agent_console.context_call_admission import active, request_row
     from agent_console.development_draft_admission import bind_created_object
@@ -72,6 +80,10 @@ def test_admin_draft_admission_is_current_audited_and_has_no_resource_requests(
     state = env.admission.read(context, invocation.context_id)
     assert state["decision"]["ordinal"] == 3
     with repo.connection_scope() as c:
+        assert {
+            table: c.execute(f"SELECT * FROM draft_provider_budget.{table}").fetchall()
+            for table in budget_before
+        } == budget_before
         assert (
             c.execute(
                 "SELECT count(*) n FROM authorization_admin.grant_requests"

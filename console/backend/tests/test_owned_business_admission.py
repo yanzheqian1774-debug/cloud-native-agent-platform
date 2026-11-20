@@ -571,7 +571,7 @@ def test_planning_preparation_preserves_exact_new_basis_and_original_allowance(
     ],
 )
 def test_shared_reader_rejects_identity_source_and_revocation_changes(
-    owned_created, changed
+    owned_created, changed, monkeypatch
 ):
     from dataclasses import replace
 
@@ -609,12 +609,39 @@ def test_shared_reader_rejects_identity_source_and_revocation_changes(
             if changed == "context_configuration"
             else ["owned_understanding_policy_digest"]
         )
+        from copy import deepcopy
+
+        from agent_console import owned_business_work_reader
+        from psycopg.errors import RaiseException
+
+        read_request = owned_business_work_reader.request_row
         with e.repo.connection_scope() as c:
-            c.execute(
-                "UPDATE authorization_admin.context_call_requests "
-                "SET record=jsonb_set(record,%s,%s) WHERE context_id=%s",
-                (path, Jsonb("0" * 64), e.original["contextId"]),
-            )
+            original = read_request(c, e.original["contextId"])
+            # Persisted requests are immutable: never disable their trigger to
+            # manufacture a reader negative case.
+            with (
+                pytest.raises(RaiseException, match="TASK_DELEGATION_IMMUTABLE"),
+                c.transaction(),
+            ):
+                c.execute(
+                    "UPDATE authorization_admin.context_call_requests "
+                    "SET record=jsonb_set(record,%s,%s) WHERE context_id=%s",
+                    (path, Jsonb("0" * 64), e.original["contextId"]),
+                )
+            assert read_request(c, e.original["contextId"]) == original
+
+        def corrupted_read(connection, identity):
+            row = read_request(connection, identity)
+            if identity != e.original["contextId"]:
+                return row
+            row = deepcopy(row)
+            target = row["record"]
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = "0" * 64
+            return row
+
+        monkeypatch.setattr(owned_business_work_reader, "request_row", corrupted_read)
     elif changed == "revoked":
         with e.repo.connection_scope() as c:
             binding = e.business_owner.work(c, e.context, root)
@@ -623,8 +650,16 @@ def test_shared_reader_rejects_identity_source_and_revocation_changes(
                 "(admission_id,actor_id,reason_code) VALUES(%s,%s,%s)",
                 (binding.admission_id, e.context.principal_id, "USER_REQUESTED"),
             )
+    expected = (
+        "OWNED_BUSINESS_CONTEXT_BINDING_CHANGED"
+        if changed in {"context_configuration", "context_policy"}
+        else None
+    )
     for historical in (False, True):
-        with e.repo.connection_scope() as c, pytest.raises(AuthorityError):
+        with (
+            e.repo.connection_scope() as c,
+            pytest.raises(AuthorityError, match=expected),
+        ):
             e.business_owner.work(
                 c, context, root, source_digest=source_digest, history=historical
             )

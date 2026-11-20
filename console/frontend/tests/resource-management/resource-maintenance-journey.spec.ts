@@ -5,7 +5,7 @@ async function create(page: Page) { await page.getByRole('button', { name: '创�
 async function openTestForm(page:Page){
  await openResourceSection(page,'测试');
  await expect(page.getByRole('tabpanel',{name:'测试',exact:true})).toBeVisible();
- const details=page.getByRole('region',{name:'技能真实测试'}).locator('details').filter({has:page.getByText('填写或修改测试用例',{exact:true})});
+ const details=page.getByRole('region',{name:'契约样例测试'}).locator('details').filter({has:page.getByText('填写或修改测试用例',{exact:true})});
  if(await details.getAttribute('open')===null)await details.locator('summary').click();
  await expect(page.getByLabel('测试名称',{exact:true})).toBeVisible();
 }
@@ -15,8 +15,8 @@ async function runTest(page:Page,operation='READ_DATA',pass=true){
  await page.getByLabel('测试操作',{exact:true}).selectOption(operation);
  await page.getByLabel('测试输入数据',{exact:true}).fill(JSON.stringify({schemaVersion:'sales-diagnostic-input.v1',synthetic:true,sourceSnapshot:source,source:JSON.parse(reportText).source,dependencies:operation==='READ_DATA'?{}:{read:{...JSON.parse(reportText),operation:'READ_DATA'}}}));
  await page.getByLabel('测试预期结果',{exact:true}).fill(JSON.stringify({schemaVersion:'sales-diagnostic-output.v1',operation:pass?operation:'INTENTIONALLY_WRONG_EXPECTATION'}));
- await Promise.all([page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/resource-management/skill/commands')&&r.request().postDataJSON().action==='test'),page.getByRole('button',{name:'运行真实测试',exact:true}).click()]);
- await expect(page.getByRole('region',{name:'技能真实测试'})).toContainText(pass?'测试通过':'测试未通过');
+ await Promise.all([page.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith('/resource-management/skill/commands')&&r.request().postDataJSON().action==='test'),page.getByRole('button',{name:'运行契约样例测试',exact:true}).click()]);
+ await expect(page.getByRole('region',{name:'契约样例测试'})).toContainText(pass?'测试通过':'测试未通过');
  await expect(page.getByRole('button',{name:'读取原操作结果',exact:true})).toHaveCount(0);
 }
 test('maintenance draft edit failed test checked publication exact employee and saved result return form one journey', async ({ page }, info) => {
@@ -25,7 +25,7 @@ test('maintenance draft edit failed test checked publication exact employee and 
     await create(page);
 
     await expect(page.getByRole('region', { name: '当前资源配置' })).toContainText('维护原用途');
-    await page.getByRole('button', { name:'继续修改草稿', exact: true }).click();
+    await page.getByRole('button', { name:'编辑草稿', exact: true }).click();
     await page.getByLabel('用途说明', { exact: true }).fill('保留操作契约的新用途');
     await page.getByRole('button', { name: '保存草稿', exact: true }).click();
     await expect(page.getByRole('region', { name: '当前资源配置' })).toContainText('保留操作契约的新用途');
@@ -67,7 +67,7 @@ test('maintenance draft edit failed test checked publication exact employee and 
     await page.getByRole('link', { name: '返回资源目录', exact: true }).click();
     await page.getByRole('article',{name:'资源维护完整路径核验',exact:true}).getByRole('link',{name:'编辑',exact:true}).click();
 
-    await page.getByRole('button', { name:'修改当前发布内容', exact: true }).click();
+    await page.getByRole('button', { name:'创建修改草稿', exact: true }).click();
     await expect.poll(() => state.resource.currentDraftRevisionId).toBe('revision:2');
     await openResourceSection(page,'版本');const pinned = await page.getByRole('link', { name: '查看发布版本与使用记录' }).getAttribute('href');
     expect(new URL(pinned!, page.url()).searchParams.get('resourceRevision')).toBe('revision:1');
@@ -92,7 +92,7 @@ for (const action of ['edit', 'test', 'publish-tested'])
         await page.goto('/skills?managedResource=' + encodeURIComponent(skillId)+'&resourceTab='+encodeURIComponent('业务规则'));
         await expect(page.getByRole('region', { name: '当前资源配置' })).toBeVisible();
         if (action === 'edit') {
-            await page.getByRole('button', { name:'继续修改草稿', exact: true }).click();
+            await page.getByRole('button', { name:'编辑草稿', exact: true }).click();
             await page.getByLabel('用途说明', { exact: true }).fill('响应丢失后的正式内容');
             await page.getByRole('button', { name: '保存草稿', exact: true }).click();
         }
@@ -100,7 +100,7 @@ for (const action of ['edit', 'test', 'publish-tested'])
             await openTestForm(page);
             await page.getByLabel('测试预期结果', { exact: true }).fill(JSON.stringify({ operation: 'READ_DATA' }));
             await page.getByLabel('测试输入数据', { exact: true }).fill(JSON.stringify({ schemaVersion: 'sales-diagnostic-input.v1', synthetic: true, sourceSnapshot: source, source: JSON.parse(reportText).source, dependencies: {} }));
-            await page.getByRole('button', { name: '运行真实测试', exact: true }).click();
+            await page.getByRole('button', { name: '运行契约样例测试', exact: true }).click();
         }
         if (action === 'publish-tested') {
             await openResourceSection(page,'发布检查');
@@ -150,7 +150,7 @@ test('leaving after ordinary POST retains original intent and cannot restore det
 test('fresh directory revocation withdraws a successful ordinary command result and never regrants', async ({ page }) => {
     const state = await fixture(page, true);
     await page.goto('/skills?managedResource=' + encodeURIComponent(skillId)+'&resourceTab='+encodeURIComponent('业务规则'));
-    await page.getByRole('button', { name:'继续修改草稿', exact: true }).click();
+    await page.getByRole('button', { name:'编辑草稿', exact: true }).click();
     await page.getByLabel('用途说明', { exact: true }).fill('正式编辑结果');
     state.revoked = true;
     await page.getByRole('button', { name: '保存草稿', exact: true }).click();
@@ -172,7 +172,7 @@ test('legacy unknown ordinary key without binding is preserved and never replace
 });
 
 test('late maintenance completion preserves the tab chosen while the command was running',async({page})=>{
- const state=await fixture(page,true);state.hold=true;await page.goto('/skills?managedResource='+encodeURIComponent(skillId)+'&resourceTab='+encodeURIComponent('业务规则'));await page.getByRole('button',{name:'继续修改草稿',exact:true}).click();await page.getByLabel('用途说明',{exact:true}).fill('保留当前页面位置');await page.getByRole('button',{name:'保存草稿',exact:true}).click();await expect.poll(()=>state.posts.length).toBe(1);await openResourceSection(page,'发布检查');state.hold=false;state.release();await expect(page.getByRole('button',{name:'读取原操作结果',exact:true})).toHaveCount(0);await expect(page.getByRole('combobox',{name:'查看配置内容'})).toHaveValue('发布检查');expect(new URL(page.url()).searchParams.get('resourceTab')).toBe('发布检查');expect(state.posts).toHaveLength(1);
+ const state=await fixture(page,true);state.hold=true;await page.goto('/skills?managedResource='+encodeURIComponent(skillId)+'&resourceTab='+encodeURIComponent('业务规则'));await page.getByRole('button',{name:'编辑草稿',exact:true}).click();await page.getByLabel('用途说明',{exact:true}).fill('保留当前页面位置');await page.getByRole('button',{name:'保存草稿',exact:true}).click();await expect.poll(()=>state.posts.length).toBe(1);await openResourceSection(page,'发布检查');state.hold=false;state.release();await expect(page.getByRole('button',{name:'读取原操作结果',exact:true})).toHaveCount(0);await expect(page.getByRole('navigation',{name:'当前配置内容'}).getByRole('button',{name:'发布检查',exact:true})).toHaveAttribute('aria-current','page');expect(new URL(page.url()).searchParams.get('resourceTab')).toBe('发布检查');expect(state.posts).toHaveLength(1);
 });
 
 test('expired policy service cannot invalidate a still-authenticated user session',async({page})=>{

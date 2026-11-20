@@ -19,6 +19,8 @@ export async function fixture(page: Page, seed = false) {
         const req = route.request(), url = new URL(req.url()), path = url.pathname;
         if (req.method() === 'GET')
             state.gets.push(path);
+        if (path.endsWith('/draft-assistance/capabilities'))
+            return route.fulfill({json:envelope({conversationUnderstanding:false,conversationRelationRouting:false,initialUnderstandingAdoption:false})});
         if (path.endsWith('/session'))
             return route.fulfill({ json: session() });
         if (path.endsWith('/resource-management/skill'))

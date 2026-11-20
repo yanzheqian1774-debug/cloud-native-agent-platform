@@ -47,7 +47,8 @@ for(const mode of ['WAITING_FOR_USER','ANSWER_SAVED','STOP_CONFIRMED','CONTINUAT
   await cue.getByRole('button',{name:'查看原问题'}).click();
   await expect(page.locator('blockquote').filter({hasText:q.question})).toBeFocused();
  }else await expect(cue).toHaveCount(0);
- if(mode==='DONE'){await expect(rail).not.toContainText('持续更新');await expect(rail).toContainText('刷新仅重新读取')}
+ if(mode==='DONE'){await expect(rail).not.toContainText('持续更新');await expect(rail).toContainText('刷新仅重新读取');const panel=page.getByRole('region',{name:'Native 执行与成果验收'});await expect(panel).toContainText('已保存的工作记录；刷新只读，不重新执行');await expect(panel).not.toContainText('进行中的状态自动更新')}
+ if(mode==='WAITING_FOR_USER')await expect(page.getByRole('region',{name:'Native 执行与成果验收'})).toContainText('进行中的状态自动更新');
 
  if(['BLOCKED','EXPIRED','BAD_DIGEST','WRONG_RUN','READ_ERROR'].includes(mode))await expect(page.getByRole('button',{name:'提交回答并继续',exact:true})).toHaveCount(0);
  if(mode==='STOP_CONFIRMED')await page.screenshot({path:test.info().outputPath('answer-saved-awaiting-continuation.png'),fullPage:true});
