@@ -1,3 +1,4 @@
+import {DeliveryAcceptancePanel} from './DeliveryAcceptance';
 import {useEffect,useState,type ReactNode} from 'react';
 import type {WorkbenchSession} from '../api/businessWorkspace';
 import {readWorkbenchSession} from '../api/businessWorkspace';
@@ -34,7 +35,7 @@ export function ConversationHistoricalWork({link,links,conversation,session,rail
   <div className="conversation-assistant-bubble"><p className="conversation-history-label">历史工作 · 已保存记录</p><h2>{link.title??'关联工作'}</h2><p>以下为此前保存的工作与成果，不代表本会话发起了新的执行。</p>
    {error?<div role="alert"><p>历史工作暂未读回，原记录保留。</p><details><summary>核查依据</summary><code>{error}</code></details></div>:!view?<p role="status">正在读取历史进度与成果…</p>:<>
     <p>{status}。业务是否解决以原评价为准。</p>
-    {view.progress?.state==='SUCCEEDED'&&view.artifacts.length>0?<PreparedDeliverySummary view={view} viewKey={key} selectedArtifact={selected} onArtifact={setSelected} onCloseArtifact={()=>setSelected('')} query="" onReview={()=>setReview(v=>!v)}/>:<p>{view.artifacts.length?'已有中间产物，完整结果尚未确认。':'当前未读到交付成果。'}</p>}
+    <DeliveryAcceptancePanel key={view.digest} view={view}/>{view.progress?.state==='SUCCEEDED'&&view.artifacts.length>0?<PreparedDeliverySummary view={view} viewKey={key} selectedArtifact={selected} onArtifact={setSelected} onCloseArtifact={()=>setSelected('')} query="" onReview={()=>setReview(v=>!v)}/>:<p>{view.artifacts.length?'已有中间产物，完整结果尚未确认。':'当前未读到交付成果。'}</p>}
     {review&&<p>{view.outcome?'已有可读评价记录，不能仅凭执行完成认定业务已解决。':'当前未读回评价，不代表没有历史记录。'}</p>}
    </>}
   </div>

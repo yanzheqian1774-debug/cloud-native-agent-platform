@@ -442,3 +442,34 @@ test('member card keeps internal bindings in detail without inventing business r
  await page.goto('/employees');const card=page.locator('.employee-version-card');await expect(card).toContainText('此版本未登记技能、MCP或知识的直接绑定');await expect(card).not.toContainText('职责定义');await expect(card).not.toContainText('运行配置');await expect(card).not.toContainText('本体 0');await expect(card).not.toContainText('工具 0');
  await card.getByRole('button',{name:'查看数字人',exact:true}).click();await expect(page.locator('.employee-internal-reference summary')).toHaveText('2 项内部依赖');expect(new URL(page.url()).searchParams.get('employeeDefinitionRevisionId')).toBe(old);await expect(page.getByRole('button',{name:'查看专业管理',exact:true})).toBeVisible();expect(extra.posts).toHaveLength(0);
 });
+
+for(const mode of ['success','detail-unavailable','failed'] as const)test('publication receipt synchronizes parent without reload '+mode,async({page},info)=>{
+ const {original,extra}=await fixture(page);
+ original.lifecycleState='APPROVED';original.aggregateVersion=3;
+ let published=false;
+ await page.route('**/api/workbench/v1/employees/**',async route=>{
+  const p=new URL(route.request().url()).pathname;
+  if(route.request().method()==='POST'&&p.endsWith('/publication')){
+   if(mode==='failed')return route.fulfill({status:409,json:{reasonCode:'CURRENT_AUTHORITY_CHANGED'}});
+   published=true;
+  }
+  if(published&&mode==='detail-unavailable'&&route.request().method()==='GET'&&!p.endsWith('/authoring')&&!p.endsWith('/history')&&!p.endsWith('/capabilities'))return route.fulfill({status:503,json:{reasonCode:'READ_UNAVAILABLE'}});
+  await route.fallback();
+ });
+ await page.goto('/employees?'+new URLSearchParams({employeeDefinitionId:employeeId,employeeDefinitionRevisionId:old,employeeEdit:'review',detail:'1',section:'overview'}));
+ const chip=page.locator('.employee-detail-context .employee-state-chip');
+ await expect(chip).toHaveText('修改草稿 · 待发布');
+ await page.getByRole('button',{name:/^发布定义/}).click();
+ await page.getByRole('button',{name:'确认提交',exact:true}).click();
+ if(mode==='failed'){
+  await expect(page.getByRole('alert').filter({hasText:'CURRENT_AUTHORITY_CHANGED'})).toBeVisible();
+  await expect(chip).toHaveText('修改草稿 · 待发布');
+  expect(original.lifecycleState).toBe('APPROVED');expect(extra.posts).toHaveLength(0);
+ }else{
+  await expect(chip).toHaveText('当前发布版本');
+  await expect(page.getByRole('button',{name:/^发布定义/})).toHaveCount(0);
+  await expect(page.getByText('修改草稿 · 待发布',{exact:true})).toHaveCount(0);
+  expect(extra.posts).toHaveLength(1);expect(original.lifecycleState).toBe('PUBLISHED');
+ }
+ await page.screenshot({path:info.outputPath('publication-'+mode+'.png')});
+});

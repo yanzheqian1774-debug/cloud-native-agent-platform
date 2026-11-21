@@ -185,6 +185,10 @@ def build_workbench_composition(
         ):
             migrate_prepared(connection)
             migrate_review(connection)
+            if os.environ.get("PREPARED_DELIVERY_ACCEPTANCE_ENABLED") == "true":
+                from .prepared_delivery_acceptance import migrate as migrate_delivery
+
+                migrate_delivery(connection)
     from .workbench_prepared_resources import (
         PreparedResourceTargets,
         prepared_resource_operations,
@@ -701,10 +705,27 @@ def build_workbench_composition(
                             owned_business.work_reader
                         )
                         task_binding = bind_owned_business(owned_business, task_binding)
+                from .context_admission_registry import ContextAdmissionRegistry
+                from .context_readmission_plan import configured_plan
                 from .conversation_history_access import install_history_access
 
+                admission_registry = ContextAdmissionRegistry(
+                    admission,
+                    planning_admission,
+                    (
+                        conversation_routing,
+                        conversation_adoption,
+                        conversation_source_adoption,
+                        conversation_typed_answers,
+                        conversation_structured_understanding,
+                    ),
+                    readmission_plan=configured_plan(
+                        os.environ.get("CONTEXT_CALL_READMISSION_PLAN"),
+                        os.environ.get("CONTEXT_CALL_READMISSION_PLAN_SHA256"),
+                    ),
+                )
                 delegation_routes += (
-                    install_context_call_admission(admission),
+                    install_context_call_admission(admission_registry),
                     install_history_access(admission, authorizer),
                 )
 
@@ -899,6 +920,31 @@ def build_workbench_composition(
                 and sales_v2_candidate,
             )
             directory_installers += (install_management(resource_manager, authorizer),)
+
+        tool_test_path = os.environ.get("MCP_PUBLISHED_TOOL_TEST_POLICY")
+        if tool_test_path:
+            from .mcp_tool_test_api import install as install_tool_tests
+            from .mcp_tool_test_owner import ToolTestOwner
+            from .mcp_tool_test_policy import ToolTestPolicy
+            from .mcp_tool_test_postgres import (
+                ToolTestTargets,
+            )
+            from .mcp_tool_test_postgres import (
+                compatible as tool_tests_compatible,
+            )
+
+            tool_policy = ToolTestPolicy.load(tool_test_path)
+            if tool_policy.enabled:
+                if resource_manager is None:
+                    raise AuthorityError("MCP_TOOL_TEST_MANAGEMENT_REQUIRED")
+                with foundation.repository.connection_scope() as c:
+                    tool_tests_compatible(c)
+                grant_targets.additional += (ToolTestTargets(),)
+                directory_installers += (
+                    install_tool_tests(
+                        ToolTestOwner(tool_test_path, resource_manager, authorizer)
+                    ),
+                )
 
         if os.environ.get("SELECTED_RESOURCE_UPGRADES_ENABLED") == "true":
             if resource_manager is None or capability_repository is None:
@@ -1102,6 +1148,10 @@ def build_workbench_composition(
                 *(
                     prepared_execution_operations(
                         prepared_execution_coordinator,
+                        delivery_acceptance_enabled=os.environ.get(
+                            "PREPARED_DELIVERY_ACCEPTANCE_ENABLED"
+                        )
+                        == "true",
                         sales_v2_candidate=sales_v2_candidate,
                         typed_settlement_reader=(
                             settlement_reader_for_services(

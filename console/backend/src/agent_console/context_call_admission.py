@@ -329,12 +329,14 @@ class ContextCallAdmission:
                 "reasonCode": reason,
             }
 
-    def approve(self, context, context_id, spec):
+    def approve(self, context, context_id, spec, *, readmission_plan=None):
         if self.planning is not None:
             with self.repository.connection_scope() as c:
                 row = request_row(c, context_id)
             if row and row["record"].get("phase") == "planning":
-                return self.planning.approve(context, context_id, spec)
+                return self.planning.approve(
+                    context, context_id, spec, readmission_plan=readmission_plan
+                )
         self.delegation._admin(context)
         payload = spec.model_dump(mode="json")
         with self.repository.connection_scope() as c:
@@ -358,6 +360,23 @@ class ContextCallAdmission:
                 "WHERE issuer_id=%s AND idempotency_key=%s",
                 (context.principal_id, spec.idempotency_key),
             ).fetchone()
+            renewal_receipt = None
+            if readmission_plan is not None:
+                if account != {
+                    "status": "ENABLED",
+                    "revision": row["account_revision"],
+                }:
+                    raise AuthorityError("CONTEXT_ADMISSION_ACCOUNT_INACTIVE")
+                renewal_receipt = readmission_plan.require(
+                    self,
+                    c,
+                    context,
+                    row,
+                    spec,
+                    latest(c, context_id),
+                    previous,
+                    datetime.now(UTC),
+                )
             if previous:
                 if previous["context_id"] != context_id or previous[
                     "payload_digest"
@@ -374,13 +393,14 @@ class ContextCallAdmission:
             ):
                 raise AuthorityError("CONTEXT_ADMISSION_INVALID")
             hook = getattr(self, "before_approve", None)
-            if hook is not None:
+            if hook is not None and renewal_receipt is None:
                 hook(c, row, payload)
             prior = latest(c, context_id)
             record = {
                 **payload,
                 "request": row["record"],
                 "predecessor_id": prior["admission_id"] if prior else None,
+                **({"readmission": renewal_receipt} if renewal_receipt else {}),
             }
             identity = "context-admission:" + uuid4().hex
             grants = self.delegation.grants

@@ -786,11 +786,11 @@ class SkillMcpService:
             )
             initialized = client.initialize()
             invocation["dispatchState"] = "CALL_ATTEMPTED"
-            invocation["result"] = client.request(
-                "tools/call",
-                {"name": tool_name, "arguments": inputs},
-                session_id=initialized.session_id,
-            ).result
+            from .skill_mcp_transport import request_selected_tool
+
+            invocation["result"] = request_selected_tool(
+                client, tool_name, inputs, session_id=initialized.session_id
+            )
             invocation["dispatchState"] = "RESPONSE_RECEIVED"
             if invocation["result"].get("isError") is True:
                 invocation.update(

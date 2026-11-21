@@ -7,6 +7,7 @@ from .authority_contracts import AuthorityError
 from .digital_employee_definition_postgres import PostgresEmployeeDefinitionRepository
 from .skill_mcp_service import SkillMcpService
 from .test_resource_read_policy import TestReadTarget
+from .workbench_prepared_resources import reference
 
 
 def require(value):
@@ -29,21 +30,21 @@ def descendant(revisions, current, anchor, anchor_digest, predecessor):
 
 def select(connection, context, spec):
     scope = (context.scope.tenant_id, context.scope.security_domain)
-    if spec.kind == "skill":
+    if spec.kind in {"skill", "mcp"}:
         row = connection.execute(
             "SELECT record FROM skill_mcp_resource.resources WHERE namespace=%s "
-            "AND security_domain=%s AND kind='skill' AND resource_id=%s FOR SHARE",
-            (*scope, spec.logicalId),
+            "AND security_domain=%s AND kind=%s AND resource_id=%s FOR SHARE",
+            (*scope, spec.kind, spec.logicalId),
         ).fetchone()
         if not row:
             return None
         record = row["record"]
         require((record["namespace"], record["securityDomain"]) == scope)
-        require(record["resourceId"] == spec.logicalId and record["kind"] == "skill")
+        require(record["resourceId"] == spec.logicalId and record["kind"] == spec.kind)
         facts = connection.execute(
             "SELECT fact FROM skill_mcp_resource.lifecycle_facts WHERE namespace=%s "
-            "AND security_domain=%s AND kind='skill' AND resource_id=%s ORDER BY ordinal",
-            (*scope, spec.logicalId),
+            "AND security_domain=%s AND kind=%s AND resource_id=%s ORDER BY ordinal",
+            (*scope, spec.kind, spec.logicalId),
         ).fetchall()
         require([r["fact"] for r in facts] == record["facts"])
         require(bool(facts) and facts[0]["fact"]["event"] == "DRAFT_CREATED")
@@ -80,7 +81,7 @@ def select(connection, context, spec):
         return TestReadTarget(
             owner="SKILL",
             action="READ_RESOURCE",
-            resource=f"skill-invocation:prepared-resource:{spec.logicalId}:{current}",
+            resource=reference(spec.kind, spec.logicalId, current),
             digest=revision["digest"],
             purpose=spec.purpose,
         )
@@ -157,22 +158,18 @@ def lineage_block(connection, context, resource, policy, generation):
     scope = (context.scope.tenant_id, context.scope.security_domain)
     for spec in getattr(policy, "publishedResources", ()):
         prefix = (
-            (
-                "skill-invocation:prepared-resource:"
-                if spec.kind == "skill"
-                else "employee:"
-            )
-            + spec.logicalId
-            + ":"
+            reference(spec.kind, spec.logicalId, "")
+            if spec.kind in {"skill", "mcp"}
+            else "employee:" + spec.logicalId + ":"
         )
         if not resource.startswith(prefix):
             continue
-        if spec.kind == "skill":
+        if spec.kind in {"skill", "mcp"}:
             rows = connection.execute(
                 "SELECT r->>'revisionId' revision FROM skill_mcp_resource.resources t, "
                 "LATERAL jsonb_array_elements(t.record->'revisions') r "
-                "WHERE namespace=%s AND security_domain=%s AND kind='skill' AND resource_id=%s",
-                (*scope, spec.logicalId),
+                "WHERE namespace=%s AND security_domain=%s AND kind=%s AND resource_id=%s",
+                (*scope, spec.kind, spec.logicalId),
             ).fetchall()
             owner, action = "SKILL", "READ_RESOURCE"
         else:

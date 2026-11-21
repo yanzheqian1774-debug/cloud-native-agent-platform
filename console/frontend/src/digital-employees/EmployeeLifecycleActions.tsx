@@ -178,9 +178,15 @@ export function EmployeeLifecycleActions({
       setUnknown(false);
       setNeedsAuthorization(false);
       setCommandFailed(false);
+      // The validated receipt updates lifecycle independently of optional detail reads.
+      // Content is immutable for the exact revision/digest checked above.
+      onReadback({...item, aggregateVersion:result.aggregateVersion,
+        lifecycleState:result.lifecycleState,
+        publicationState:result.lifecycleState==='PUBLISHED'?'PUBLISHED':item.publicationState},result);
       try {
         const definition = await getEmployeeDefinition(result.employeeDefinitionId, result.employeeDefinitionRevisionId, controller.signal);
         if (turn !== generation.current) return;
+        if(definition.employeeDefinitionId!==result.employeeDefinitionId||definition.employeeDefinitionRevisionId!==result.employeeDefinitionRevisionId||definition.employeeDefinitionDigest!==result.employeeDefinitionDigest||(definition.aggregateVersion??0)<result.aggregateVersion)throw new Error('EMPLOYEE_READBACK_BEHIND_RECEIPT');
         setMessage(`${actionLabel[frozen.action]}已确认，并完成所选修订核对。`);
         onReadback(definition, result);
       } catch (readReason) {

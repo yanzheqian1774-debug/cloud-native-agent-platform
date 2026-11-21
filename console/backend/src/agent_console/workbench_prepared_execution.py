@@ -45,6 +45,15 @@ class RetryPrepared(StartPrepared):
     expectedAttemptOrdinal: int = Field(ge=1, le=3)
 
 
+class DeliveryDecision(StartPrepared):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    action: str = Field(pattern="^(ACCEPT_DELIVERY|RETRACT_DELIVERY)$")
+    packageDigest: str = Field(pattern="^[a-f0-9]{64}$")
+    expectedVersion: int = Field(ge=0)
+    targetEventId: str | None = Field(default=None, max_length=200)
+    reason: str = Field(default="", max_length=1000)
+
+
 class ConfirmPreparedResult(StartPrepared):
     evaluationId: str = Field(min_length=1, max_length=200)
     evaluationDigest: str = Field(pattern="^[0-9a-f]{64}$")
@@ -90,7 +99,9 @@ class PreparedExecutionOwner:
         *,
         sales_v2_candidate=False,
         typed_settlement_reader=None,
+        delivery_acceptance_enabled=False,
     ):
+        self.delivery_acceptance_enabled = delivery_acceptance_enabled
         self.coordinator = coordinator
         self.typed_settlement_reader = typed_settlement_reader
         self.sales_v2_candidate = sales_v2_candidate
@@ -158,6 +169,17 @@ class PreparedExecutionOwner:
                     "executionStarted": False,
                 }
             p = candidate(call.connection, app.scope, call.path["digest"])
+            if call.operation in {"DECIDE_PREPARED_DELIVERY", "READ_DELIVERY_RECEIPT"}:
+                if not self.delivery_acceptance_enabled:
+                    raise ExecutionPreparationError("DELIVERY_ACCEPTANCE_DISABLED")
+                from .prepared_delivery_acceptance import PreparedDeliveryAcceptance
+
+                delivery = PreparedDeliveryAcceptance(
+                    call.connection, principal, call.authority
+                )
+                if call.operation == "READ_DELIVERY_RECEIPT":
+                    return delivery.receipt(p, call.path["command_key"])
+                return delivery.decide(p, call.payload)
             if call.operation == "START_PREPARED_EXECUTION":
                 if self.coordinator is None:
                     raise WorkbenchOwnerError(
@@ -292,12 +314,17 @@ class PreparedExecutionOwner:
                     reason=body["reason"],
                     command_key=body["idempotencyKey"],
                 )
-            return self.read(call, app, p)
+            return self.read(
+                call,
+                app,
+                p,
+                delivery_acceptance_enabled=self.delivery_acceptance_enabled,
+            )
         except ExecutionPreparationError as exc:
             raise WorkbenchOwnerError(str(exc), 409) from exc
 
     @staticmethod
-    def read(call, app, p):
+    def read(call, app, p, *, delivery_acceptance_enabled=False):
         key = (p.namespace, p.security_domain, p.run_id)
         exists = call.connection.execute(
             "SELECT 1 FROM execution_authority.run_preparations WHERE namespace=%s "
@@ -446,12 +473,29 @@ class PreparedExecutionOwner:
             "artifacts": artifacts,
             "outcome": outcome,
             "humanReview": human_review,
+            **(
+                {
+                    "deliveryAcceptance": PreparedExecutionOwner.delivery_read(
+                        call, app, p
+                    )
+                }
+                if delivery_acceptance_enabled
+                else {}
+            ),
             "admission": admission,
             "resourceUses": usage,
             "events": events,
             "executionStarted": exists is not None,
             "technicalSuccessNotBusinessSuccess": True,
         }
+
+    @staticmethod
+    def delivery_read(call, app, preparation):
+        from .prepared_delivery_acceptance import PreparedDeliveryAcceptance
+
+        return PreparedDeliveryAcceptance(
+            call.connection, app.principal, call.authority
+        ).read(preparation)
 
 
 class PreparedExecutionGrantTargets:
@@ -481,7 +525,15 @@ class PreparedExecutionGrantTargets:
         prefix = "governed-execution:prepared:"
         if (
             grant.owner == "EXECUTION"
-            and grant.action in {"START", "READ", "CANCEL", "RETRY"}
+            and grant.action
+            in {
+                "START",
+                "READ",
+                "CANCEL",
+                "RETRY",
+                "ACCEPT_DELIVERY",
+                "RETRACT_DELIVERY",
+            }
             and grant.exact_resource.startswith(prefix)
         ):
             return (
@@ -563,7 +615,11 @@ class PreparedExecutionGrantTargets:
 
 
 def prepared_execution_operations(
-    coordinator=None, *, sales_v2_candidate=False, typed_settlement_reader=None
+    coordinator=None,
+    *,
+    sales_v2_candidate=False,
+    typed_settlement_reader=None,
+    delivery_acceptance_enabled=False,
 ):
     from .native_interaction import NativeAnswer
 
@@ -571,9 +627,37 @@ def prepared_execution_operations(
         coordinator,
         sales_v2_candidate=sales_v2_candidate,
         typed_settlement_reader=typed_settlement_reader,
+        delivery_acceptance_enabled=delivery_acceptance_enabled,
     )
     path = PREFIX + "/prepared-executions/{digest}"
+    delivery_operations = (
+        (
+            WorkbenchOperation(
+                "DECIDE_PREPARED_DELIVERY",
+                "POST",
+                path + "/delivery-acceptance",
+                DeliveryDecision,
+                None,
+                lambda context, path, payload, query: grant(payload["action"])(
+                    context, path, payload, query
+                ),
+                handler,
+            ),
+            WorkbenchOperation(
+                "READ_DELIVERY_RECEIPT",
+                "GET",
+                path + "/delivery-acceptance/commands/{command_key}",
+                None,
+                None,
+                grant("READ"),
+                handler,
+            ),
+        )
+        if delivery_acceptance_enabled
+        else ()
+    )
     return (
+        *delivery_operations,
         WorkbenchOperation(
             "READ_NATIVE_PROGRESS",
             "GET",

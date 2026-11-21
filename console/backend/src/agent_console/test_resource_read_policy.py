@@ -117,9 +117,10 @@ class TestReadPolicy(BaseModel):
         import json
 
         kind = json.loads(raw).get("schemaVersion")
-        model = (
-            PublishedTestReadPolicy if kind == "test-resource-read-policy.v2" else cls
-        )
+        model = {
+            "test-resource-read-policy.v2": PublishedTestReadPolicy,
+            "test-resource-read-policy.v3": PublishedMcpTestReadPolicy,
+        }.get(kind, cls)
         return model.model_validate_json(raw)
 
     @property
@@ -195,6 +196,43 @@ class PublishedTestReadPolicy(TestReadPolicy):
     def unique_selectors(self):
         if len({(x.kind, x.logicalId) for x in self.publishedResources}) != len(
             self.publishedResources
+        ):
+            raise ValueError("TEST_READ_SELECTOR_INVALID")
+        return self
+
+
+class McpPublishedResourceSelector(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["mcp"]
+    logicalId: str = Field(min_length=1, max_length=200)
+    anchorRevision: str = Field(min_length=1, max_length=200)
+    anchorDigest: str = Field(pattern="^[a-f0-9]{64}$")
+    purpose: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def exact_mcp(self):
+        if not self.logicalId.startswith("mcp-definition:") or any(
+            c in self.logicalId for c in "*%/\\"
+        ):
+            raise ValueError("TEST_READ_SELECTOR_INVALID")
+        return self
+
+
+class PublishedMcpTestReadPolicy(TestReadPolicy):
+    """Explicit successor schema. Existing v1/v2 bytes and limits are unchanged."""
+
+    schemaVersion: Literal["test-resource-read-policy.v3"]
+    publishedResources: tuple[
+        PublishedResourceSelector | McpPublishedResourceSelector, ...
+    ] = Field(default=(), max_length=3)
+
+    @model_validator(mode="after")
+    def bounded_selectors(self):
+        specs = self.publishedResources
+        if (
+            len({(s.kind, s.logicalId) for s in specs}) != len(specs)
+            or sum(s.kind == "mcp" for s in specs) > 1
+            or sum(s.kind != "mcp" for s in specs) > 2
         ):
             raise ValueError("TEST_READ_SELECTOR_INVALID")
         return self

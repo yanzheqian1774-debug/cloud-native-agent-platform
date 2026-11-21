@@ -167,3 +167,10 @@ class StreamableHttpMcpClient:
         if response.session_id:
             self.notify("notifications/initialized", session_id=response.session_id)
         return response
+
+
+def request_selected_tool(client, tool_name, inputs, *, session_id):
+    """Shared single tools/call transport; authorization belongs to the caller owner."""
+    return client.request(
+        "tools/call", {"name": tool_name, "arguments": inputs}, session_id=session_id
+    ).result
