@@ -193,7 +193,10 @@ def test_unrelated_answer_and_unknown_cannot_consume_active_work():
         {"phase": "CLARIFY", "problem": {"business_problem_id": "old"}},
     ],
 )
-def test_initial_understanding_cannot_enter_existing_work_profile(monkeypatch, state):
+@pytest.mark.parametrize("application", [NS(), NS(state=None), NS(state=NS())])
+def test_initial_understanding_cannot_enter_existing_work_profile(
+    monkeypatch, state, application
+):
     from agent_console import conversation_relation_reader as module
 
     monkeypatch.setattr(module, "_journal", lambda *_: {"version": 1, "state": state})
@@ -202,6 +205,46 @@ def test_initial_understanding_cannot_enter_existing_work_profile(monkeypatch, s
         def execute(self, *args, **kwargs):
             pytest.fail("stage rejection must precede all work owner reads")
 
-    read = module.reader(NS(), ForbiddenOwner(), NS(), NS(records=NS()))
+    read = module.reader(application, ForbiddenOwner(), NS(), NS(records=NS()))
     with pytest.raises(ConversationError, match="CONVERSATION_ROUTING_WORK_REQUIRED"):
         read(NS(), "conversation", "message", NS())
+
+
+def test_configured_focus_denial_does_not_fall_back_to_legacy_journal(monkeypatch):
+    from agent_console import conversation_relation_reader as module
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("denied focus must not fall back to legacy work")
+
+    def denied(*args, **kwargs):
+        raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 403)
+
+    monkeypatch.setattr(module, "_journal", forbidden)
+    application = NS(state=NS(fixed_cycle_focus_reader=denied))
+    read = module.reader(application, NS(execute=forbidden), NS(), NS(records=NS()))
+    with pytest.raises(ConversationError, match="CONVERSATION_SOURCE_UNAVAILABLE"):
+        read(NS(), "conversation", "message", NS())
+
+
+def test_configured_focus_remains_exact_read_only_snapshot(monkeypatch):
+    from agent_console import conversation_relation_reader as module
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("resolved focus must not invoke the legacy work reader")
+
+    calls = []
+    observation = {"contentComplete": True, "outputs": []}
+
+    def focus(context, conversation, *, message_id):
+        calls.append((context, conversation, message_id))
+        return {}, observation
+
+    monkeypatch.setattr(module, "_journal", forbidden)
+    application = NS(state=NS(fixed_cycle_focus_reader=focus))
+    read = module.reader(application, NS(execute=forbidden), NS(), NS(records=NS()))
+    context = NS()
+    value = read(context, "conversation", "message", NS())
+    assert calls == [(context, "conversation", "message")]
+    assert value["target"] is None and value["currentQuestionToken"] is None
+    assert value["input"]["currentQuestion"] is None
+    assert value["input"]["fixedCycleObservation"] == observation

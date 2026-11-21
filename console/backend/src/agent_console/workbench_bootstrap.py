@@ -1083,6 +1083,24 @@ def build_workbench_composition(
             fixed_work_source_routes = source_operations(
                 fixed_work_source_owner, enabled=True
             )
+        fixed_chat_path = os.environ.get("FIXED_CHAT_READ_POLICY")
+        if fixed_chat_path:
+            from .fixed_chat_api import install_fixed_chat
+            from .fixed_chat_read_policy import FixedChatReadPolicy
+
+            if resource_automation is None or fixed_work_source_owner is None:
+                raise ValueError("FIXED_CHAT_READ_OWNERS_REQUIRED")
+            fixed_chat_policy = FixedChatReadPolicy.load(
+                fixed_chat_path, os.environ.get("FIXED_CHAT_READ_POLICY_SHA256")
+            )
+            directory_installers += (
+                install_fixed_chat(
+                    fixed_chat_policy,
+                    authorizer,
+                    resource_automation,
+                    WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                ),
+            )
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,

@@ -173,6 +173,19 @@ def install_private_conversations(
         return jsonable_encoder(dict(result))
 
     def resolve(ctx, target):
+        if "fixedCycleFocus" in target:
+            read_focus = getattr(app.state, "fixed_cycle_focus_reader", None)
+            if read_focus is None:
+                raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+            basis, observed = read_focus(
+                ctx, target["fixedCycleFocus"]["conversationId"], target=target
+            )
+            return {
+                "title": "固定工作本次结果",
+                "focusDigest": basis["focusDigest"],
+                "fixedCycle": basis["identity"],
+                "fixedCycleContentComplete": observed["contentComplete"],
+            }
         if "source" in target:
             source = SourceReference.model_validate(target["source"]).model_dump(
                 exclude_none=True
@@ -448,11 +461,18 @@ def install_private_conversations(
     def capabilities(request: Request):
         _, context = authenticate(request)
         history = getattr(app.state, "conversation_history_access_available", None)
+        fixed = getattr(app.state, "fixed_work_activity_available", None)
         return {
             "result": {
                 "enabled": bool(service),
                 "schemaVersion": 1,
                 "historyReadPreparation": bool(history and history(context)),
+                "fixedWorkActivity": bool(fixed and fixed(context)),
+                "fixedWorkFollowup": bool(
+                    fixed
+                    and fixed(context)
+                    and getattr(app.state, "fixed_cycle_focus_reader", None)
+                ),
             }
         }
 

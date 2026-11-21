@@ -18,6 +18,16 @@ FIELDS = (
 )
 
 
+def require_fixed_basis(actions, ctx, conversation, facts):
+    target = facts.get("fixedCycleFocus")
+    if target is None:
+        return
+    reader = getattr(actions, "fixed_focus_read", None)
+    if reader is None:
+        raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+    reader(ctx, conversation, {"fixedCycleFocus": target})
+
+
 def require_target(
     actions, ctx, conversation, message_id, content=None, *, allow_archived=False
 ):
@@ -76,6 +86,7 @@ def require_target(
             ):
                 raise ConversationError("CONVERSATION_PREVIOUS_ANSWER_MISMATCH")
             actions.source_read(ctx, retained["facts"]["source"])
+            require_fixed_basis(actions, ctx, conversation, retained["facts"])
         if latest != message["content"]:
             raise ConversationError("CONVERSATION_REQUEST_MESSAGE_MISMATCH")
 
@@ -85,6 +96,8 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
     if value["state"] != "SUCCEEDED":
         return {**value, "conversationDelivery": {"state": "NOT_COMPLETED"}}
     source = reference("DRAFT", value)
+    focus_reader = getattr(actions, "fixed_focus_for_message", None)
+    focus = focus_reader(ctx, conversation, message_id) if focus_reader else None
     observed = actions.source_read(ctx, source)
     if (
         observed["receiptState"] != "SUCCEEDED"
@@ -116,6 +129,7 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
                 or facts.get("userMessageId") != message_id
             ):
                 raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
+            require_fixed_basis(actions, ctx, conversation, facts)
             saved = facts["response"]
             if (
                 value.get("reasonCode") != "RESULT_CONTENT_NOT_RETAINED"
@@ -164,6 +178,8 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
             "requestKey": request_key,
             "userMessageId": message_id,
         }
+        if focus is not None:
+            facts["fixedCycleFocus"] = focus[0]
         identity = actions.insert(
             c, ctx, row, key, content, "SOURCE", facts, digest(facts)
         )
@@ -208,6 +224,7 @@ def read_retained(actions, ctx, conversation, value, *, request_key, message_id)
         or facts.get("assistantResponse") is not True
     ):
         raise ConversationError("CONVERSATION_SOURCE_MISMATCH")
+    require_fixed_basis(actions, ctx, conversation, facts)
     return {
         **value,
         **facts["response"],

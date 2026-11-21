@@ -295,8 +295,13 @@ class PrivateConversations:
                 ]:
                     if source:
                         facts_reader.source_read(ctx, source)
+                from .conversation_answer_retention import require_fixed_basis
+
+                require_fixed_basis(facts_reader, ctx, identity, details)
                 message["kind"] = fact["kind"]
-                message["facts"] = details
+                message["facts"] = {
+                    k: v for k, v in details.items() if k != "fixedCycleFocus"
+                }
                 if fact["kind"] == "ACTION_INTENT":
                     intent = intent_by_id[details["intentId"]]
                     message["facts"] = {
@@ -330,7 +335,23 @@ class PrivateConversations:
         for link in links:
             try:
                 resolved = self.resolve_link(ctx, link["target"])
-                visible.append({**link, "readable": True, "title": resolved["title"]})
+                if "fixedCycleFocus" in link["target"]:
+                    visible.append(
+                        {
+                            "link_id": link["link_id"],
+                            "target": None,
+                            "readable": True,
+                            "title": resolved["title"],
+                            "fixedCycle": resolved["fixedCycle"],
+                            "fixedCycleContentComplete": resolved[
+                                "fixedCycleContentComplete"
+                            ],
+                        }
+                    )
+                else:
+                    visible.append(
+                        {**link, "readable": True, "title": resolved["title"]}
+                    )
             except Exception:
                 # Do not reveal revoked target metadata; never use stale snapshots.
                 visible.append({"link_id": link["link_id"], "readable": False})

@@ -120,6 +120,7 @@ class TestReadPolicy(BaseModel):
         model = {
             "test-resource-read-policy.v2": PublishedTestReadPolicy,
             "test-resource-read-policy.v3": PublishedMcpTestReadPolicy,
+            "test-resource-read-policy.v4": CuratedPublishedTestReadPolicy,
         }.get(kind, cls)
         return model.model_validate_json(raw)
 
@@ -233,6 +234,23 @@ class PublishedMcpTestReadPolicy(TestReadPolicy):
             len({(s.kind, s.logicalId) for s in specs}) != len(specs)
             or sum(s.kind == "mcp" for s in specs) > 1
             or sum(s.kind != "mcp" for s in specs) > 2
+        ):
+            raise ValueError("TEST_READ_SELECTOR_INVALID")
+        return self
+
+
+class CuratedPublishedTestReadPolicy(TestReadPolicy):
+    """Explicit reviewed object list; publication lineage still checked per read."""
+
+    schemaVersion: Literal["test-resource-read-policy.v4"]
+    publishedResources: tuple[
+        PublishedResourceSelector | McpPublishedResourceSelector, ...
+    ] = Field(default=(), max_length=64)
+
+    @model_validator(mode="after")
+    def unique_curated_selectors(self):
+        if len({(s.kind, s.logicalId) for s in self.publishedResources}) != len(
+            self.publishedResources
         ):
             raise ValueError("TEST_READ_SELECTOR_INVALID")
         return self

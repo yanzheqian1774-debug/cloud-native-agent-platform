@@ -1,0 +1,3 @@
+import {defineConfig} from '@playwright/test';
+import base from './playwright.resource-management.config';
+export default defineConfig({...base,testDir:'./tests/teams',testMatch:'fixed-cycle-conversation.spec.ts',workers:1,retries:0,use:{...base.use,baseURL:'http://127.0.0.1:4198',viewport:{width:1440,height:1000}},webServer:{command:'VITE_FIXED_WORK_SOURCE_ENABLED=true VITE_RESOURCE_AUTHORING_ENABLED=true VITE_RESOURCE_DIRECTORY_ENABLED=true VITE_SUPPLIER_QUALITY_DEMO_MODE=live VITE_PROBLEM_DRAFT_ASSISTANCE=enabled npm run build && npm run preview -- --host 127.0.0.1 --port 4198',url:'http://127.0.0.1:4198',reuseExistingServer:false}});

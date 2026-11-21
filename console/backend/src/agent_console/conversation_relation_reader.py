@@ -38,6 +38,28 @@ def reader(application, authorizer, business_problems, actions):
     records = actions.records
 
     def read(context, conversation, message_id, draft_service):
+        focus_reader = getattr(
+            getattr(application, "state", None), "fixed_cycle_focus_reader", None
+        )
+        focus = (
+            focus_reader(context, conversation, message_id=message_id)
+            if focus_reader
+            else None
+        )
+        if focus is not None:
+            _basis, observed = focus
+            return sealed_snapshot(
+                conversation,
+                message_id,
+                None,
+                {
+                    "goal": "就所选固定工作周期的已保存结果作普通回复, 不改变工作目标或安排",
+                    "scope": "仅解释以下当前有权读取的保存观察; 不是新的执行请求",
+                    "stage": "FIXED_CYCLE_OBSERVATION",
+                    "currentQuestion": None,
+                    "fixedCycleObservation": observed,
+                },
+            )
         journal = _journal(records, context, conversation)
         state = journal["state"] or {}
         current = {
