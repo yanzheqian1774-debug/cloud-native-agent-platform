@@ -338,7 +338,16 @@ def build_cycle_process(configuration):
         }
         services["mcp"] = services["skill"]
         planning_runtime = owned(
-            build_existing_planning(db, configuration.planningRuntime.path, migrations)
+            build_existing_planning(
+                db,
+                configuration.planningRuntime.path,
+                migrations,
+                **(
+                    {"budget_extension_path": configuration.budgetExtension.path}
+                    if configuration.budgetExtension is not None
+                    else {}
+                ),
+            )
         )
         _schema(
             problems.pool,

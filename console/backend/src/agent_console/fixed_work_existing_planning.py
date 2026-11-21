@@ -21,7 +21,9 @@ from .plan_suggestion_runtime import (
 )
 
 
-def build_existing_planning(database_url, path, migrations):
+def build_existing_planning(
+    database_url, path, migrations, *, budget_extension_path=None
+):
     document = json.loads(path.read_text())
     require(
         document.get("transportKind") == "REAL_PROVIDER",
@@ -77,6 +79,14 @@ def build_existing_planning(database_url, path, migrations):
                 "FIXED_CYCLE_BUDGET_SCHEMA_REQUIRED",
             )
             require_revision(c, budget)
+        from .provider_budget_extension import configure_from_environment
+
+        configure_from_environment(
+            budget,
+            {"PROVIDER_BUDGET_EXTENSION_POLICY": str(budget_extension_path)}
+            if budget_extension_path is not None
+            else None,
+        )
         dependencies = PlanningInvocationDependencies(
             profile=PlanningProfile(
                 profile_revision_id=profile.profile_revision_id,

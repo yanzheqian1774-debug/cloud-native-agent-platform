@@ -46,6 +46,7 @@ class PostgresProviderCallBudget:
         timeout: float = 5.0,
         profile_pricing_root_digest: str | None = None,
         allowance_id: str | None = None,
+        budget_extension: dict | None = None,
     ) -> None:
         if (
             not database_url
@@ -63,6 +64,7 @@ class PostgresProviderCallBudget:
         ):
             raise DraftAssistanceError("PROVIDER_BUDGET_PROFILE_INVALID")
         self.allowance_id = allowance_id
+        self.budget_extension = budget_extension
         self.profile_pricing_root_digest = profile_pricing_root_digest
         self.migration_path = migration_path
         self.profile = profile
@@ -182,6 +184,9 @@ class PostgresProviderCallBudget:
 
             require(connection, self)
             guard_budget(connection, self, invocation, quote)
+            from .provider_budget_extension import dispatch
+
+            dispatch(connection, self, invocation)
             yield
 
     @contextmanager
@@ -197,6 +202,9 @@ class PostgresProviderCallBudget:
 
             require(connection, self)
             guard_budget(connection, self, invocation, quote)
+            from .provider_budget_extension import dispatch
+
+            dispatch(connection, self, invocation)
             yield
 
     def reserve(
@@ -248,6 +256,10 @@ class PostgresProviderCallBudget:
                 from .provider_budget_allowance import require
 
                 allowance = require(connection, self)
+                from .provider_budget_extension import require as require_extension
+
+                extension = require_extension(connection, self)
+                ceiling = extension or allowance
                 existing = connection.execute(
                     "SELECT reservation_id,payload_digest "
                     "FROM draft_provider_budget.reservations WHERE namespace=%s "
@@ -263,6 +275,9 @@ class PostgresProviderCallBudget:
                     from .provider_profile_pricing import require_reservation
 
                     require_reservation(connection, self, reservation_id)
+                    from .provider_budget_extension import dispatch
+
+                    dispatch(connection, self, invocation)
                     return reservation_id
                 totals = connection.execute(
                     "SELECT count(*) AS calls,"
@@ -281,19 +296,19 @@ class PostgresProviderCallBudget:
                     connection,
                     self,
                     invocation,
-                    allowance.callCap if allowance else policy["call_cap"],
+                    ceiling.callCap if ceiling else policy["call_cap"],
                 )
                 cost_cap = effective_cost_cap(
                     connection,
                     self,
                     invocation,
-                    allowance.totalCostCapMicrousd
-                    if allowance
+                    ceiling.totalCostCapMicrousd
+                    if ceiling
                     else policy["total_cost_cap_microusd"],
                 )
-                if allowance is not None:
-                    call_cap = min(call_cap, allowance.callCap)
-                    cost_cap = min(cost_cap, allowance.totalCostCapMicrousd)
+                if ceiling is not None:
+                    call_cap = min(call_cap, ceiling.callCap)
+                    cost_cap = min(cost_cap, ceiling.totalCostCapMicrousd)
                     continuous_development = False
                 if not continuous_development and (
                     totals["calls"] + 1 > call_cap
@@ -320,6 +335,11 @@ class PostgresProviderCallBudget:
                 from .provider_profile_pricing import bind_reservation
 
                 bind_reservation(connection, self, reservation_id)
+                from .provider_budget_extension import (
+                    bind_reservation as bind_extension,
+                )
+
+                bind_extension(connection, self, reservation_id, extension)
                 return reservation_id
         except DraftAssistanceError:
             raise

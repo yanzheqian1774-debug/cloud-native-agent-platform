@@ -98,6 +98,7 @@ class Configuration:
             "NATIVE_LOOP_RUNTIME_FILE",
             "NATIVE_DURABLE_WAIT_CONFIGURATION",
             "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
+            "PROVIDER_BUDGET_EXTENSION_POLICY",
         }
         if (
             not isinstance(value["policyFiles"], dict)

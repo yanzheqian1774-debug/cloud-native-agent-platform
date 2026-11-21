@@ -534,6 +534,9 @@ def build_draft_assistance_composition(
                 ),
             )
             budget_owner.migrate_and_configure()
+            from .provider_budget_extension import configure_from_environment
+
+            configure_from_environment(budget_owner)
             resolver_arguments = {
                 "expected_profile_revision_id": profile.profile_revision_id,
                 "expected_connection_profile_id": profile.connection_profile_id,

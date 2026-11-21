@@ -180,4 +180,6 @@ def experience_limits(c, row, budget):
         )
     elif (configuration["calls"], configuration["cost_microusd"]) != (20, 1_000_000):
         raise AuthorityError("CONTEXT_ADMISSION_BUDGET_MISMATCH")
-    return configuration["calls"], configuration["cost_microusd"]
+    from .provider_budget_extension import context_limits
+
+    return context_limits(c, budget, row)

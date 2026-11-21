@@ -118,6 +118,7 @@ class StartupObservation:
                     "OWNED_BUSINESS_ADMISSION_POLICY",
                     "NATIVE_DURABLE_WAIT_CONFIGURATION",
                     "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
+                    "PROVIDER_BUDGET_EXTENSION_POLICY",
                 }
             )
             path = os.environ.get(env, "")
@@ -144,6 +145,7 @@ class StartupObservation:
                     "OWNED_BUSINESS_ADMISSION_POLICY",
                     "NATIVE_DURABLE_WAIT_CONFIGURATION",
                     "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
+                    "PROVIDER_BUDGET_EXTENSION_POLICY",
                 )
             )
         )

@@ -571,6 +571,9 @@ def build_planning_runtime(
             "profilePricingRootDigest"
         )
         budget.migrate_and_configure()
+        from .provider_budget_extension import configure_from_environment
+
+        configure_from_environment(budget)
         credentials = planning_credentials(configuration, profile)
         dependencies = PlanningInvocationDependencies(
             profile=PlanningProfile(

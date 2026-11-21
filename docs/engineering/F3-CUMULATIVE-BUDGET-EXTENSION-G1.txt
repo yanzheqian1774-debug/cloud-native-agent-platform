@@ -1,0 +1,127 @@
+G1 — ORIGINAL LEDGER CUMULATIVE EXTENSION, proposed for parent review
+No implementation yet. Isolated successor tree, never current105/root source.
+
+Acceptance target: existing eligible conversation at original cumulative100 can
+make call101 on SAME ledger through current authorization, reach max200/USD20;
+existing pending reservation settles once at original price; no old row rewritten.
+Current authority/expiry and original Dec12 deadline remain independent hard gates.
+
+Slice A / typed owner + additive persistence:
+New provider_budget_extension.py module/type, immutable extension/activation/
+reservation-basis tables in same original budget schema (migration number TBD).
+Operator prepare accepts explicit old allowance digest, root digest, predecessor,
+new user authorization proof and cumulative arithmetic. It does not activate by
+insertion or change grants. Explicit installed ID/digest activates only a previously
+validated exact extension; append CAS receipt records expected predecessor. No
+latest fallback, no sum across extension rows, no reset of ledger counters.
+All operations retain current original owner transaction ordering; design/test
+root FOR UPDATE ordering with guard_budget before implementation of new locks.
+
+Slice B / effective cap resolver, keep original records:
+Do NOT replace Allowance v1 or Limits v1 with larger global validators.
+require(base allowance) and configured_limits remain old immutable facts.
+Add resolve_effective_budget(c,budget,validated_basis) returning base caps unless
+explicit verified extension selected. Validated_basis is built server-side after
+old guard and carries exact original allowance/root, context authorization digest,
+configuration digest plus original caps, and subject/scope/current lineage.
+Extension contains eligible original configuration bindings for experience-family
+contexts (routing/adoption/source/typed/structured/planning), from actual approved
+policy facts; not arbitrary client-supplied cap100. Only its authorized ledger-cap
+component resolves200/20M. Separate task/event limit staysmin. No extension or
+mismatch cannot upgrade cap. New contexts retain old scope configuration and use
+same effective resolver, so old and new do not split pools.
+Wire provider_budget_allowance.experience_limits after its existing exact checks;
+context_call_admission and conversation_planning_admission callers then consume
+new effective caps instead of reimposing old ledger ceiling100. Legacy context and
+planning/development branches remain unchanged. Global reserve still applies the
+same original ledger-wide COUNT/SUM and root row lock. Basis evidence written in
+reservation transaction; guard_dispatch validates original reservation's basis.
+
+Slice C / explicit composition and old settlement:
+New separately pinned optional private policy, defaultoff. Budget constructor
+receives exact extension selection through draft bootstrap, plan runtime,
+fixed_work_existing_planning, Native runtime and app composition. Existing model
+profile JSON, root/pricing caps and original context configuration digests stay
+unchanged; configuration proof is not inferred from a mutable env alone.
+Main draft/planning come from context-call-runtime manifest after env clear; cover
+that actual bootstrap branch. Native shares planning runtime; propagate extension
+pin into host prepare/config/startup allowed-policy and ambient pin checks.
+No decision/token/time/skill limit changes. Retained settlement selector continues
+using old snapshot profile+pricing; no active-extension requirement for settle.
+Unknown original calls are never re-invoked by this feature.
+
+Slice D / regression, handoff and independent release:
+Isolated random PostgreSQL only: sameledger93/91/2 fixture, call101 and cap200,
+USD20, concurrent101/201, wrong/small/narrow scope, oldcontext vsnewcontext, current
+revoke/expired, inactive/defaultoff, CASfork/replay, oldNative pending settlement
+once after activation+expiry at exact original price. Include original budget
+reserve/settle tests and actual experience/planning owner contexts, not only mocks.
+Add seven-budget constructor pin coverage + Native child composition + history.
+Freeze production/test manifest and G1 evidence; independent review. Root alone
+prepares new authorization evidence, append-only owner activation, source-release
+27codepin updates (retain oldproof), backup/drain/manifest preflight. Current105
+is untouched and still100/USD10. No live model required for isolated validation.
+
+Remaining unknowns to close before implementation freeze (not reasons to block A):
+1 root-provided new authorization evidence digest and exact runtime-approved
+   extension ID; never fabricate user review/approval identity.
+2 exact migration number after current root reservations; do not edit0062.
+3 enumerate original configuration eligibility tuples from sanitized current
+   policy facts during implementation; omit/deny any unproven narrower context.
+4 confirm precise lock order against each original guard path with two-connection
+   tests; don't move root lock ahead of current authority locks speculatively.
+5 independent review actual reserve basis/dispatch replay behavior and oldNative
+   settlement integration, plus actual source-release affected27-member manifest.
+G1 classification: meaningful cross-module sameowner change, no public CRD/API or
+lifecycle/tenant/state architecture/ownership change. No specific frozen Contract
+conflict identified; if one emerges, cite actual clause instead of blanket G2.
+
+Implementation binding (2026-11-20, original105 kept separate):
+- Extension schema provider-budget-extension.v1 is NEW, not Allowance v1 rewrite.
+  Initial successor only: parent100/10M +100/10M = cumulative200/20M; no arbitrary
+  chain or second increment. Existing allowance deadline bounds extension.
+- 0075: extensions, extension_activations, extension_deactivations,
+  reservation_extension_basis; all UPDATE/DELETE forbidden. Root lock serializes
+  prepare/activate/deactivate and existing reserve. Activation unique per original
+  allowance rejects forks; exact command replay returns same immutable receipt.
+- Runtime selector: PROVIDER_BUDGET_EXTENSION_POLICY; exact Selection namespace,
+  domain, ledger, allowance, extensionID, canonical extensionDigest and original
+  new authorizationEvidenceDigest. Operator prepare/activate separate; constructing
+  a runtime never creates extension tables/records or activates a candidate.
+- API reads O_NOFOLLOW regular current-uid0600 <=32KB selector, rejects duplicate
+  JSON keys, validates against immutable active DB record and remembers loaded
+  file SHA. No hot reload. Native additionally requires file SHA in manager/startup
+  policyFiles and checks ambient unpinned/mutated files using existing owner.
+- Fixed cycle process adds optional budgetExtension FilePin; no ambient inherited
+  policy allowed without matching pin. Builder explicitly receives selected path;
+  check-only/current tick retains configuration.verify and no model/grant writes.
+- Original configured_limits remains100/10M. Only contextBases exactsubject+
+  originalauthorizationDigest+digest(entire original configuration) with parent
+  shared100/10M resolves200/20M after original exact current admission checks.
+  Smaller independentcaps unchanged, no context/price/policy rewrite. New matching
+  contexts share this proof; unknown future Human profile configuration requires
+  a new reviewed eligibility mechanism, not editing this immutable extension.
+- SERVICE_ONLY budget extension needs no Human contextBasis: original0070 owner
+  proves current credential/scope/exactpolicy/event/target/model/token boundaries;
+  global ledger cap200 is separate from these gates. Future root service policy
+  may bind its exact references without rewriting budget extension. This is not
+  general service authorization or a bypass of original per-event limits.
+- Original reservation payload, model profile, runtime JSON, root pricing unchanged.
+  Reservation basis is appended only for NEW reservations whenextension selected.
+  Existing old reservation replay does not create a basis; newbasis dispatch needs
+  matching selected active extension; failed/UNKNOWN remains original history.
+- Settlement never reads extension selection: Native's original
+  planning_measurement.settle -> PlanningBudget -> record_usage/pricing owner
+  accepts exact original receipt/measurement once; no receipt means pending,
+  no provider dispatch. Test measurement is controlled, not actual provider proof.
+- Private preparation example (root ONLY after release/preflight):
+  owner = original PostgresProviderCallBudget with original base profile/allowance;
+  record = provider_budget_extension.prepare(owner, exact_document)
+  selection.extensionDigest = _digest(record) (typed datetime canonicalization);
+  owner.budget_extension = selection
+  activation = provider_budget_extension.activate(owner, exact_operator_command_id)
+  No side effect is performed by merely generating this example.
+- Deployment source manifest must include new module/migration and every modified
+  builder/budget/host file; among original27 verified model-code files only
+  draft_assistance_bootstrap changes. Preserve old27+3 proof and issue separate
+  successor verification. Never replace old evidence's asserted historical hash.
