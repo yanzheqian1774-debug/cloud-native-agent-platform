@@ -36,7 +36,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
  const registerOwner=useCallback((owner:RoutedOwner)=>{const key=Symbol();owners.current.set(key,owner);setOwnerEpoch(n=>n+1);return()=>{owners.current.delete(key);setOwnerEpoch(n=>n+1)}},[]);
  const sendHandler=useRef<((text:string)=>Promise<boolean>)|null>(null);
  const context=useMemo<ConversationRoutingValue>(()=>({enabled,failure:saved?.lastResult&&saved.observedOwner?{target:saved.observedOwner,...saved.lastResult}:undefined,registerOwner,send:text=>sendHandler.current?sendHandler.current(text):Promise.resolve(false)}),[enabled,registerOwner,saved]);
- async function verify(){if(goal&&fixedMode)throw Error('CONVERSATION_GOAL_FOCUS_CONFLICT');const actual=await readWorkbenchSession();if(invalidated.current||!alive.current||liveStorage.current!==storage||conversationScope(actual)!==scope||actual.csrfToken!==session.csrfToken)throw Error('登录或会话已变化，原请求保留。')}
+ async function verify(){if(goal&&fixedMode)throw Error('CONVERSATION_GOAL_FOCUS_CONFLICT');const actual=await readWorkbenchSession();if(invalidated.current||!alive.current||liveStorage.current!==storage||conversationScope(actual)!==scope)throw Error('登录或会话已变化，原请求保留。');return actual;}
  // A durable answer is only a candidate: every exact owner GET must agree.
  const discoverPersisted=useEffectEvent(async(isLive:()=>boolean)=>{
   const before=current.current;
@@ -107,11 +107,11 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
  }
  async function prepareIndependent(request:Saved){
   if(!conversation||!request.messageId||!request.independentResult||!independentAdoptionReady||request.goalAdoption)return false;
-  await verify();const head=await readConversationHead(conversation);await verify();
+  await verify();const head=await readConversationHead(conversation);const {csrfToken}=await verify();
   const command={conversationId:conversation,commandId:request.key+':independent-goal',messageId:request.messageId,requestKey:request.key,expectedConversationVersion:head.conversation.version};
   const pending={...request,phase:'APPLYING' as const,goalAdoption:command};
   const serialized=JSON.stringify(pending);sessionStorage.setItem(storage,serialized);if(sessionStorage.getItem(storage)!==serialized)throw Error('CONVERSATION_GOAL_INTENT_NOT_SAVED');persist(pending);
-  try{return await finishIndependent(pending,await adoptIndependentResult(command,session.csrfToken))}
+  try{return await finishIndependent(pending,await adoptIndependentResult(command,csrfToken))}
   catch{if(alive.current)setNotice('理解结果已保存，独立工作的接收状态尚待核实；不会重发或再次理解。');return false}
  }
  async function continueIndependent(){const request=current.current;if(!request||flight.current)return;flight.current=true;setBusy(true);try{await prepareIndependent(request)}finally{flight.current=false;if(alive.current)setBusy(false)}}
@@ -127,7 +127,7 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   if(matches.length!==1)throw Error('原问题当前不可续接，已保留回复，不会提交给其他问题。');
   persist({...request,phase:'APPLYING',ownerTarget:route.target});
   const receipt=await matches[0].onAnswer(route.originalText,route.messageId,{requestKey:request.key});
-  if(typeof receipt==='object'&&receipt.state==='REJECTED'){persist({...request,phase:'REVIEW'});setNotice(receipt.notice??'原问题未接受这条回答，输入已保留，请核对后修改；不会自动重发。');return false}
+  if(typeof receipt==='object'&&receipt.state==='REJECTED'){persist({...request,phase:'REVIEW',routeRejected:true});setNotice(receipt.notice??'原问题未接受这条回答，输入已保留，请核对后修改；不会自动重发。');return false}
   if(receipt!==true&&!(typeof receipt==='object'&&receipt.state==='ACCEPTED')){setNotice(typeof receipt==='object'&&receipt.notice?receipt.notice:'原回答的接收状态尚待核实，请查看原工作进展；不会自动重发。');return false}
   persist({...request,phase:'DONE',ownerTarget:route.target});setNotice(routingReceiptNotice(request.text,route.target));await refresh.current();return true;
  }
@@ -184,25 +184,25 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   const previous=current.current,continueThread=!fixedMode||Boolean(previous?.fixedFocus&&fixedFocus&&(['bindingDigest','workDigest','eventId','receiptDigest','preparationDigest','runId'] as const).every(k=>previous.fixedFocus![k]===fixedFocus[k])),request:Saved={...(fixedMode&&!fixedFocus&&naturalRouting?{naturalNeutral:true}:{}),key:'conversation-route:'+crypto.randomUUID(),messageKey:'conversation-route-message:'+crypto.randomUUID(),text,phase:'MESSAGE_PENDING',observedOwner:[...owners.current.values()].filter(o=>o.target.kind==='UNDERSTANDING').length===1?[...owners.current.values()].find(o=>o.target.kind==='UNDERSTANDING')!.target:undefined,thread:continueThread&&previous?.previousQuestion&&['AMBIGUOUS','CURRENT_WORK'].includes(previous.relation??'')?previous.thread:[],previousQuestion:continueThread&&previous?.previousQuestion&&['AMBIGUOUS','CURRENT_WORK'].includes(previous.relation??'')?previous.previousQuestion:undefined};if(!fixedMode||request.naturalNeutral)persist(request);
   try{
    await verify();let prepared=request;
-   if(fixedMode&&fixedFocus){const head=await readConversationHead(conversation);await verify();const command={...fixedFocus,conversationId:conversation,commandId:request.key+':focus',expectedConversationVersion:head.conversation.version};prepared={...request,fixedFocus:command,messageSent:false};persist(prepared);const observed=await recordFixedFocus(command,session.csrfToken);await verify();prepared={...prepared,focusLinkId:observed.focusLinkId,focusContentComplete:observed.contentComplete};persist(prepared);}
+   if(fixedMode&&fixedFocus){const head=await readConversationHead(conversation);const {csrfToken}=await verify();const command={...fixedFocus,conversationId:conversation,commandId:request.key+':focus',expectedConversationVersion:head.conversation.version};prepared={...request,fixedFocus:command,messageSent:false};persist(prepared);const observed=await recordFixedFocus(command,csrfToken);await verify();prepared={...prepared,focusLinkId:observed.focusLinkId,focusContentComplete:observed.contentComplete};persist(prepared);}
    return await sendSavedMessage(prepared);
   }catch(e){if(alive.current){setModelState('UNKNOWN');setNotice(failureNotice(e))}return false}
   finally{flight.current=false;if(alive.current)setBusy(false)}
  }
  async function sendSavedMessage(request:Saved){
   if(!conversation||request.messageSent||request.messageId)throw Error('原消息状态尚未核实，不会重复发送。');
-  await verify();const head=await readConversationHead(conversation);await verify();
+  await verify();const head=await readConversationHead(conversation);const {csrfToken}=await verify();
   const pending={...request,messageSent:true};persist(pending);
-  const sent=await conversationRequest<{identity:string}>('/'+encodeURIComponent(conversation)+'/messages',session.csrfToken,{expectedVersion:head.conversation.version,idempotencyKey:request.messageKey,content:request.text,...(goal?{goalId:goal.goalId}:{}),...(request.focusLinkId?{focusLinkId:request.focusLinkId}:{})});await verify();
+  const sent=await conversationRequest<{identity:string}>('/'+encodeURIComponent(conversation)+'/messages',csrfToken,{expectedVersion:head.conversation.version,idempotencyKey:request.messageKey,content:request.text,...(goal?{goalId:goal.goalId}:{}),...(request.focusLinkId?{focusLinkId:request.focusLinkId}:{})});await verify();
   const active={...pending,messageId:sent.identity,phase:'MODEL_PENDING' as const,thread:[...request.thread,{id:'user:'+sent.identity,text:request.text}]};persist(active);notifyConversationSend(conversation);await refresh.current();return dispatchSaved(active);
  }
  async function dispatchSaved(request:Saved){
   if(!conversation||!request.messageId||(fixedMode&&!request.fixedFocus&&!(naturalRouting&&request.naturalNeutral)))return false;
-  await verify();
+  const {csrfToken}=await verify();
   const focus=currentFocus.current;if(request.naturalNeutral&&(!focus.fixedMode||!focus.naturalRouting||focus.fixedFocus))throw Error('当前阅读上下文已变化，原问题保留，请核对后再继续。');if(focus.fixedMode&&!request.naturalNeutral&&(!request.fixedFocus||!focus.fixedFocus||(['bindingDigest','workDigest','eventId','receiptDigest','preparationDigest','runId'] as const).some(k=>request.fixedFocus![k]!==focus.fixedFocus![k])))throw Error('所选周期已变化，原问题保留；核对原周期后再明确继续。');
   setCanResume(false);setModelState('RUNNING');if(request.focusContentComplete===false)setNotice('依据所选周期的结果节选回答，未包含全部正文。');
   const content=conversationUnderstandingContent(request.thread,request.previousQuestion?{clarificationQuestion:request.previousQuestion} as DraftAssistanceResult:undefined);
-  const result=await beginDraftAssistance(session.csrfToken,{idempotencyKey:request.key,content,conversationId:conversation,conversationMessageId:request.messageId,conversationRouting:true,...(request.failedRetryOf?{failedRetryOf:request.failedRetryOf}:{})},{},event=>{if(alive.current){setNotice('正在处理这条补充，原工作继续保留。');if(event.preview){previewRef.current=event.preview.slice(-600);setPreview(previewRef.current)}}});
+  const result=await beginDraftAssistance(csrfToken,{idempotencyKey:request.key,content,conversationId:conversation,conversationMessageId:request.messageId,conversationRouting:true,...(request.failedRetryOf?{failedRetryOf:request.failedRetryOf}:{})},{},event=>{if(alive.current){setNotice('正在处理这条补充，原工作继续保留。');if(event.preview){previewRef.current=event.preview.slice(-600);setPreview(previewRef.current)}}});
   await verify();return await accept(result,request,true);
  }
  async function resumeUnstarted(){

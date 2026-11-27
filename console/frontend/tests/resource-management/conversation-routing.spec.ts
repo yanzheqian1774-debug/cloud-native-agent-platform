@@ -47,6 +47,28 @@ for(const phase of ['PLAN','EXECUTE','RUNNING'])test(`independent question prese
  await page.reload();await expect(input(page)).toBeVisible();expect(s.modelCalls).toHaveLength(1);expect(JSON.stringify(s.journal)).toBe(before);expect(s.writes.filter(p=>p.endsWith('/journey'))).toHaveLength(0);
  await page.setViewportSize({width:1440,height:900});await page.screenshot({path:info.outputPath('independent-'+phase+'-1440.png'),fullPage:true});
 });
+test('renewed CSRF tokens in the same session allow one routed reply',async({page})=>{
+ const state=await fixture(page,'PLAN');
+ let issued=0;
+ const writeTokens:string[]=[];
+ await page.route('**/api/workbench/v1/session',route=>route.fulfill({json:{
+  principal:{principalId:'human:alice',tenantId:'tenant',securityDomain:'domain'},
+  csrfToken:'renewed-'+(++issued),session:{expiresAt:'2099-01-01T00:00:00Z'},
+ }}));
+ page.on('request',request=>{
+  if(request.method()==='POST'&&/\/(messages|invocations)$/.test(new URL(request.url()).pathname)){
+   writeTokens.push(request.headers()['x-csrf-token']??'');
+  }
+ });
+ await page.goto('/work?conversation=routing');
+ await send(page,'HTTP 是什么？');
+ await expect(page.getByText('HTTP 是传输网页内容的协议。',{exact:true})).toBeVisible();
+ expect(state.modelCalls).toHaveLength(1);
+ expect(state.messages.filter(message=>message.content==='HTTP 是什么？')).toHaveLength(1);
+ expect(writeTokens).toHaveLength(2);
+ expect(writeTokens.every(token=>/^renewed-\d+$/.test(token)&&token!=='renewed-1')).toBe(true);
+ expect(new Set(writeTokens).size).toBe(2);
+});
 test('exact Native answer is revalidated and submitted once to original owner',async({page})=>{
  const s=await fixture(page,'RUNNING');s.relation='CURRENT_QUESTION';const before=JSON.stringify(s.journal);await page.goto('/work?conversation=routing');await expect(page.getByText(s.question.question,{exact:true})).toBeVisible();await send(page,'采用内部交接规范');await expect.poll(()=>s.ownerPosts.length).toBe(1);expect(s.reads).toBe(1);expect(s.modelCalls).toHaveLength(1);expect(s.messages.filter(m=>m.content==='采用内部交接规范')).toHaveLength(1);expect(JSON.stringify(s.journal)).toBe(before);await page.reload();await expect(input(page)).toBeVisible();expect(s.ownerPosts).toHaveLength(1);expect(s.modelCalls).toHaveLength(1);
 });
