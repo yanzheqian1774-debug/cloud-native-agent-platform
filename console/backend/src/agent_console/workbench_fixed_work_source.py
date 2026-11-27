@@ -280,16 +280,27 @@ class FixedWorkSourceOwner:
             else value.context_id
         )
         origin = request_row(c, origin_context)
+        original_message_id = (
+            origin["record"].get("first_user_message_id") if origin else None
+        )
+        journal_message_id = state.get("userMessageId")
         store.require(
             origin is not None
             and origin["record"].get("conversation_id") == conversation
-            and origin["record"].get("first_user_message_id")
-            == state.get("userMessageId"),
+            and original_message_id
+            and (
+                journal_message_id == original_message_id
+                or (
+                    ancestry
+                    and ancestry[0]["target"]["message_id"] == journal_message_id
+                    and ancestry[0]["target"]["journey_key"] == state.get("key")
+                )
+            ),
             "ORIGINAL_MESSAGE_CHANGED",
         )
         store.require(
             self.owned.root.experience.conversation_scope(
-                c, ctx, conversation, state["userMessageId"]
+                c, ctx, conversation, original_message_id
             ),
             "ORIGINAL_MESSAGE_CHANGED",
         )
@@ -297,7 +308,7 @@ class FixedWorkSourceOwner:
             "SELECT author_id,content FROM private_conversation.messages WHERE "
             "tenant_id=%s AND security_domain=%s AND conversation_id=%s AND "
             "message_id=%s",
-            (*scope, conversation, state.get("userMessageId")),
+            (*scope, conversation, original_message_id),
         ).fetchone()
         store.require(
             msg
@@ -331,7 +342,7 @@ class FixedWorkSourceOwner:
             "INPUT_CHANGED",
         )
         return {
-            "originalMessageId": state["userMessageId"],
+            "originalMessageId": original_message_id,
             "originalContextId": origin_context,
             "instructionDigest": digest(msg["content"]),
             "understanding": {

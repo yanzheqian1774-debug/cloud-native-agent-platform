@@ -136,7 +136,15 @@ def test_exact_real_adopted_target_and_literal_message_no_new_model(
     from agent_console.grant_administration_application import GrantRevocationCommand
     from fixed_work_binding_support import setup as binding_setup
 
-    state["userMessageId"] = original["message_id"]
+    # The routed reply advances the journal pointer to the adopted supplement.
+    # Its verified ancestor remains the saved fixed-work instruction.
+    state["userMessageId"] = ancestry[0]["target"]["message_id"]
+    assert state["userMessageId"] != original["message_id"]
+    state["key"] = "unrelated-journey"
+    with pytest.raises(WorkbenchOwnerError, match="ORIGINAL_MESSAGE_CHANGED"):
+        read(saved)
+    state["key"] = ancestry[0]["target"]["journey_key"]
+    assert read(saved) == value
     invoke, draft, grants, decision = binding_setup(
         e, tmp_path, state, original["content"]
     )
