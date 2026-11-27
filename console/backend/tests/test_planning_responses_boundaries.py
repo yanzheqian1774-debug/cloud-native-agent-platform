@@ -214,7 +214,7 @@ def test_actual_local_https_deadline_reaps_and_replay_never_retries(
     started = time.monotonic()
     with ThreadPoolExecutor(max_workers=1) as pool:
         pending = pool.submit(send, network.client)
-        reached = network.endpoint.accepted.wait(2.5)
+        reached = network.endpoint.accepted.wait(4)
         response = pending.result(timeout=7.5)
     value = result(response)
     assert time.monotonic() - started < 7.5

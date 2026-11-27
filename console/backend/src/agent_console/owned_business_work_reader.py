@@ -6,6 +6,7 @@ lease is renewed. Callers supply their original trusted owner/command identity.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import MappingProxyType
 
 from .authority_contracts import AuthorityError, ExactGrant
 from .context_call_admission import request_row
@@ -53,7 +54,11 @@ class OwnedBusinessWorkReader:
         *,
         retained_history_paths=(),
         _retained_read_only=False,
+        environment=None,
     ):
+        self.environment = (
+            None if environment is None else MappingProxyType(dict(environment))
+        )
         self.retained_read_only = _retained_read_only
         self.path = path
         self.policy = OwnedBusinessPolicy.load(path)
@@ -326,6 +331,24 @@ class OwnedBusinessWorkReader:
         original_id = (
             chain[-1]["target"]["original_context_id"] if chain else value.context_id
         )
+        goal_origin = None
+        if r.get("goalAdoptionDigest") is not None:
+            from .conversation_goal_origin import validate
+
+            original = (
+                PostgresDraftAssistanceRepository._latest(
+                    c, value.scope, chain[-1]["target"]["original_invocation_id"]
+                )
+                if chain
+                else value
+            )
+            require(original is not None, "CONTEXT_BINDING_CHANGED")
+            goal_origin = validate(c, context, original, p)
+            require(
+                goal_origin is not None
+                and goal_origin["record_digest"] == r["goalAdoptionDigest"],
+                "CONTEXT_BINDING_CHANGED",
+            )
         frozen = r.get("understandingBindings")
         require(
             isinstance(frozen, list)
@@ -352,14 +375,22 @@ class OwnedBusinessWorkReader:
                 and context_binding(row) == bindings[identity]
                 and (
                     row["record"].get("owned_understanding_policy_digest")
-                    == p.rootUnderstandingPolicyDigest
+                    == (
+                        p.adoptionPolicyDigest
+                        if goal_origin
+                        else p.rootUnderstandingPolicyDigest
+                    )
                     if identity == original_id
                     else bool(row["record"].get("owned_understanding_policy_digest"))
                 ),
                 "CONTEXT_BINDING_CHANGED",
             )
             require(
-                (row["record"].get("question_only") is not True)
+                (
+                    row["record"].get("question_only") is True
+                    if goal_origin
+                    else row["record"].get("question_only") is not True
+                )
                 if identity == original_id
                 else row["record"].get("question_only") is True,
                 "CONTEXT_BINDING_CHANGED",

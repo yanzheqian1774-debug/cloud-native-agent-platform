@@ -21,6 +21,7 @@ class ContinuationWork:
         *,
         sales_v2_candidate=False,
         owned_business=None,
+        bound_service_execution=None,
     ):
         self.repository, self.policy, self.authority_factory = (
             repository,
@@ -30,6 +31,7 @@ class ContinuationWork:
 
         self.sales_v2_candidate = sales_v2_candidate
         self.owned_business = owned_business
+        self.bound_service_execution = bound_service_execution
         self.exact_host_scope = None
 
     @classmethod
@@ -41,6 +43,7 @@ class ContinuationWork:
         *,
         sales_v2_candidate=False,
         owned_business=None,
+        bound_service_execution=None,
     ):
         return cls(
             repository,
@@ -48,6 +51,7 @@ class ContinuationWork:
             authority_factory,
             sales_v2_candidate=sales_v2_candidate,
             owned_business=owned_business,
+            bound_service_execution=bound_service_execution,
         )
 
     def receipts(self):
@@ -147,9 +151,70 @@ class ContinuationWork:
                 and w.case == r.get("case")
                 and w.nativeAgentName == r.get("nativeAgentName")
             ]
-            if len(matches) == 1:
+            if len(matches) == 1 and (
+                self.bound_service_execution is None or self._service_receipt(row, now)
+            ):
                 eligible.append((row["namespace"], row["security_domain"], r))
         return eligible
+
+    def _service_receipt(self, row, now):
+        bridge = self.bound_service_execution
+        if bridge is None:
+            return False
+        receipt = row["result"]
+        try:
+            bridge.require_scope(
+                (row["namespace"], row["security_domain"], receipt["subject"])
+            )
+            if datetime.fromisoformat(receipt["authorizationExpiresAt"]) <= now:
+                return False
+            with self.repository.pool.connection() as c:
+                saved = c.execute(
+                    "SELECT payload FROM execution_authority.native_dispatch_commands "
+                    "WHERE namespace=%s AND security_domain=%s AND principal_id=%s "
+                    "AND authorization_resource=%s ORDER BY queued_at,command_id LIMIT 1",
+                    (
+                        row["namespace"],
+                        row["security_domain"],
+                        receipt["subject"],
+                        "governed-execution:prepared:" + receipt["preparationDigest"],
+                    ),
+                ).fetchone()
+                if saved is None:
+                    return False
+                command = self.repository._dispatch_command(saved["payload"])
+                context, authority = self.authority_factory(c, command)
+                bridge.authorize(c, context, command)
+                if receipt.get("case") == "native_readonly":
+                    from .execution_preparation_postgres import PreparedExecutionStore
+                    from .plan_suggestion_domain import ExactReference
+                    from .readonly_native_policy import require_preparation
+
+                    selected = self.policy.work(
+                        context,
+                        ExactReference.model_validate(
+                            receipt["executionPlan"]["plan"]["semantics"]["target"][
+                                "problem"
+                            ]
+                        ),
+                        receipt["sourceContentDigest"],
+                        now,
+                    )
+                    prepared, _ = PreparedExecutionStore(c).read(
+                        row["namespace"], row["security_domain"], receipt["runId"]
+                    )
+                    require_preparation(selected, prepared, receipt)
+                authority.require(
+                    OwnerPrincipal(
+                        context.principal_id, row["namespace"], row["security_domain"]
+                    ),
+                    "EXECUTION",
+                    "START",
+                    "governed-execution:prepared:" + receipt["preparationDigest"],
+                )
+                return True
+        except (AuthorityError, ValueError, ExecutionPreparationError):
+            return False
 
     def _owned_receipt(self, row, now):
         if self.owned_business is None:

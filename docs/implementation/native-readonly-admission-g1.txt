@@ -1,0 +1,113 @@
+G1 - explicit Native read-only owned-business successor
+Baseline: frozen backend39 tree 4137364f1c13883501952c01129847f5bd4c9da4. Isolated tree only.
+
+Observed defect: owned scope permits document/sales only; selected maps every
+non-document scope to sales schema. Existing synthetic-delivery source is readable
+and its tools are available but cannot become an owned admission. Never alias it
+as sales or extend the frozen old scope enums.
+
+Successor: owned-business-admission.v4, explicit native_readonly scope with exact
+source reference, source schema/body digest, registered adapter identity/contract,
+exact published employee/agent/skill/runtime references and permitted operations.
+Original actor/account/scope, deadline, source READ, model/ledger/current context,
+revocation and authorizationBasis remain mandatory. READ_ONLY and externalWrites
+false. Existing v1/v2/v3 serialization and selection semantics remain unchanged.
+No new model invocation, automatic publication, source mutation or execution right.
+
+Required consumer audit: selected/validate_source; admission and work_reader;
+resource adapter derive_work/readonly_work/require_preparation; resource automation
+validation; capability observation/planning candidates; coverage; readonly
+continuation and instance assembly; effect-time source/resource validation;
+retained-history perimeter. Source protocol must use existing registered adapter
+validation, not an added delivery-specific branch. Unknown adapters/schemas and
+wrong body/ref/actor/operations reject before admission/START.
+
+Validation: frozen legacy digest and case regressions; registered schema/adapter
+positive and negative contracts; exact published-resource binding; original owner
+isolated random53429 admission -> planning/resource preparation -> readonly START
+and source provenance, with provider/network controlled and explicit test boundary.
+No actual private config/HTTP/DB/model. Root separately publishes exact policy.
+
+P0 correction confirmed by root: no frozen general Native data adapter registry
+exists. Add an explicit versioned registry as part of this successor, not as an
+assumed dependency. Keep existing document/tabular execution entrypoints unchanged;
+new registry-backed executor/runtime must be opt-in and exactly registered.
+
+Four capability layers (observed code, not execution acceptance):
+1 Document: real NativeDocumentTools/variant rule tools, bound sections/quotes and
+   independent verification; existing exact document executor versions remain frozen.
+2 Declarative tabular: real NativeDiagnosticTools with inspect/check/row/report,
+   governed loop and independent tabular checks; existing tabular schema only.
+3 Synthetic delivery: deterministic SyntheticDeliverySkillExecutor and independent
+   delivery_evaluation exist; NO current Native delivery tool library. New adapter
+   will expose source inspection, bounded original-row inspection, delivery checks
+   and report construction. Model selects each tool/next step from observations.
+4 Sales: deterministic SalesDiagnosticSkillExecutor (and separate explicit v2
+   candidate) is not generic Native support. Registry advertises unsupported unless
+   an independently implemented and verified Native adapter is explicitly registered.
+
+Registry descriptor: exact sourceSchema + adapterId/revision/configurationDigest,
+operations + tool descriptor digest, source validator + independent verifier.
+Resolve exact descriptor, never infer from case/name or latest metadata. Supported
+registry entries initially declarative tabular and new delivery; document capability
+is separately described but not implicitly migrated to a new executor. Unknown
+schema, wrong adapter tuple, unvalidated source or unregistered operations reject.
+New owned v4 scope pins this descriptor as well as exact source/body/resources.
+
+Delivery tool validation reuses original parsing/computation primitives; acceptance
+uses independent delivery_evaluation.checks. FINISH requires a report emitted by
+this library, exact report digest, all anomalous/overdue source row indices actually
+inspected and declared limitations. Row indices handle missing/duplicate order IDs
+without inventing identifiers. No cause/business acceptance or external operation.
+Controlled multi-turn decisions must change branch with actual observations.
+
+Implementation order completed in the isolated candidate: registry/library -> explicit
+executor/runtime -> source protocol consumer gates -> real original owner chain.
+Installation, resource publication and live model acceptance remain root-owned steps.
+
+
+Validation and publication boundary (2026-11-21)
+- Resource tests deliberately execute a separate computation-test identity. Their
+  receipts say READ_ONLY_OPERATION_COMPUTATION and NOT_RUN_REQUIRES_NATIVE_ATTEMPT;
+  they never call a model or constitute autonomous business execution evidence.
+- Native execution uses the selected registered executor and the original
+  NativeLoopRuntime. The runtime sends exact adapter/answer schema in context;
+  current authority is rechecked at each decision/tool step. New resource drafts
+  have a bounded 480000 ms operation ceiling (same ceiling as existing document
+  Native resources), not an extension of any grant, context or allowance deadline.
+- A SUCCEEDED label or raw tool observation cannot produce a report projection:
+  NativeDataSkillExecutor rebuilds the independent expected report, verifies all
+  original-row observations and FINISH answer, and seals nativeReportVerification.
+  The UI consumes only that server-verified field from authorized artifacts,
+  checking matching source/adapter/report identity; immutable artifact bytes stay.
+- This revision is synchronous Native data execution, NOT document v7 and NOT
+  durable typed-question support. 0078 integration requires an explicit successor;
+  do not replace its executor tuple with this adapter or claim delegated answers.
+
+Required root publication/configuration steps (no actual operations in this slice)
+1. Register/publish a NEW Skill revision with exact generated adapter executor tuple,
+   native-data-input.v1/native-data-output.v1 and four operations. Do not overwrite
+   the current deterministic six-operation delivery Skill or existing preparation.
+2. Use an exact published Agent/Runtime that really supports this Native execution;
+   publish successors if current capability constraints do not cover it. Publish a
+   NEW Employee revision selecting this Skill and exact source/Agent/Runtime refs;
+   original Employee and old fixed-work references are immutable.
+3. Create explicit owned-business-admission.v4 Native scope with exact source schema,
+   content digest and all published resource refs/adapter descriptor; retain prior
+   pinned read policies and unchanged legacy scope perimeters. Default remains off.
+4. Root must explicitly add the adapter descriptor to nativeDataAdapters in a new
+   pinned Native runtime configuration. The existing modelRuntime file, ledger,
+   prices, allowance/cutoff and smaller per-context cap remain unchanged. C1 profile
+   need not change for this registration. Native provider/runtime source bytes do
+   change; their release/source verification pins must be reviewed and advanced by
+   the existing publication/deployment owner, never silently bypassed.
+5. Existing actual deterministic work, UNKNOWN commands and historical grants must
+   not be replayed or reassigned. This package does not activate/publish anything.
+6. Team/work lifecycle is a separate owner boundary: a Team referring to the old
+   deterministic Employee cannot silently inherit this new Employee. Root must
+   publish the exact Team successor and use an explicitly supported work/handoff
+   successor path. This slice never rewrites 0073/handoff or an existing fixed work.
+   native_readonly does NOT permit an old deterministic executor as a substitute.
+7. Source baseline is immutable backend39 tree4137364 (root47+0077 backend), not
+   the mutable actual API. v4 inherits the exact v3 independentGoalProfile binding;
+   root must supply its reviewed value and history pins during configuration.

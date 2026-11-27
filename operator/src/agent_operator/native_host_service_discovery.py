@@ -6,7 +6,18 @@ from datetime import UTC, datetime
 class Discovery:
     def __init__(self, assembly, scope, fingerprint):
         self.work = assembly.worker.repository.work
-        if self.work.owned_business is None or not self.work.policy.enabled:
+        self.service = getattr(self.work, "bound_service_execution", None)
+        if self.service is not None:
+            from agent_console.bound_service_execution import (
+                BoundServiceExecutionBridge,
+            )
+
+            if not isinstance(self.service, BoundServiceExecutionBridge):
+                raise ValueError("HOST_SERVICE_BOUND_SERVICE_REQUIRED")
+            self.service.require_scope(scope)
+        if (
+            self.work.owned_business is None and self.service is None
+        ) or not self.work.policy.enabled:
             raise ValueError("HOST_SERVICE_OWNED_CONTINUATION_REQUIRED")
         caller = getattr(getattr(assembly.worker, "transport", None), "caller", None)
         self.wait_access = getattr(caller, "wait_access", None)
@@ -24,7 +35,8 @@ class Discovery:
                 "execution_authority.prepared_resource_commands WHERE namespace=%s "
                 "AND security_domain=%s AND actor_id=%s AND command_key>%s "
                 "AND result->>'schemaVersion'='readonly-continuation.v1' "
-                "AND result ? 'ownedBusiness' ORDER BY command_key LIMIT %s",
+                + ("AND result ? 'ownedBusiness' " if self.service is None else "")
+                + "ORDER BY command_key LIMIT %s",
                 (ns, domain, principal, self.cursor, limit),
             ).fetchall()
         self.cursor = rows[-1]["command_key"] if len(rows) == limit else ""
@@ -38,9 +50,12 @@ class Discovery:
         receipt = row["result"]
         if receipt.get("executionAuthorizationDigest") != self.work.policy.digest:
             return None
-        if receipt.get("subject") != self.scope[2] or not self.work._owned_receipt(
-            row, datetime.now(UTC)
-        ):
+        check = (
+            self.work._owned_receipt
+            if self.service is None
+            else self.work._service_receipt
+        )
+        if receipt.get("subject") != self.scope[2] or not check(row, datetime.now(UTC)):
             return None
         resource = "governed-execution:prepared:" + receipt["preparationDigest"]
         ns, domain, principal = self.scope

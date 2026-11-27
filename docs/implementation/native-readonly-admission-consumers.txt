@@ -1,0 +1,35 @@
+Consumer audit, frozen backend39/next66 baseline
+
+owned_business_policy.selected/validate_source: only document or sales schema.
+owned_business_resource_adapter.readonly_work: constructs frozen ReadonlyWork;
+requires new internal typed successor rather than widening v1 case enum.
+readonly_instance_assembly: non-document/tabular/sales defaults to delivery; new
+case must never reach this fallback. Resolve registered adapter explicitly.
+problem_resource_coverage: source schema -> case map; use exact owned successor
+scope when present, retain ordinary legacy map.
+task_member_binding: source-specific mapping validators; new adapter must declare
+its executor revision and original mapping validation, not skip validation.
+resource_automation_validation: registered executor + static source-prefix map;
+new protocol must validate exact source compatibility and operation contract.
+readonly_continuation: development branch has own schema map; do not expand
+admin behavior incidentally. Owned path already derives explicit readonly_work.
+readonly_continuation_worker: receipt case equality is preserved; no global
+case inference for new owned scope.
+owned_business_work_reader/admission: require all source/READ/current-revocation
+checks; parse new scope through policy model, never downgrade typed evidence.
+owned_business_retained_history: strict scope perimeter currently demands same
+full scope set. A v4 with added native_readonly scope needs explicitly pinned
+history-only subset comparison while preserving all old scope bytes and outer
+subject/root/ledger fields. Do not allow old policy for new admission/dispatch.
+
+Unresolved dependency found by source inspection: NativeDiagnosticTools currently
+imports tabular_diagnostic_skill.validate_source directly; no general data adapter
+registry exists in frozen39 or current next66 source. SyntheticDeliverySkillExecutor
+is a distinct deterministic executor, not proof of Native loop adaptation. Root
+asked to identify frozen adapter dependency before implementing an admission gate
+that would misrepresent executable support.
+
+Resolution in this candidate: the explicit native_data_adapters registry and new
+native_delivery_tools are implemented and used by the v4 selected/validation,
+resource assembly, effect-time exact tuple validation and NativeLoopRuntime.
+Legacy sources/executors are not inferred to be supported by this registration.

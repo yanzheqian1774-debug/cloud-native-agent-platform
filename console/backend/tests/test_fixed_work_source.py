@@ -73,6 +73,8 @@ class ModeConnection:
         self.present, self.records = present, records
 
     def execute(self, query, params=None):
+        if "to_regclass('fixed_work_successions.schema_migrations')" in query:
+            return SimpleNamespace(fetchone=lambda: {"relation": None})
         if "to_regclass" in query:
             return SimpleNamespace(
                 fetchone=lambda: {"name": "handoffs" if self.present else None}

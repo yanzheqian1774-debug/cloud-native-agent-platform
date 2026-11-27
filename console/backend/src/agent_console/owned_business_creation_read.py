@@ -31,11 +31,9 @@ class OwnedBusinessCreationRead:
         if source["record"].get("conversation_id") != conversation:
             raise ConversationError("CONVERSATION_CREATE_STATUS_TARGET_CHANGED", 409)
         scope = (ctx.scope.tenant_id, ctx.scope.security_domain)
-        journal = c.execute(
-            "SELECT version,state FROM private_conversation.journeys WHERE "
-            "tenant_id=%s AND security_domain=%s AND conversation_id=%s",
-            (*scope, conversation),
-        ).fetchone()
+        from .conversation_goal_selection import selected_journal
+
+        journal = selected_journal(c, ctx, conversation, invocation=value)
         state = journal["state"] if journal else {}
         draft = state.get("draft") or {}
         if not (

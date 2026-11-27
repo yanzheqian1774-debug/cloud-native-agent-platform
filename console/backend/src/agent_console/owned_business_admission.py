@@ -89,6 +89,19 @@ class OwnedBusinessAdmission:
         require(len(matches) == 1, "CONTEXT_BINDING_CHANGED")
         return matches[0]
 
+    def _goal_origin(self, c, context, value, chain):
+        from .conversation_goal_origin import validate
+
+        original = (
+            PostgresDraftAssistanceRepository._latest(
+                c, value.scope, chain[-1]["target"]["original_invocation_id"]
+            )
+            if chain
+            else value
+        )
+        require(original is not None, "OWNED_ORIGIN_REQUIRED")
+        return validate(c, context, original, self.policy)
+
     def supports(self, c, context, invocation_id):
         """Select only this opt-in lineage; selection itself is not admission."""
         value = PostgresDraftAssistanceRepository._latest(
@@ -115,6 +128,8 @@ class OwnedBusinessAdmission:
                 conn, ctx, (original, actual), now
             ),
         )
+        if self._goal_origin(c, context, value, chain) is not None:
+            return True
         if not chain:
             return False
         origin = request_row(c, chain[-1]["target"]["original_context_id"])
@@ -188,12 +203,20 @@ class OwnedBusinessAdmission:
                     conn, ctx, (original, actual), now
                 ),
             )
-            require(bool(ancestry), "ADOPTION_REFERENCE_REQUIRED")
+            independent = self._goal_origin(c, context, value, ancestry)
+            require(
+                bool(ancestry) or independent is not None, "ADOPTION_REFERENCE_REQUIRED"
+            )
             for item in ancestry:
                 identity = item["target"]["original_context_id"]
                 contexts[identity] = self._context_admission(request_row(c, identity))
             require(
-                contexts[ancestry[-1]["target"]["original_context_id"]] is self.root,
+                independent is not None
+                or (
+                    ancestry
+                    and contexts[ancestry[-1]["target"]["original_context_id"]]
+                    is self.root
+                ),
                 "OWNED_ORIGIN_REQUIRED",
             )
             require(
@@ -270,9 +293,17 @@ class OwnedBusinessAdmission:
         )
         origin = request_row(c, origin_id)
         require(
-            origin["record"].get("owned_understanding_policy_digest")
-            == self.root.experience.understanding_policy_digest
-            and origin["record"].get("question_only") is not True,
+            (
+                self._goal_origin(c, context, value, ancestry) is not None
+                and origin["record"].get("owned_understanding_policy_digest")
+                == self.policy.adoptionPolicyDigest
+                and origin["record"].get("question_only") is True
+            )
+            or (
+                origin["record"].get("owned_understanding_policy_digest")
+                == self.root.experience.understanding_policy_digest
+                and origin["record"].get("question_only") is not True
+            ),
             "OWNED_ORIGIN_REQUIRED",
         )
         require(value.input_source is not None, "SOURCE_REQUIRED")
@@ -323,15 +354,11 @@ class OwnedBusinessAdmission:
                 "BUSINESS_BINDING_CHANGED",
             )
         else:
-            journey = c.execute(
-                "SELECT version,state FROM private_conversation.journeys "
-                "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",
-                (
-                    context.scope.tenant_id,
-                    context.scope.security_domain,
-                    source["record"]["conversation_id"],
-                ),
-            ).fetchone()
+            from .conversation_goal_selection import selected_journal
+
+            journey = selected_journal(
+                c, context, source["record"]["conversation_id"], invocation=value
+            )
             state = journey["state"] if journey else {}
             require(
                 state.get("phase") == "CREATE"
@@ -373,6 +400,9 @@ class OwnedBusinessAdmission:
             "generation": self.grants.generation.generation,
             "expiresAt": expires.isoformat(),
         }
+        goal_origin = self._goal_origin(c, context, value, ancestry)
+        if goal_origin is not None:
+            record["goalAdoptionDigest"] = goal_origin["record_digest"]
         previous = saved(c, context, invocation_id)
         if previous:
             if value.aggregate_version != previous["record"]["aggregateVersion"]:

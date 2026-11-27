@@ -31,6 +31,64 @@ class RenewalEntry(BaseModel):
     lease_mode: Literal["KEEP_EXPIRY", "EXPIRED_LEASE"]
 
 
+def valid_original_decision(original, row):
+    """Read original writer shapes without rewriting historical admission facts."""
+    if not isinstance(original, dict) or not isinstance(original.get("record"), dict):
+        return False
+    record = original["record"]
+    request = row["record"]
+    if record.get("request") != request:
+        return False
+    if "type" not in record:
+        return record.get("request_digest") == row["digest"]
+    kind = record.get("type")
+    expected_phase = {
+        "F3_CONVERSATION_EXPERIENCE": "understanding",
+        "F3_CONVERSATION_PLANNING": "planning",
+    }.get(kind)
+    if expected_phase is None:
+        return False
+    policy = request.get("experience_policy_digest")
+    if expected_phase == "understanding":
+        policy = request.get("owned_understanding_policy_digest", policy)
+    return (
+        set(record) == {"type", "request", "policy_digest", "ledger_unchanged"}
+        and request.get("phase") == expected_phase
+        and request.get("task_id") == "F3-CONVERSATION-EXPERIENCE"
+        and request.get("external_writes") is False
+        and isinstance(policy, str)
+        and len(policy) == 64
+        and all(ch in "0123456789abcdef" for ch in policy)
+        and record["policy_digest"] == policy
+        and record["ledger_unchanged"] is True
+        and original.get("issuer_id") == "policy:f3-conversation-experience"
+        and original.get("ordinal") == 1
+        and original.get("context_id") == row["context_id"]
+        and original.get("idempotency_key") == "f3:" + row["context_id"]
+        and original.get("admission_id")
+        == ("f3-experience:" if expected_phase == "understanding" else "f3-planning:")
+        + digest(row["context_id"])
+        and original.get("payload_digest") == digest(record)
+        and digest(request) == row["digest"]
+        and all(
+            request.get(k) == row.get(k)
+            for k in (
+                "context_id",
+                "subject_id",
+                "account_id",
+                "account_revision",
+                "first_invocation_id",
+            )
+        )
+        and (
+            expected_phase == "planning"
+            or all(
+                request.get(k) == row.get(k) for k in ("tenant_id", "security_domain")
+            )
+        )
+    )
+
+
 class ReadmissionPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schema_version: Literal["context-readmission.v1"]
@@ -119,9 +177,8 @@ class ReadmissionPlan(BaseModel):
         if (
             not original
             or digest(original["record"]) != e.prior_record_digest
-            or original["record"]["request"] != row["record"]
+            or not valid_original_decision(original, row)
             or original["subject_id"] != e.subject_id
-            or original["record"]["request_digest"] != row["digest"]
             or (previous is None and prior["admission_id"] != e.prior_admission_id)
             or (
                 previous is not None

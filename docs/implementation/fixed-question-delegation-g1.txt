@@ -1,0 +1,175 @@
+0078 — exact necessary-question delegation, separate default-off successor.
+Base is frozen0077 candidate4137364f1c13883501952c01129847f5bd4c9da4.
+Root reserved0078; no actual migration/configuration/model/service operation.
+
+Problem and scope:
+Existing /native-answers requires EXECUTION START and q/checkpoint principal equal
+caller. A fixed service execution therefore cannot accept its original human's
+answer merely from READ. Keep that legacy API and record shape unchanged. New
+private owner verifies an explicit original-chat question presentation, independent
+QUESTION_ANSWER authority and actor/subject separation before the original WAIT
+transaction saves one answer. No executor re-invocation, task creation, START or
+claim_continuation occurs in this owner.
+
+G1 classification:
+Same owners, same PostgreSQL, additive internal permission/typed receipt and
+optional composition ports. No public CRD, Skill/Task lifecycle, Kubernetes engine
+or frozen Human API change. Any identified contrary accepted/frozen restriction
+must be reported specifically before that part is changed.
+
+Authority and private policy:
+- Register EXECUTION QUESTION_ANSWER on an exact question digest resource,
+  governed-execution:question:<canonical identity digest>. It is distinct from
+  EXECUTION READ/START and never inferred from either.
+- Strict private SHA-pinned0600 default-off policy identifies original human,
+  owned chat, exact BOUND/work, exact service subject/credential and issuer,
+  expiry and bounded question grant TTL. Dedicated issuer must be independent;
+  actual GrantAdministration submit/approve uses its current authority, not a
+  browser proof. Denied/revoked/UNKNOWN request is never replaced by another key.
+- Scope is intersected with original bound service policy, question/checkpoint
+  expiry, current generation/recovery epoch/account and issuer credential expiry.
+  No budget extension, lease extension or replacement identity is authorized.
+
+Read/presentation/answer contracts:
+- READ exact selected event/question only after original fixed-chat retained
+  BOUND+committed receipt+preparation/task/attempt/source and current READ checks.
+  Returns canonical question identity/digest/text/contract; no permission implied.
+- Explicit POST presentation receives exact current question identity previously
+  presented in UI and current conversation CAS. Owner re-reads original records,
+  validates current WAIT/head and obtains exact QUESTION_ANSWER through independent
+  issuer. Same transaction appends immutable0078 presentation/delegation receipt
+  and ordinary private link to that question. No fabricated user/assistant text.
+- GET original presentation command is read-only recovery. Missing/unknown result
+  never permits blind new-key resubmission or re-answer. One immutable question
+  selection per actor/question; duplicate requests observe original receipt.
+- User's original message carries that saved link; server constructs NATIVE
+  currentQuestion token from immutable presentation+original question. Existing
+  C1 runs once; stored metadata identifies presentation instead of old PLAN journal.
+- POST answer carries original saved message/request key, not interpreted intent.
+  Original typed contract/current C1 terminal/reaped/settlement/facts/source checks
+  remain. New verifier binds exact presentation/question/task/run/prep/attempt,
+  human actor and service execution subject without replacing caller identity.
+
+Atomic owner interface:
+- Governance barrier/lock -> chat -> original command -> Skill projection ->
+  prepared progress -> WAIT head/question. Delegation record lock follows these;
+  no reverse path may acquire command after holding WAIT/receipt.
+- NativeWaitOwner gains optional accept_delegated_answer path with mandatory same-c
+  verification port; old accept_answer checks/shape stay byte-semantically intact.
+  New answer persists actor=human and executionSubject=service explicitly, plus
+  immutable delegation digest. It does not forge principal=service. INPUT result
+  still contains original text/typed interpretation, reconstructed from saved
+  question/answer. Continuation fencing and effects remain original owners.
+- Exact current head/command state/root/Skill/progress/attempt, cp digest, expiry,
+  source/profile/config/generation/scope evidence are rechecked. Terminal and
+  UNKNOWN cannot be revived. Replay rechecks current authority and original saved
+  payload; only the already-existing receipt is returned.
+- Original-question observation is the source artifact. No caller-supplied question
+  text/contract is trusted. Audit retains both identities and exact original keys.
+
+Storage0078:
+Private schema metadata, immutable presentations/delegations and immutable accepted
+answer receipts. PK/unique scope/chat/actor/command and exact question identity;
+FK to original private conversation/message where applicable. Full row/JSON/hash
+matrix, immutable UPDATE/DELETE triggers, default-off missing-schema behavior.
+No existing records are rewritten and no data are migrated to a new actor.
+
+Validation:
+Formal random53429 owner/session/grant tests; original real WAIT records with
+controlled provider. Service-owned question -> distinct human explicit receipt/
+permission -> one saved answer -> same original continuation. Assert one INPUT
+completion, no duplicate effect, original service principal remains unchanged.
+Reject wrong actor/credential/generation/scope/task/attempt/source/token, missing
+permission, deny/revoke/expiry, stale head, terminal/UNKNOWN, conflicting replay.
+Keep old human answer tests and source typed contract tests. Controlled UI must
+show exact original question before prepare/answer, bind saved message, recover
+unknown by same command GET only; ordinary chat and no-question views do not
+prepare a delegate. No actual models or runtime involved.
+
+Service execution composition dependency (0078 successor only):
+The legacy durable binding reads a Human owned_business_admission. A service
+command cannot borrow that row: the new NativeServiceWaitBinding instead checks
+its original ServicePlanningRegistry current SERVICE_CREDENTIAL policy, exact
+0070 preparation, 0073 BOUND/handoff, trigger and readonly START receipts, original
+conversation owner and exact source. Native runtime/host access accepts this
+explicit trusted port only for service principals. Human binding is unchanged.
+Current question/answer preparation requires current service authorization; old
+presentation/answer reads separately require exact original run/source READ and
+immutable question/checkpoint evidence, without renewing execution or answering.
+
+The initial trusted FixedQuestionComposition port is not itself a deployable
+private-file factory. Actual app/host construction must supply the separately
+configured exact service runtime and registered original ServicePlanningRegistry;
+it must not reuse a Human runtime or invent a service identity from DB rows.
+No production enablement claim is made until this construction and the complete
+single-C1 BFF -> original WAIT continuation test are closed. Existing physical
+WAIT and independent GrantAdmin tests are separate proof boundaries.
+
+Additional exact service host boundary found during implementation:
+- operator/native_host_service_discovery.py currently requires owned_business,
+  filters continuation receipts with ownedBusiness, and calls _owned_receipt.
+- operator/native_dispatch_reconciler.py durable composition currently requires
+  NATIVE_WAIT_OWNED_BUSINESS_REQUIRED for every runtime.
+These are Human-admission gates and cannot be represented as service acceptance.
+The proposed narrow continuation adds an explicitly pinned BoundServicePlanningPolicy
+input and original ServicePlanningRegistry reader to this same existing host.
+Service discovery must verify original scoped command/service credential, current
+policy/grants, exact 0070 preparation, 0073 BOUND, trigger and readonly START receipt
+through NativeServiceWaitBinding before admitting a candidate. No widened claim,
+new dispatch command, new scheduler, Human authority reuse or unverified row-to-
+identity conversion is permitted. Human ownedBusiness discovery stays unchanged.
+The same binding is mandatory at service WAIT composition and every resumed effect;
+UNKNOWN/terminal and physical stop/GO/fence semantics stay original. Optional policy
+must join prepare/config/startup pin checks; ambient unpinned input must reject.
+This wiring remains pending, independently reviewed before its implementation.
+
+2026-11-21 P0 dependency update (not a release claim):
+The exact service discovery/dispatch bridge is now the independent frozen
+BoundServiceExecutionBridge candidate (tree 243afc27fffc1c1849acb8851cf8237b3843795c,
+14 net files, patch d8390fab6ebcb3b5ae6c5ddfc73db198f122aa9593a3a056d43abec8052fbee6).
+0078 reuses that original runtime.bound_service_execution instance and exact
+ServicePlanningRegistry. FixedQuestionComposition cannot create a service bridge
+for an unbound/Human runtime. There is no second native_service_wait_binding
+implementation. The P0 dependency has no 0078 table or answer authority.
+
+C1/receipt component evidence boundary:
+Actual saved human message and original single C1 invocation/budget/retention,
+actual authenticated/CSRF fixed-question POST/GET controller and immutable 0078
+answer, original service-owned WAIT and single continuation claim are exercised
+in test_fixed_question_c1_wait. Presentation/source/current-answer callbacks in
+that component remain controlled. Independent formal GrantAdmin issuance and
+surrender are separately tested; combining their results is not a claim of a
+single end-to-end BOUND publication/service-host acceptance.
+Typed scope contracts may only enter original native-document-review revision 7.
+A cost-executor fixture rejected such a contract during original WAIT register
+(NATIVE_WAIT_TYPED_QUESTION_NOT_ENABLED); the failure is retained, and neither
+executor identity nor the gate was relaxed. Typed positive continuation still
+requires the actual published revision-7 fixture and complete service assembly.
+
+Startup assembly refinement (0078 only; P0 bytes unchanged):
+- An explicit pinned private FIXED_QUESTION_DELEGATION_CONFIGURATION selects a pinned question policy and pinned P1 policy-set configuration plus exact service-policy digest. Absent configuration is default off. No ambient identity selection and no request-time owner construction.
+- Build PolicySetAssembly once during API startup; construction has the original migrations/configuration side effects and is not advertised as read-only. Select exactly one original Service leaf, checking scope/credential/policy, then bind FixedQuestionComposition to that same runtime/registry/work/execution repository. Require actual durable document7 tuple; procurement rev1 cannot enable this port.
+- Close the created owner on any startup failure and on application close. Register the original model-budget readers by exact installed profile; no new ledger/reservation at assembly.
+- P1 remains an explicit source dependency, not copied floating code. Unit tests inject only its constructor to verify selection/lifetime; actual leaf proof remains the separately exercised original service document7 chain.
+
+2026-11-21 source-chain progress and startup boundary
+- Isolated actual document7 source publication -> formal ServicePlanningRegistry /
+  Plan / START -> NativeLoop typed WAIT is implemented. Generic WAIT component
+  tests are not used as evidence for that source chain.
+- C1 uses actual local-account BrowserSession, original ExperienceAdmission,
+  original ledger/pricing/reservation/settlement and retained assistant facts;
+  only model catalog and provider output are controlled. Human actor and service
+  execution subject remain separate. Presentations issue independent exact
+  QUESTION_ANSWER through original GrantAdmin.
+- Startup opt-in uses two explicit environment values for an owned 0600 pinned
+  configuration. It binds a pinned question policy and P1 policy-set bytes,
+  constructs P1 once at startup, selects exact scope/credential/service policy,
+  and requires the real typed7 runtime. No GET builds factories or grants.
+  P1 constructor performs original migration/configure; this is not read-only.
+  Actual P1 factory integration remains dependent on its independently frozen
+  package; controlled existing-leaf factory tests do not substitute for it.
+- Procurement native_readonly rev1 has no durable WAIT and is rejected here.
+- Original cycle receipt replay acquired the governance lock on a nested second
+  connection. Independent fixed-cycle-receipt-lock-r1 releases observation first,
+  then reauthenticates/current-checks through original call_scope and rereads the
+  exact immutable receipt before READ. No authority gate is removed.

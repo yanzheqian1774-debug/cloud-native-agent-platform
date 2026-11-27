@@ -19,6 +19,12 @@ FIELDS = (
 
 
 def require_fixed_basis(actions, ctx, conversation, facts):
+    question = facts.get("fixedCycleQuestion")
+    if question is not None:
+        read_question = getattr(actions, "fixed_question_read", None)
+        if read_question is None:
+            raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+        read_question(ctx, conversation, {"fixedCycleQuestion": question})
     target = facts.get("fixedCycleFocus")
     if target is None:
         return
@@ -98,6 +104,10 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
     source = reference("DRAFT", value)
     focus_reader = getattr(actions, "fixed_focus_for_message", None)
     focus = focus_reader(ctx, conversation, message_id) if focus_reader else None
+    question_reader = getattr(actions, "fixed_question_for_message", None)
+    question = (
+        question_reader(ctx, conversation, message_id) if question_reader else None
+    )
     observed = actions.source_read(ctx, source)
     if (
         observed["receiptState"] != "SUCCEEDED"
@@ -180,6 +190,12 @@ def retain(actions, ctx, conversation, value, *, request_key, message_id):
         }
         if focus is not None:
             facts["fixedCycleFocus"] = focus[0]
+        if question is not None:
+            from .fixed_question_reader import FixedQuestionReader
+
+            facts["fixedCycleQuestion"] = FixedQuestionReader.target(question[0])[
+                "fixedCycleQuestion"
+            ]
         identity = actions.insert(
             c, ctx, row, key, content, "SOURCE", facts, digest(facts)
         )

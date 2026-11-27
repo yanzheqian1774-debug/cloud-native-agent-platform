@@ -184,6 +184,27 @@ class ServicePlanningRegistry:
             == (True,) * len(grants),
             "FIXED_WORK_SERVICE_GRANTS_REQUIRED",
         )
+        from .fixed_work_succession_postgres import require_current
+
+        c.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s,67))",
+            (
+                digest(
+                    (
+                        "work",
+                        policy.tenantId,
+                        policy.securityDomain,
+                        policy.work.resource_id,
+                    )
+                ),
+            ),
+        )
+        require_current(
+            c,
+            (policy.tenantId, policy.securityDomain),
+            policy.work.resource_id,
+            policy.work.revision_id,
+        )
         if policy.schemaVersion == "fixed-work-service-planning.v2":
             from .fixed_work_bound_source import require_bound_source
 

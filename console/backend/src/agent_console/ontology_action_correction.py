@@ -71,7 +71,9 @@ def resource_reads(reader, c, context, p):
 
 
 def project(reader, c, context, binding):
-    path = os.environ.get(ENV)
+    environment = getattr(reader, "environment", None)
+    environment = os.environ if environment is None else environment
+    path = environment.get(ENV)
     if not path or binding.history_only:
         return binding
     p = CorrectionPolicy.load(path)

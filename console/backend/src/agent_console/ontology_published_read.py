@@ -83,6 +83,14 @@ def resolve(policy, context, connection):
             targets.append(target)
         else:
             unavailable.append({"resource": spec.logicalId, "state": "NOT_PUBLISHED"})
+    if getattr(policy, "registeredResources", ()):
+        from .test_domain_resource_read import select
+
+        registered = select(policy, context, connection)
+        targets.extend(registered)
+        manifest.append(
+            ["registered-test-domain", [t.model_dump(mode="json") for t in registered]]
+        )
     return PublishedSelection(
         canonical_digest([policy.digest, *scope, context.principal_id, manifest]),
         tuple(targets),

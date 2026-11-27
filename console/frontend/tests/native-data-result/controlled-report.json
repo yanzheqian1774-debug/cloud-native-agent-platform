@@ -1,0 +1,1166 @@
+{
+  "schemaVersion": "native-data-output.v1",
+  "operation": "RENDER_REPORT",
+  "synthetic": true,
+  "source": {
+    "assessmentDate": "2026-09-20",
+    "orders": [
+      {
+        "deliveredQuantity": "40",
+        "orderId": "PO-S01",
+        "orderedQuantity": "100",
+        "promisedDate": "2026-09-10",
+        "status": "PARTIALLY_DELIVERED",
+        "supplierId": "SYN-A",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "5",
+        "orderId": "PO-S02",
+        "orderedQuantity": "20",
+        "promisedDate": "2026-09-15",
+        "status": "PARTIALLY_DELIVERED",
+        "supplierId": "SYN-A",
+        "unit": "箱"
+      },
+      {
+        "deliveredQuantity": "0",
+        "orderId": "PO-S03",
+        "orderedQuantity": "30",
+        "promisedDate": "2026-09-10",
+        "status": "OPEN",
+        "supplierId": "SYN-B",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "10",
+        "orderId": "PO-S04",
+        "orderedQuantity": "50",
+        "promisedDate": "2026-09-18",
+        "status": "PARTIALLY_DELIVERED",
+        "supplierId": "SYN-C",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "0",
+        "orderId": "PO-S05",
+        "orderedQuantity": "20",
+        "promisedDate": "2026-09-20",
+        "status": "OPEN",
+        "supplierId": "SYN-D",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "0",
+        "orderId": "PO-S06",
+        "orderedQuantity": "20",
+        "promisedDate": "2026-09-21",
+        "status": "OPEN",
+        "supplierId": "SYN-D",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "10",
+        "orderId": "PO-S07",
+        "orderedQuantity": "10",
+        "promisedDate": "2026-09-01",
+        "status": "DELIVERED",
+        "supplierId": "SYN-A",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "0",
+        "orderId": "PO-S08",
+        "orderedQuantity": "10",
+        "promisedDate": "2026-09-01",
+        "status": "CANCELLED",
+        "supplierId": "SYN-B",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "0",
+        "orderId": "PO-S09",
+        "orderedQuantity": "10",
+        "promisedDate": null,
+        "status": "OPEN",
+        "supplierId": "SYN-E",
+        "unit": "件"
+      },
+      {
+        "deliveredQuantity": "12",
+        "orderId": "PO-S10",
+        "orderedQuantity": "10",
+        "promisedDate": "2026-09-01",
+        "status": "PARTIALLY_DELIVERED",
+        "supplierId": "SYN-F",
+        "unit": "件"
+      }
+    ],
+    "provenance": "MANUALLY_CONSTRUCTED_SYNTHETIC_PURCHASE_ORDERS_NOT_ENTERPRISE_DATA",
+    "schemaVersion": "synthetic-delivery-source.v1",
+    "snapshotId": "s5-324-delivery-orders-v1",
+    "synthetic": true
+  },
+  "sourceSnapshot": {
+    "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "resource_id": "monitoring-fixture",
+    "revision_id": "1"
+  },
+  "sourceDigest": "5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d",
+  "adapter": {
+    "adapterId": "native-synthetic-delivery-readonly",
+    "adapterRevision": "1",
+    "configurationDigest": "3186a76b272c860f038cf7e328e6b41ccf3101e99cb87860c9ef696546f7ba3d",
+    "sourceSchema": "synthetic-delivery-source.v1",
+    "operations": [
+      "READ_DATA",
+      "VALIDATE_DATA",
+      "ANALYZE_DATA",
+      "RENDER_REPORT"
+    ],
+    "effectPolicy": "READ_ONLY",
+    "externalWrites": false
+  },
+  "businessConclusion": "UNDETERMINED",
+  "externalWrites": false,
+  "limitations": [
+    "Bounded source evidence; not business acceptance."
+  ],
+  "nativeLoop": {
+    "answer": {
+      "businessAcceptance": false,
+      "inspectedRowIndices": [
+        0,
+        1,
+        2,
+        3,
+        8,
+        9
+      ],
+      "reportDigest": "7d8bbb27e8a3e291c4310c2a4e9db15d4968ef1c46779748fca2d8e5e9bd1f31"
+    },
+    "reason": "VERIFIED",
+    "status": "SUCCEEDED",
+    "trace": [
+      {
+        "decision": {
+          "action": "TOOL",
+          "arguments": {},
+          "tool": "inspect_source"
+        },
+        "observation": {
+          "arguments": {},
+          "digest": "0672bf70d19e785a8397b106802b871ba8d2892d834b521851c09ef471de3cee",
+          "kind": "TOOL_RESULT",
+          "output": {
+            "adapterDigest": "3186a76b272c860f038cf7e328e6b41ccf3101e99cb87860c9ef696546f7ba3d",
+            "assessmentDate": "2026-09-20",
+            "limitations": [
+              "Synthetic snapshot only",
+              "No causal evidence or business acceptance"
+            ],
+            "rowCount": 10,
+            "sourceDigest": "5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d",
+            "sourceSnapshot": {
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "resource_id": "monitoring-fixture",
+              "revision_id": "1"
+            },
+            "synthetic": true
+          },
+          "revision": "1",
+          "tool": "inspect_source"
+        },
+        "observationDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "step": 0
+      },
+      {
+        "decision": {
+          "action": "TOOL",
+          "arguments": {},
+          "tool": "check_delivery"
+        },
+        "observation": {
+          "arguments": {},
+          "digest": "2f1e0ea4b897300292a593209a405fedb565e2d3b23690dede100e894f32ba62",
+          "kind": "TOOL_RESULT",
+          "output": {
+            "adapterDigest": "3186a76b272c860f038cf7e328e6b41ccf3101e99cb87860c9ef696546f7ba3d",
+            "anomalies": [
+              {
+                "orderId": "PO-S09",
+                "reasons": [
+                  "PROMISED_DATE_MISSING_OR_INVALID"
+                ],
+                "rowIndex": 8
+              },
+              {
+                "orderId": "PO-S10",
+                "reasons": [
+                  "QUANTITY_CONTRADICTION_OR_MISSING"
+                ],
+                "rowIndex": 9
+              }
+            ],
+            "excludedOrders": [
+              {
+                "orderId": "PO-S07",
+                "reason": "FULLY_DELIVERED",
+                "rowIndex": 6
+              },
+              {
+                "orderId": "PO-S08",
+                "reason": "CANCELLED",
+                "rowIndex": 7
+              }
+            ],
+            "requiredRowIndices": [
+              0,
+              1,
+              2,
+              3,
+              8,
+              9
+            ],
+            "sourceDigest": "5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d",
+            "sourceSnapshot": {
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "resource_id": "monitoring-fixture",
+              "revision_id": "1"
+            },
+            "suppliers": [
+              {
+                "maxOverdueDays": 10,
+                "orders": [
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "40",
+                    "orderId": "PO-S01",
+                    "orderedQuantity": "100",
+                    "overdue": true,
+                    "overdueDays": 10,
+                    "promisedDate": "2026-09-10",
+                    "remainingQuantity": "60",
+                    "rowIndex": 0,
+                    "supplierId": "SYN-A",
+                    "unit": "件"
+                  },
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "5",
+                    "orderId": "PO-S02",
+                    "orderedQuantity": "20",
+                    "overdue": true,
+                    "overdueDays": 5,
+                    "promisedDate": "2026-09-15",
+                    "remainingQuantity": "15",
+                    "rowIndex": 1,
+                    "supplierId": "SYN-A",
+                    "unit": "箱"
+                  }
+                ],
+                "overdueOrderCount": 2,
+                "rank": 1,
+                "rankingReason": "最长逾期10天，逾期订单2笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+                "remainingByUnit": {
+                  "件": "60",
+                  "箱": "15"
+                },
+                "supplierId": "SYN-A"
+              },
+              {
+                "maxOverdueDays": 10,
+                "orders": [
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "0",
+                    "orderId": "PO-S03",
+                    "orderedQuantity": "30",
+                    "overdue": true,
+                    "overdueDays": 10,
+                    "promisedDate": "2026-09-10",
+                    "remainingQuantity": "30",
+                    "rowIndex": 2,
+                    "supplierId": "SYN-B",
+                    "unit": "件"
+                  }
+                ],
+                "overdueOrderCount": 1,
+                "rank": 2,
+                "rankingReason": "最长逾期10天，逾期订单1笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+                "remainingByUnit": {
+                  "件": "30"
+                },
+                "supplierId": "SYN-B"
+              },
+              {
+                "maxOverdueDays": 2,
+                "orders": [
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "10",
+                    "orderId": "PO-S04",
+                    "orderedQuantity": "50",
+                    "overdue": true,
+                    "overdueDays": 2,
+                    "promisedDate": "2026-09-18",
+                    "remainingQuantity": "40",
+                    "rowIndex": 3,
+                    "supplierId": "SYN-C",
+                    "unit": "件"
+                  }
+                ],
+                "overdueOrderCount": 1,
+                "rank": 3,
+                "rankingReason": "最长逾期2天，逾期订单1笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+                "remainingByUnit": {
+                  "件": "40"
+                },
+                "supplierId": "SYN-C"
+              }
+            ]
+          },
+          "revision": "1",
+          "tool": "check_delivery"
+        },
+        "observationDigest": "075e98a947e99491eee054d1cb2760716dc9cc4400e62ff488f6bdac88a8e0e4",
+        "step": 1
+      },
+      {
+        "decision": {
+          "action": "TOOL",
+          "arguments": {
+            "rowIndices": [
+              0,
+              1,
+              2,
+              3,
+              8,
+              9
+            ]
+          },
+          "tool": "inspect_rows"
+        },
+        "observation": {
+          "arguments": {
+            "rowIndices": [
+              0,
+              1,
+              2,
+              3,
+              8,
+              9
+            ]
+          },
+          "digest": "cca485bcadd7540d52a0a443e559459c765dbb4984f64ec7226d536ee6880bd2",
+          "kind": "TOOL_RESULT",
+          "output": {
+            "adapterDigest": "3186a76b272c860f038cf7e328e6b41ccf3101e99cb87860c9ef696546f7ba3d",
+            "rows": [
+              {
+                "rowIndex": 0,
+                "sourceRow": {
+                  "deliveredQuantity": "40",
+                  "orderId": "PO-S01",
+                  "orderedQuantity": "100",
+                  "promisedDate": "2026-09-10",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-A",
+                  "unit": "件"
+                }
+              },
+              {
+                "rowIndex": 1,
+                "sourceRow": {
+                  "deliveredQuantity": "5",
+                  "orderId": "PO-S02",
+                  "orderedQuantity": "20",
+                  "promisedDate": "2026-09-15",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-A",
+                  "unit": "箱"
+                }
+              },
+              {
+                "rowIndex": 2,
+                "sourceRow": {
+                  "deliveredQuantity": "0",
+                  "orderId": "PO-S03",
+                  "orderedQuantity": "30",
+                  "promisedDate": "2026-09-10",
+                  "status": "OPEN",
+                  "supplierId": "SYN-B",
+                  "unit": "件"
+                }
+              },
+              {
+                "rowIndex": 3,
+                "sourceRow": {
+                  "deliveredQuantity": "10",
+                  "orderId": "PO-S04",
+                  "orderedQuantity": "50",
+                  "promisedDate": "2026-09-18",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-C",
+                  "unit": "件"
+                }
+              },
+              {
+                "rowIndex": 8,
+                "sourceRow": {
+                  "deliveredQuantity": "0",
+                  "orderId": "PO-S09",
+                  "orderedQuantity": "10",
+                  "promisedDate": null,
+                  "status": "OPEN",
+                  "supplierId": "SYN-E",
+                  "unit": "件"
+                }
+              },
+              {
+                "rowIndex": 9,
+                "sourceRow": {
+                  "deliveredQuantity": "12",
+                  "orderId": "PO-S10",
+                  "orderedQuantity": "10",
+                  "promisedDate": "2026-09-01",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-F",
+                  "unit": "件"
+                }
+              }
+            ],
+            "sourceDigest": "5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d",
+            "sourceSnapshot": {
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "resource_id": "monitoring-fixture",
+              "revision_id": "1"
+            }
+          },
+          "revision": "1",
+          "tool": "inspect_rows"
+        },
+        "observationDigest": "033893669a2c1caff7272806a9a1ec98003af07e6290440139037f415fec7986",
+        "step": 2
+      },
+      {
+        "decision": {
+          "action": "TOOL",
+          "arguments": {},
+          "tool": "build_report"
+        },
+        "observation": {
+          "arguments": {},
+          "digest": "1d6feb7756290afd796681e35f2c36814e692ed04ac6b1fa7e4d418ba6b76a11",
+          "kind": "TOOL_RESULT",
+          "output": {
+            "adapterDigest": "3186a76b272c860f038cf7e328e6b41ccf3101e99cb87860c9ef696546f7ba3d",
+            "anomalies": [
+              {
+                "orderId": "PO-S09",
+                "reasons": [
+                  "PROMISED_DATE_MISSING_OR_INVALID"
+                ],
+                "rowIndex": 8
+              },
+              {
+                "orderId": "PO-S10",
+                "reasons": [
+                  "QUANTITY_CONTRADICTION_OR_MISSING"
+                ],
+                "rowIndex": 9
+              }
+            ],
+            "assessmentDate": "2026-09-20",
+            "businessConclusion": "UNDETERMINED",
+            "excludedOrders": [
+              {
+                "orderId": "PO-S07",
+                "reason": "FULLY_DELIVERED",
+                "rowIndex": 6
+              },
+              {
+                "orderId": "PO-S08",
+                "reason": "CANCELLED",
+                "rowIndex": 7
+              }
+            ],
+            "gaps": [
+              "仅合成订单，真实企业状况与损失未验证"
+            ],
+            "operation": "RENDER_REPORT",
+            "orderDetails": [
+              {
+                "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                "deliveredQuantity": "40",
+                "orderId": "PO-S01",
+                "orderedQuantity": "100",
+                "overdue": true,
+                "overdueDays": 10,
+                "promisedDate": "2026-09-10",
+                "remainingQuantity": "60",
+                "rowIndex": 0,
+                "supplierId": "SYN-A",
+                "unit": "件"
+              },
+              {
+                "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                "deliveredQuantity": "5",
+                "orderId": "PO-S02",
+                "orderedQuantity": "20",
+                "overdue": true,
+                "overdueDays": 5,
+                "promisedDate": "2026-09-15",
+                "remainingQuantity": "15",
+                "rowIndex": 1,
+                "supplierId": "SYN-A",
+                "unit": "箱"
+              },
+              {
+                "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                "deliveredQuantity": "0",
+                "orderId": "PO-S03",
+                "orderedQuantity": "30",
+                "overdue": true,
+                "overdueDays": 10,
+                "promisedDate": "2026-09-10",
+                "remainingQuantity": "30",
+                "rowIndex": 2,
+                "supplierId": "SYN-B",
+                "unit": "件"
+              },
+              {
+                "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                "deliveredQuantity": "10",
+                "orderId": "PO-S04",
+                "orderedQuantity": "50",
+                "overdue": true,
+                "overdueDays": 2,
+                "promisedDate": "2026-09-18",
+                "remainingQuantity": "40",
+                "rowIndex": 3,
+                "supplierId": "SYN-C",
+                "unit": "件"
+              },
+              {
+                "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                "deliveredQuantity": "0",
+                "orderId": "PO-S05",
+                "orderedQuantity": "20",
+                "overdue": false,
+                "overdueDays": 0,
+                "promisedDate": "2026-09-20",
+                "remainingQuantity": "20",
+                "rowIndex": 4,
+                "supplierId": "SYN-D",
+                "unit": "件"
+              },
+              {
+                "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                "deliveredQuantity": "0",
+                "orderId": "PO-S06",
+                "orderedQuantity": "20",
+                "overdue": false,
+                "overdueDays": 0,
+                "promisedDate": "2026-09-21",
+                "remainingQuantity": "20",
+                "rowIndex": 5,
+                "supplierId": "SYN-D",
+                "unit": "件"
+              }
+            ],
+            "reportDigest": "7d8bbb27e8a3e291c4310c2a4e9db15d4968ef1c46779748fca2d8e5e9bd1f31",
+            "requiredRowIndices": [
+              0,
+              1,
+              2,
+              3,
+              8,
+              9
+            ],
+            "schemaVersion": "synthetic-delivery-output.v1",
+            "source": {
+              "assessmentDate": "2026-09-20",
+              "orders": [
+                {
+                  "deliveredQuantity": "40",
+                  "orderId": "PO-S01",
+                  "orderedQuantity": "100",
+                  "promisedDate": "2026-09-10",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-A",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "5",
+                  "orderId": "PO-S02",
+                  "orderedQuantity": "20",
+                  "promisedDate": "2026-09-15",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-A",
+                  "unit": "箱"
+                },
+                {
+                  "deliveredQuantity": "0",
+                  "orderId": "PO-S03",
+                  "orderedQuantity": "30",
+                  "promisedDate": "2026-09-10",
+                  "status": "OPEN",
+                  "supplierId": "SYN-B",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "10",
+                  "orderId": "PO-S04",
+                  "orderedQuantity": "50",
+                  "promisedDate": "2026-09-18",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-C",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "0",
+                  "orderId": "PO-S05",
+                  "orderedQuantity": "20",
+                  "promisedDate": "2026-09-20",
+                  "status": "OPEN",
+                  "supplierId": "SYN-D",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "0",
+                  "orderId": "PO-S06",
+                  "orderedQuantity": "20",
+                  "promisedDate": "2026-09-21",
+                  "status": "OPEN",
+                  "supplierId": "SYN-D",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "10",
+                  "orderId": "PO-S07",
+                  "orderedQuantity": "10",
+                  "promisedDate": "2026-09-01",
+                  "status": "DELIVERED",
+                  "supplierId": "SYN-A",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "0",
+                  "orderId": "PO-S08",
+                  "orderedQuantity": "10",
+                  "promisedDate": "2026-09-01",
+                  "status": "CANCELLED",
+                  "supplierId": "SYN-B",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "0",
+                  "orderId": "PO-S09",
+                  "orderedQuantity": "10",
+                  "promisedDate": null,
+                  "status": "OPEN",
+                  "supplierId": "SYN-E",
+                  "unit": "件"
+                },
+                {
+                  "deliveredQuantity": "12",
+                  "orderId": "PO-S10",
+                  "orderedQuantity": "10",
+                  "promisedDate": "2026-09-01",
+                  "status": "PARTIALLY_DELIVERED",
+                  "supplierId": "SYN-F",
+                  "unit": "件"
+                }
+              ],
+              "provenance": "MANUALLY_CONSTRUCTED_SYNTHETIC_PURCHASE_ORDERS_NOT_ENTERPRISE_DATA",
+              "schemaVersion": "synthetic-delivery-source.v1",
+              "snapshotId": "s5-324-delivery-orders-v1",
+              "synthetic": true
+            },
+            "sourceDigest": "5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d",
+            "sourceSnapshot": {
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "resource_id": "monitoring-fixture",
+              "revision_id": "1"
+            },
+            "suggestedChecks": [
+              "核对异常记录的原始日期、数量及单位",
+              "与供应商核对未交数量和最新承诺，不自动执行业务变更"
+            ],
+            "suppliers": [
+              {
+                "maxOverdueDays": 10,
+                "orders": [
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "40",
+                    "orderId": "PO-S01",
+                    "orderedQuantity": "100",
+                    "overdue": true,
+                    "overdueDays": 10,
+                    "promisedDate": "2026-09-10",
+                    "remainingQuantity": "60",
+                    "rowIndex": 0,
+                    "supplierId": "SYN-A",
+                    "unit": "件"
+                  },
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "5",
+                    "orderId": "PO-S02",
+                    "orderedQuantity": "20",
+                    "overdue": true,
+                    "overdueDays": 5,
+                    "promisedDate": "2026-09-15",
+                    "remainingQuantity": "15",
+                    "rowIndex": 1,
+                    "supplierId": "SYN-A",
+                    "unit": "箱"
+                  }
+                ],
+                "overdueOrderCount": 2,
+                "rank": 1,
+                "rankingReason": "最长逾期10天，逾期订单2笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+                "remainingByUnit": {
+                  "件": "60",
+                  "箱": "15"
+                },
+                "supplierId": "SYN-A"
+              },
+              {
+                "maxOverdueDays": 10,
+                "orders": [
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "0",
+                    "orderId": "PO-S03",
+                    "orderedQuantity": "30",
+                    "overdue": true,
+                    "overdueDays": 10,
+                    "promisedDate": "2026-09-10",
+                    "remainingQuantity": "30",
+                    "rowIndex": 2,
+                    "supplierId": "SYN-B",
+                    "unit": "件"
+                  }
+                ],
+                "overdueOrderCount": 1,
+                "rank": 2,
+                "rankingReason": "最长逾期10天，逾期订单1笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+                "remainingByUnit": {
+                  "件": "30"
+                },
+                "supplierId": "SYN-B"
+              },
+              {
+                "maxOverdueDays": 2,
+                "orders": [
+                  {
+                    "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+                    "deliveredQuantity": "10",
+                    "orderId": "PO-S04",
+                    "orderedQuantity": "50",
+                    "overdue": true,
+                    "overdueDays": 2,
+                    "promisedDate": "2026-09-18",
+                    "remainingQuantity": "40",
+                    "rowIndex": 3,
+                    "supplierId": "SYN-C",
+                    "unit": "件"
+                  }
+                ],
+                "overdueOrderCount": 1,
+                "rank": 3,
+                "rankingReason": "最长逾期2天，逾期订单1笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+                "remainingByUnit": {
+                  "件": "40"
+                },
+                "supplierId": "SYN-C"
+              }
+            ],
+            "synthetic": true,
+            "title": "供应商交付及时性 · 合成订单分析"
+          },
+          "revision": "1",
+          "tool": "build_report"
+        },
+        "observationDigest": "e0cb06d2f887d8a472c8d3f8062ff2079199c5ea801db0a1422e348015bd6217",
+        "step": 3
+      },
+      {
+        "decision": {
+          "action": "FINISH",
+          "answer": {
+            "businessAcceptance": false,
+            "inspectedRowIndices": [
+              0,
+              1,
+              2,
+              3,
+              8,
+              9
+            ],
+            "reportDigest": "7d8bbb27e8a3e291c4310c2a4e9db15d4968ef1c46779748fca2d8e5e9bd1f31"
+          }
+        },
+        "observationDigest": "d30e7f44f1e479dcd49ada05256e8834395a0a24352d09edfc0e5a233653974a",
+        "step": 4,
+        "verification": {
+          "businessAcceptance": false,
+          "checks": {
+            "anomalies": true,
+            "eligibility": true,
+            "quantities": true,
+            "ranking": true,
+            "snapshot": true,
+            "traceability": true
+          },
+          "passed": true
+        }
+      }
+    ]
+  },
+  "nativeReport": {
+    "adapterDigest": "3186a76b272c860f038cf7e328e6b41ccf3101e99cb87860c9ef696546f7ba3d",
+    "anomalies": [
+      {
+        "orderId": "PO-S09",
+        "reasons": [
+          "PROMISED_DATE_MISSING_OR_INVALID"
+        ],
+        "rowIndex": 8
+      },
+      {
+        "orderId": "PO-S10",
+        "reasons": [
+          "QUANTITY_CONTRADICTION_OR_MISSING"
+        ],
+        "rowIndex": 9
+      }
+    ],
+    "assessmentDate": "2026-09-20",
+    "businessConclusion": "UNDETERMINED",
+    "excludedOrders": [
+      {
+        "orderId": "PO-S07",
+        "reason": "FULLY_DELIVERED",
+        "rowIndex": 6
+      },
+      {
+        "orderId": "PO-S08",
+        "reason": "CANCELLED",
+        "rowIndex": 7
+      }
+    ],
+    "gaps": [
+      "仅合成订单，真实企业状况与损失未验证"
+    ],
+    "operation": "RENDER_REPORT",
+    "orderDetails": [
+      {
+        "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+        "deliveredQuantity": "40",
+        "orderId": "PO-S01",
+        "orderedQuantity": "100",
+        "overdue": true,
+        "overdueDays": 10,
+        "promisedDate": "2026-09-10",
+        "remainingQuantity": "60",
+        "rowIndex": 0,
+        "supplierId": "SYN-A",
+        "unit": "件"
+      },
+      {
+        "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+        "deliveredQuantity": "5",
+        "orderId": "PO-S02",
+        "orderedQuantity": "20",
+        "overdue": true,
+        "overdueDays": 5,
+        "promisedDate": "2026-09-15",
+        "remainingQuantity": "15",
+        "rowIndex": 1,
+        "supplierId": "SYN-A",
+        "unit": "箱"
+      },
+      {
+        "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+        "deliveredQuantity": "0",
+        "orderId": "PO-S03",
+        "orderedQuantity": "30",
+        "overdue": true,
+        "overdueDays": 10,
+        "promisedDate": "2026-09-10",
+        "remainingQuantity": "30",
+        "rowIndex": 2,
+        "supplierId": "SYN-B",
+        "unit": "件"
+      },
+      {
+        "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+        "deliveredQuantity": "10",
+        "orderId": "PO-S04",
+        "orderedQuantity": "50",
+        "overdue": true,
+        "overdueDays": 2,
+        "promisedDate": "2026-09-18",
+        "remainingQuantity": "40",
+        "rowIndex": 3,
+        "supplierId": "SYN-C",
+        "unit": "件"
+      },
+      {
+        "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+        "deliveredQuantity": "0",
+        "orderId": "PO-S05",
+        "orderedQuantity": "20",
+        "overdue": false,
+        "overdueDays": 0,
+        "promisedDate": "2026-09-20",
+        "remainingQuantity": "20",
+        "rowIndex": 4,
+        "supplierId": "SYN-D",
+        "unit": "件"
+      },
+      {
+        "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+        "deliveredQuantity": "0",
+        "orderId": "PO-S06",
+        "orderedQuantity": "20",
+        "overdue": false,
+        "overdueDays": 0,
+        "promisedDate": "2026-09-21",
+        "remainingQuantity": "20",
+        "rowIndex": 5,
+        "supplierId": "SYN-D",
+        "unit": "件"
+      }
+    ],
+    "reportDigest": "7d8bbb27e8a3e291c4310c2a4e9db15d4968ef1c46779748fca2d8e5e9bd1f31",
+    "requiredRowIndices": [
+      0,
+      1,
+      2,
+      3,
+      8,
+      9
+    ],
+    "schemaVersion": "synthetic-delivery-output.v1",
+    "source": {
+      "assessmentDate": "2026-09-20",
+      "orders": [
+        {
+          "deliveredQuantity": "40",
+          "orderId": "PO-S01",
+          "orderedQuantity": "100",
+          "promisedDate": "2026-09-10",
+          "status": "PARTIALLY_DELIVERED",
+          "supplierId": "SYN-A",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "5",
+          "orderId": "PO-S02",
+          "orderedQuantity": "20",
+          "promisedDate": "2026-09-15",
+          "status": "PARTIALLY_DELIVERED",
+          "supplierId": "SYN-A",
+          "unit": "箱"
+        },
+        {
+          "deliveredQuantity": "0",
+          "orderId": "PO-S03",
+          "orderedQuantity": "30",
+          "promisedDate": "2026-09-10",
+          "status": "OPEN",
+          "supplierId": "SYN-B",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "10",
+          "orderId": "PO-S04",
+          "orderedQuantity": "50",
+          "promisedDate": "2026-09-18",
+          "status": "PARTIALLY_DELIVERED",
+          "supplierId": "SYN-C",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "0",
+          "orderId": "PO-S05",
+          "orderedQuantity": "20",
+          "promisedDate": "2026-09-20",
+          "status": "OPEN",
+          "supplierId": "SYN-D",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "0",
+          "orderId": "PO-S06",
+          "orderedQuantity": "20",
+          "promisedDate": "2026-09-21",
+          "status": "OPEN",
+          "supplierId": "SYN-D",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "10",
+          "orderId": "PO-S07",
+          "orderedQuantity": "10",
+          "promisedDate": "2026-09-01",
+          "status": "DELIVERED",
+          "supplierId": "SYN-A",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "0",
+          "orderId": "PO-S08",
+          "orderedQuantity": "10",
+          "promisedDate": "2026-09-01",
+          "status": "CANCELLED",
+          "supplierId": "SYN-B",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "0",
+          "orderId": "PO-S09",
+          "orderedQuantity": "10",
+          "promisedDate": null,
+          "status": "OPEN",
+          "supplierId": "SYN-E",
+          "unit": "件"
+        },
+        {
+          "deliveredQuantity": "12",
+          "orderId": "PO-S10",
+          "orderedQuantity": "10",
+          "promisedDate": "2026-09-01",
+          "status": "PARTIALLY_DELIVERED",
+          "supplierId": "SYN-F",
+          "unit": "件"
+        }
+      ],
+      "provenance": "MANUALLY_CONSTRUCTED_SYNTHETIC_PURCHASE_ORDERS_NOT_ENTERPRISE_DATA",
+      "schemaVersion": "synthetic-delivery-source.v1",
+      "snapshotId": "s5-324-delivery-orders-v1",
+      "synthetic": true
+    },
+    "sourceDigest": "5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d",
+    "sourceSnapshot": {
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resource_id": "monitoring-fixture",
+      "revision_id": "1"
+    },
+    "suggestedChecks": [
+      "核对异常记录的原始日期、数量及单位",
+      "与供应商核对未交数量和最新承诺，不自动执行业务变更"
+    ],
+    "suppliers": [
+      {
+        "maxOverdueDays": 10,
+        "orders": [
+          {
+            "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+            "deliveredQuantity": "40",
+            "orderId": "PO-S01",
+            "orderedQuantity": "100",
+            "overdue": true,
+            "overdueDays": 10,
+            "promisedDate": "2026-09-10",
+            "remainingQuantity": "60",
+            "rowIndex": 0,
+            "supplierId": "SYN-A",
+            "unit": "件"
+          },
+          {
+            "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+            "deliveredQuantity": "5",
+            "orderId": "PO-S02",
+            "orderedQuantity": "20",
+            "overdue": true,
+            "overdueDays": 5,
+            "promisedDate": "2026-09-15",
+            "remainingQuantity": "15",
+            "rowIndex": 1,
+            "supplierId": "SYN-A",
+            "unit": "箱"
+          }
+        ],
+        "overdueOrderCount": 2,
+        "rank": 1,
+        "rankingReason": "最长逾期10天，逾期订单2笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+        "remainingByUnit": {
+          "件": "60",
+          "箱": "15"
+        },
+        "supplierId": "SYN-A"
+      },
+      {
+        "maxOverdueDays": 10,
+        "orders": [
+          {
+            "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+            "deliveredQuantity": "0",
+            "orderId": "PO-S03",
+            "orderedQuantity": "30",
+            "overdue": true,
+            "overdueDays": 10,
+            "promisedDate": "2026-09-10",
+            "remainingQuantity": "30",
+            "rowIndex": 2,
+            "supplierId": "SYN-B",
+            "unit": "件"
+          }
+        ],
+        "overdueOrderCount": 1,
+        "rank": 2,
+        "rankingReason": "最长逾期10天，逾期订单1笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+        "remainingByUnit": {
+          "件": "30"
+        },
+        "supplierId": "SYN-B"
+      },
+      {
+        "maxOverdueDays": 2,
+        "orders": [
+          {
+            "calculation": "remaining=ordered-delivered; overdueDays=max(0,assessmentDate-promisedDate)",
+            "deliveredQuantity": "10",
+            "orderId": "PO-S04",
+            "orderedQuantity": "50",
+            "overdue": true,
+            "overdueDays": 2,
+            "promisedDate": "2026-09-18",
+            "remainingQuantity": "40",
+            "rowIndex": 3,
+            "supplierId": "SYN-C",
+            "unit": "件"
+          }
+        ],
+        "overdueOrderCount": 1,
+        "rank": 3,
+        "rankingReason": "最长逾期2天，逾期订单1笔；同分按供应商编号稳定排列。仅演示优先级，不代表真实损失。",
+        "remainingByUnit": {
+          "件": "40"
+        },
+        "supplierId": "SYN-C"
+      }
+    ],
+    "synthetic": true,
+    "title": "供应商交付及时性 · 合成订单分析"
+  },
+  "nativeReportVerification": {
+    "schemaVersion": "native-data-report-verification.v1",
+    "adapterDigest": "3186a76b272c860f038cf7e328e6b41ccf3101e99cb87860c9ef696546f7ba3d",
+    "sourceSnapshot": {
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resource_id": "monitoring-fixture",
+      "revision_id": "1"
+    },
+    "sourceDigest": "5e669266573537b00f641aeb174fc42cd9a52bcf7f2914f287a37558e1e0c83d",
+    "reportDigest": "7d8bbb27e8a3e291c4310c2a4e9db15d4968ef1c46779748fca2d8e5e9bd1f31",
+    "businessAcceptance": false,
+    "digest": "e6c4b483aaa2723d7e8702f00452222d2de6ee87b50d5f9cba1d74ba2c8677c6"
+  }
+}

@@ -122,8 +122,13 @@ ORDER BY p.created_at DESC,p.workflow_run_id DESC
 
 
 def read_current_work_snapshot(connection, *, namespace: str, security_domain: str):
+    from .conversation_goal_selection import journal_relation
+
+    statement = SNAPSHOT_SQL.replace(
+        "private_conversation.journeys", journal_relation(connection)
+    )
     rows = connection.execute(
-        SNAPSHOT_SQL, (namespace, security_domain, MAX_SNAPSHOT_RUNS + 1)
+        statement, (namespace, security_domain, MAX_SNAPSHOT_RUNS + 1)
     ).fetchall()
     if len(rows) > MAX_SNAPSHOT_RUNS:
         raise WorkbenchOwnerError("CURRENT_WORK_SNAPSHOT_CAPACITY", 503)

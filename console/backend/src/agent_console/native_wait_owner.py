@@ -20,12 +20,24 @@ from .resource_use_domain import canonical_digest
 
 
 class NativeWaitOwner:
-    def __init__(self, authorize, skill_repository, *, clock=lambda: datetime.now(UTC)):
+    def __init__(
+        self,
+        authorize,
+        skill_repository,
+        *,
+        clock=lambda: datetime.now(UTC),
+        authorize_delegated_answer=None,
+    ):
         if not callable(authorize):
             raise TypeError("NATIVE_WAIT_AUTHORITY_PORT_REQUIRED")
         self.authorize = authorize
         self.skill_repository = skill_repository
         self.clock = clock
+        if authorize_delegated_answer is not None and not callable(
+            authorize_delegated_answer
+        ):
+            raise TypeError("NATIVE_WAIT_DELEGATED_AUTHORITY_PORT_REQUIRED")
+        self.authorize_delegated_answer = authorize_delegated_answer
 
     def _lock(self, c, cp, operation):
         # Caller holds generation barrier; callback uses THIS connection. It may
@@ -231,6 +243,50 @@ class NativeWaitOwner:
             or not answer["answer"].strip()
         ):
             raise AuthorityError("NATIVE_WAIT_ANSWER_BINDING_INVALID")
+        return self._save_answer(c, cp, answer, store, head)
+
+    def accept_delegated_answer(self, c, cp, answer):
+        """Explicit actor/subject path; original execution authorization still runs.
+
+        The installed private port verifies the presented question, current human
+        QUESTION_ANSWER grant and saved C1 interpretation on this connection.
+        Default-off callers cannot supply a boolean proof or impersonate service.
+        """
+        from .fixed_question_types import DelegatedAnswer, QuestionPresentation
+
+        if self.authorize_delegated_answer is None:
+            raise AuthorityError("NATIVE_WAIT_DELEGATION_NOT_ENABLED")
+        try:
+            value = DelegatedAnswer.model_validate(answer)
+        except ValueError as exc:
+            raise AuthorityError("NATIVE_WAIT_DELEGATED_ANSWER_INVALID") from exc
+        store = self._lock(c, cp, "DELEGATED_ANSWER")
+        head = store.head()
+        if (
+            not head
+            or head["checkpoint_digest"] != cp.digest
+            or store.checkpoint(cp.digest) != cp
+        ):
+            raise AuthorityError("NATIVE_WAIT_QUESTION_NOT_CURRENT")
+        presentation = self.authorize_delegated_answer(c, cp, value)
+        if not isinstance(presentation, QuestionPresentation):
+            raise AuthorityError("NATIVE_WAIT_DELEGATED_AUTHORITY_INVALID")
+        presentation.require_checkpoint(cp)
+        if (
+            value.presentationDigest != presentation.digest
+            or value.actorId != presentation.actorId
+            or value.executionSubject != cp.identity.principal_id
+            or value.questionDigest != cp.question_digest
+            or value.conversationId != cp.identity.conversation_id
+        ):
+            raise AuthorityError("NATIVE_WAIT_DELEGATED_ANSWER_INVALID")
+        if self.clock() >= presentation.expiresAt:
+            raise AuthorityError("NATIVE_WAIT_DELEGATION_EXPIRED")
+        return self._save_answer(
+            c, cp, value.model_dump(mode="json", exclude_none=True), store, head
+        )
+
+    def _save_answer(self, c, cp, answer, store, head):
         prior = store.observation(cp.digest, "ANSWER_SAVED")
         if prior:
             if prior != answer:

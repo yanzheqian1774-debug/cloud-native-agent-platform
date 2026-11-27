@@ -152,7 +152,12 @@ class HostService:
                 raise ValueError("HOST_SERVICE_CANDIDATE_CHANGED")
             startup_path = directory / f"{identity}-boot-{boot}.json"
             record_path = directory / f"{identity}-startup-{boot}.json"
-            cfg = self.config.value
+            child_config = (
+                self.config.for_candidate(current)
+                if hasattr(self.config, "for_candidate")
+                else self.config
+            )
+            cfg = child_config.value
             startup = {
                 "workerId": identity,
                 "namespace": candidate["namespace"],
@@ -187,7 +192,7 @@ class HostService:
             ready_r, ready_w = os.pipe()
             control_r, control_w = os.pipe()
             environment = {
-                **self.config.environment,
+                **child_config.environment,
                 "NATIVE_DISPATCH_WORKER_ID": identity,
                 "NATIVE_HOST_STARTUP_CONFIGURATION": str(startup_path),
                 "NATIVE_HOST_SERVICE_LOCK_FD": str(fd),
@@ -294,8 +299,16 @@ class HostService:
                 if descriptor >= 0:
                     os.close(descriptor)
 
+    def _wait_access(self, candidate):
+        select = getattr(self.discovery, "wait_access_for", None)
+        return (
+            select(candidate)
+            if select is not None
+            else getattr(self.discovery, "wait_access", None)
+        )
+
     def _confirm_wait_exit(self, child):
-        if getattr(self.discovery, "wait_access", None) is None:
+        if self._wait_access(child.candidate) is None:
             return
         if child.process.poll() is None:
             raise ValueError("HOST_SERVICE_WAIT_EXIT_NOT_OBSERVED")
@@ -419,10 +432,7 @@ class HostService:
     def recover_wait_exit(self, candidate):
         """Redeliver a prior trusted exit fact, never infer exit from a missing PID."""
         identity = self.identity(candidate)
-        if (
-            identity in self.children
-            or getattr(self.discovery, "wait_access", None) is None
-        ):
+        if identity in self.children or self._wait_access(candidate) is None:
             return
         path = self.config.directory / (identity + ".json")
         if not path.exists():
@@ -507,7 +517,10 @@ class HostService:
         self.last_error = None
         self.config.verify()
         self.poll_children()
-        for candidate in self.discovery.page():
+        candidates = self.discovery.page()
+        if getattr(self.discovery, "page_errors", ()):
+            self.last_error = "LEAF_OBSERVATION_UNAVAILABLE"
+        for candidate in candidates:
             if self.identity(candidate) in self.children:
                 continue
             if len(self.children) >= self.config.value["maxHosts"]:
@@ -581,15 +594,24 @@ def main():
     from .native_dispatch_reconciler import build_native_dispatch_from_environment
 
     path = os.environ.get("NATIVE_EXACT_HOST_SERVICE_CONFIGURATION")
-    if not path:
+    set_path = os.environ.get("NATIVE_EXACT_HOST_POLICY_SET_CONFIGURATION")
+    if not path and not set_path:
         raise ValueError("HOST_SERVICE_CONFIGURATION_REQUIRED")
-    config = Configuration(path)
-    fingerprint = execution_database_fingerprint(
-        os.environ["NATIVE_DISPATCH_DATABASE_URL"]
-    )
+    if path and set_path:
+        raise ValueError("HOST_SERVICE_ONE_CONFIGURATION_REQUIRED")
+    if set_path:
+        from .native_host_policy_set_config import PolicySetConfiguration
+
+        config = PolicySetConfiguration(set_path)
+        fingerprint = config.fingerprint
+    else:
+        config = Configuration(path)
+        fingerprint = execution_database_fingerprint(
+            os.environ["NATIVE_DISPATCH_DATABASE_URL"]
+        )
     lock_directory = machine_lock_directory()
     fd = lock(lock_directory / (fingerprint + ".lock"))
-    assembly = None
+    assemblies = []
     service = None
     stop = Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -606,16 +628,25 @@ def main():
                 "children": [],
             },
         )
-        assembly = build_native_dispatch_from_environment()
-        if assembly is None:
-            raise ValueError("HOST_SERVICE_ASSEMBLY_REQUIRED")
-        discovery = Discovery(
-            assembly,
-            tuple(
-                config.value[k] for k in ("namespace", "securityDomain", "principalId")
-            ),
-            fingerprint,
-        )
+        if set_path:
+            from .native_host_policy_set_assembly import PolicySetAssembly
+
+            assembly = PolicySetAssembly(config)
+            assemblies.append(assembly)
+            discovery = assembly.discovery
+        else:
+            assembly = build_native_dispatch_from_environment()
+            if assembly is None:
+                raise ValueError("HOST_SERVICE_ASSEMBLY_REQUIRED")
+            assemblies.append(assembly)
+            discovery = Discovery(
+                assembly,
+                tuple(
+                    config.value[k]
+                    for k in ("namespace", "securityDomain", "principalId")
+                ),
+                fingerprint,
+            )
         service = HostService(config, discovery, service_lock_fd=fd)
         while not stop.is_set():
             try:
@@ -628,11 +659,21 @@ def main():
                 break
             stop.wait(config.value["pollSeconds"])
     finally:
-        if service is not None:
-            service.close()
-        if assembly is not None:
-            assembly.close()
-        os.close(fd)
+        try:
+            if service is not None:
+                service.close()
+        finally:
+            try:
+                failures = []
+                for assembly in reversed(assemblies):
+                    try:
+                        assembly.close()
+                    except Exception as error:
+                        failures.append(error)
+                if failures:
+                    raise failures[0]
+            finally:
+                os.close(fd)
 
 
 if __name__ == "__main__":

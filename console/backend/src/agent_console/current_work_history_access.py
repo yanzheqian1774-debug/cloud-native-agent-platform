@@ -27,9 +27,12 @@ def prepare_directory(service, records, authorizer, context, after=None):
             ).fetchone()
             if not anchor:
                 raise AuthorityError("CONVERSATION_HISTORY_SCOPE_DENIED")
+        from .conversation_goal_selection import journal_relation
+
         rows = c.execute(
-            "SELECT v.conversation_id FROM private_conversation.conversations v "
-            "JOIN private_conversation.journeys j "
+            "SELECT DISTINCT v.conversation_id,v.created_at "
+            "FROM private_conversation.conversations v "
+            f"JOIN {journal_relation(c)} j "
             "USING(tenant_id,security_domain,conversation_id) "
             "WHERE v.tenant_id=%s AND v.security_domain=%s AND v.owner_id=%s "
             "AND v.archived_at IS NULL AND jsonb_typeof(j.state->'problem')='object' "

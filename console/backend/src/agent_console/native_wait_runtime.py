@@ -44,6 +44,11 @@ class NativeWaitRuntimeSession:
         self.owner = NativeWaitOwner(self.authorize, runtime.skill_repository)
 
     def binding(self, c):
+        if self.command.principal_id.startswith("service:"):
+            reader = getattr(self.runtime, "bound_service_execution", None)
+            if reader is None:
+                raise AuthorityError("NATIVE_WAIT_SERVICE_BINDING_REQUIRED")
+            return reader.read(c, self.context, self.command, self.preparation)
         if self.runtime.owned_business is None:
             raise AuthorityError("NATIVE_WAIT_OWNED_BUSINESS_REQUIRED")
         bound = self.runtime.owned_business.work(
@@ -89,6 +94,23 @@ class NativeWaitRuntimeSession:
             raise AuthorityError("NATIVE_WAIT_RUNTIME_BINDING_CHANGED")
 
     def identity(self, c, bound):
+        from .bound_service_execution import BoundServiceExecution
+
+        if isinstance(bound, BoundServiceExecution):
+            if bound.execution_subject != self.command.principal_id:
+                raise AuthorityError("NATIVE_WAIT_SERVICE_BINDING_CHANGED")
+            return WaitIdentity(
+                namespace=self.command.scope.namespace,
+                security_domain=self.command.scope.security_domain,
+                preparation_digest=self.preparation.digest,
+                workflow_run_id=self.preparation.run_id,
+                task_id=self.task_id,
+                attempt_id=str(self.command.attempt_id),
+                command_id=str(self.command.command_id),
+                skill_invocation_id=self.invocation_id,
+                principal_id=self.command.principal_id,
+                conversation_id=bound.conversation_id,
+            )
         row = c.execute(
             "SELECT record FROM authorization_admin.owned_business_admissions "
             "WHERE tenant_id=%s AND security_domain=%s AND admission_id=%s "

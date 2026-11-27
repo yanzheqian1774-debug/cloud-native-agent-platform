@@ -12,7 +12,9 @@ from .workbench_owner_authorization import (
 )
 
 
-def install_fixed_chat(policy, authorizer, automation, cursors):
+def install_fixed_chat(
+    policy, authorizer, automation, cursors, *, question_composition=None
+):
     def install(app, authenticate, require_csrf, boundary_policy):
         app.state.fixed_work_activity_available = lambda context: bool(
             policy.enabled
@@ -124,6 +126,35 @@ def install_fixed_chat(policy, authorizer, automation, cursors):
                     call, conversation, body
                 ),
                 write=True,
+            )
+
+        if question_composition is not None:
+            from .fixed_question_api import install as install_questions
+            from .fixed_question_reader import FixedQuestionReader, connect
+
+            install_questions(app, execute, question_composition.owners)
+            reader = FixedQuestionReader(
+                app.state.conversation_actions.records,
+                authorizer,
+                lambda: FixedChatDelivery(
+                    policy, app.state.conversation_actions.records, automation, cursors
+                ),
+                question_composition.owners,
+            )
+            connect(app, reader)
+            app.state.fixed_question_delegation_available = lambda context: bool(
+                app.state.fixed_work_activity_available(context)
+                and question_composition.policy.enabled
+                and question_composition.clock() < question_composition.policy.expiresAt
+                and any(
+                    (s.tenantId, s.securityDomain, s.subjectId)
+                    == (
+                        context.scope.tenant_id,
+                        context.scope.security_domain,
+                        context.principal_id,
+                    )
+                    for s in question_composition.policy.scopes
+                )
             )
 
         import os

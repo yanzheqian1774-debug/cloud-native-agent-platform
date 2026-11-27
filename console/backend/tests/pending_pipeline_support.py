@@ -39,6 +39,8 @@ def drive(
     sales_v2_candidate=False,
     exact_run_id=None,
     expected_runs=1,
+    bound_service_execution=None,
+    discovery_observer=None,
 ):
     assert native.load_checkpoint().state.value == "POSTGRES_ACTIVE"
     reader = a.automation.grants.authorization
@@ -51,6 +53,8 @@ def drive(
             AuthenticationSource(command.authentication_source),
             a.gen.policy_version,
         )
+        if bound_service_execution is not None:
+            bound_service_execution.authorize(c, context, command)
         return all(
             reader.has_current_grants(
                 context,
@@ -65,7 +69,15 @@ def drive(
 
     factory = owner_authority_factory(reader, a.gen, authorize)
     work = ContinuationWork(
-        native, policy, factory, sales_v2_candidate=sales_v2_candidate
+        native,
+        policy,
+        factory,
+        sales_v2_candidate=sales_v2_candidate,
+        **(
+            {"bound_service_execution": bound_service_execution}
+            if bound_service_execution
+            else {}
+        ),
     )
     ready = PreparedReadyDriver(native, factory, eligible_dispatches=work.dispatches)
     caller, composition = compose(
@@ -134,6 +146,8 @@ def drive(
 
     kubernetes = FixtureKubernetes()
     try:
+        if discovery_observer is not None:
+            discovery_observer(work, native, caller)
         for _ in range(task_count):
             # Restart the worker each turn while all owner state remains durable.
             worker = NativeDispatchWorker(

@@ -1,0 +1,104 @@
+2026-11-21 — separate successor, 0077 reserved by root, default off.
+
+Problem: the current journey primary key is (tenant,domain,conversation), while
+16 backend modules issue direct queries. A UI-only switch would retarget prior
+work and fixed_work_sources.conversation_mode applies TARGET_REVIEW_ONLY to the
+entire chat. Neither copying over the old journal nor treating an arbitrary client
+run as current work is acceptable.
+
+Private storage proposal (not public CRD/lifecycle change):
+- Keep private_conversation.journeys and old rows/bytes/API default unchanged.
+- 0077 adds owned goal-slot identity and per-slot CAS journal, plus immutable
+message-to-goal association. Composite keys include tenant/domain/chat/goal;
+conversation ownership remains original owner. A new slot records the original
+real user message and creator/request digest, never fabricated assistant facts.
+- Existing no-goal routes continue exact legacy journal semantics. New private
+explicit goal routes select only a stored owned slot. The selector is observation
+and orchestration context, never execution authorization.
+- A new message is understood once by existing C1 before a new work is adopted.
+DIRECT_ANSWER remains a reply; necessary understanding uses that slot; a new work
+must use existing adoption/CREATE/criteria/planning/START owners and original
+budget. Fixed BOUND context is not a parent to silently inherit execution rights.
+- Existing BOUND handoff continues referencing the original/default journal;
+new slot receives its own source/target/admission lineage. Fixed source mode must
+be resolved against a verified slot relation, never blanket-disable or blanket-
+enable all goals in the conversation. Existing historical results remain linked.
+
+Selector integration matrix:
+OWNER_QUERY_MATRIX.txt lists exact current queries and source lines. Every query
+must be classified as legacy fixed-source ancestry (stays original journal),
+current-message preparation (select persisted message slot), or existing operation
+(recover slot from persisted invocation/problem binding). Shared selector checks
+owned chat, goal identity, expected version and any persisted input binding on the
+same connection; no fallback from a missing/foreign slot to legacy current work.
+Known owners needing explicit treatment: relation reader and typed answer;
+understanding source/adoption/failed retry/correction; create/criterion/planning
+status; source bridge; journal API and fixed source preparation. Do not simply
+interpolate another table name at every query.
+
+Lock order: current governance before conversation, selected slot journal,
+then existing admission/domain locks; original owner inner ordering remains.
+Message association inserted with original message transaction, and slot journal
+CAS never mutates the default journal. Replay recovers same slot, conflicting
+same key fails; UNKNOWN invocation is observed under its original slot/key only.
+
+Required vertical verification: original fixed BOUND bytes unchanged; second real
+user message→one controlled C1→independent original CREATE/plan/run with exact
+current grants; both results readable in one chat; refresh/switch does not invoke;
+old pending/revoked/UNKNOWN cannot be rebound or retried as a new goal. Include
+DIRECT_ANSWER (no new problem), necessary understanding, concurrent tabs/CAS,
+foreign/archived chat, stale slot and current permission revocation. No actual
+model/runtime. Acceptance remains bounded by the explicit validation record below.
+
+Independent ANSWER delegation remains a separate successor. READ or goal selection
+never grants START/ANSWER, and service execution principal is never rewritten to
+human. Need exact independent question authority and immutable actor/subject facts.
+
+Implemented natural-input successor (2026-11-21, default off)
+- Auxiliary explicit root slots remain optional. BOUND chat without a cycle focus
+  can use its ordinary message and one existing routing call. Server neutral
+  input proves owned BOUND/handoff/work/retained ancestry but exposes no unread
+  resource content, no old question token, and no inherited execution target.
+- Only the new server snapshot opt-in naturalGoalIntentVersion=v1 persists the
+  validated response intent. The old model policy/schema bytes and old two-field
+  route result remain unchanged. TASK is mandatory for independent adoption;
+  ANSWER, including conceptual NEEDS_CLARIFICATION, never creates a business goal.
+- POST /conversations/{id}/goals/adoptions accepts commandId, messageId,
+  requestKey and expectedConversationVersion only. It resolves the exact saved
+  C1 result server-side, current profile/standing policy/READ/context and actual
+  settlement; successful result retention is required. No invocation, source,
+  intent, proof or execution authorization comes from the browser.
+- GET on that path with commandId returns NOT_RECORDED or the immutable RECORDED
+  identity plus current goal journal and retained understanding. It never starts
+  a model. Unknown POST delivery is recovered with this original command only.
+- Migration 0077 has private slots/journals/message associations/message claims
+  and immutable result_adoptions in the existing database, plus schema metadata.
+  Original result/context/snapshot records are never rewritten. The receipt
+  authorizes resolving that result's independent journal, not domain execution.
+- A private owned-business v3 policy pins the exact already-installed structured
+  routing profile as an additional allowed original basis. v1/v2 serialized
+  policies and historical readers remain compatible. Old retained readers cannot
+  execute. All original CREATE/criteria/ACTIVE/Planning/START owner guards remain.
+- When no real source was attached, adoption stores CLARIFY without inventing a
+  source. A later explicit source reply uses the original UNDERSTANDING question
+  adoption owner and one call for that new message. It is not a second call for
+  the original independent task. Original default journal/BOUND is not replaced.
+- Current-work replies are not independent adoption. Necessary ANSWER delegation
+  is not implemented here; no READ or slot selection grants QUESTION_ANSWER.
+
+Transaction/integrity boundaries:
+- Governance before chat and context; exact latest result, cleanup, settlement,
+  original retained facts and current context revocation checked before writes.
+- Focus checks reuse that transaction connection with current identity and exact
+  EXECUTION READ before BOUND/receipt/source/artifact-content verification.
+- All receipt physical identity/request columns match immutable JSON/hash; the
+  selected slot physical columns match its JSON/hash and original message link.
+- Stored settlement and retainedFactsDigest are the verified adoption-time proof.
+  GET separately rechecks current service/READ and retained response/source; it
+  does not settle again or rewrite the historical price/settlement proof.
+- READ/current grant failure never becomes permission to create, restart or
+  replay a model. Explicit per-goal CAS is not a capability or resource grant.
+
+Validation is tracked in external evidence conversation-goal-slots-g1. Provider
+responses and publication/BIND setup in isolated tests are controlled fixtures;
+these tests do not claim real model, real deployment or business acceptance.

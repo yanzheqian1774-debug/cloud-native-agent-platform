@@ -38,6 +38,7 @@ def require_snapshot(
         and isinstance(snapshot, dict)
         and snapshot.get("conversationId") == conversation
         and snapshot.get("messageId") == message_id
+        and snapshot.get("goalId") == metadata.get("goalId")
         and snapshot.get("target") == target
         and snapshot.get("contextDigest") == metadata.get("contextDigest")
         and snapshot.get("currentQuestionToken") == metadata.get("currentQuestionToken")
@@ -99,11 +100,19 @@ def require_retry_claim(connection, candidate):
         and user["assistant_fact"] is None
     )
     require(metadata.get("failedRetryInputDigest") == digest(user["content"]))
-    journal = connection.execute(
-        "SELECT version,state FROM private_conversation.journeys WHERE tenant_id=%s "
-        "AND security_domain=%s AND conversation_id=%s FOR UPDATE",
-        (scope.namespace, scope.security_domain, conversation),
-    ).fetchone()
+    from types import SimpleNamespace
+
+    from .conversation_goal_selection import selected_journal
+
+    ctx = SimpleNamespace(
+        principal_id=candidate.initiating_principal_id,
+        scope=SimpleNamespace(
+            tenant_id=scope.namespace, security_domain=scope.security_domain
+        ),
+    )
+    journal = selected_journal(
+        connection, ctx, conversation, invocation=candidate, lock=True
+    )
     target = metadata["target"]
     state = (journal or {}).get("state") or {}
     draft = state.get("draft") or {}

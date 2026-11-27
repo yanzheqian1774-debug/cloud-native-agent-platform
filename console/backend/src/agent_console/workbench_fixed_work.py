@@ -100,11 +100,26 @@ class FixedWorkAuthoringOwner:
                         page_size=size,
                         key_size=1,
                     )[0]
+                from .fixed_work_succession_postgres import available, compatible
+                from .fixed_work_succession_postgres import rows as succession_rows
+
+                retirement = ""
+                if available(c):
+                    compatible(c)
+                    retirement = (
+                        "AND NOT EXISTS (SELECT 1 FROM "
+                        "fixed_work_successions.transitions t "
+                        "WHERE t.namespace=h.namespace AND "
+                        "t.security_domain=h.security_domain "
+                        "AND t.predecessor_work_id=h.work_id) "
+                    )
                 rows = c.execute(
-                    "SELECT work_id,head_revision_id FROM fixed_work_authoring.heads "
+                    "SELECT work_id,head_revision_id FROM fixed_work_authoring.heads h "
                     "WHERE namespace=%s AND security_domain=%s AND team_id=%s "
                     "AND team_revision_id=%s AND team_digest=%s "
-                    'AND work_id COLLATE "C">%s ORDER BY work_id COLLATE "C" LIMIT %s',
+                    + retirement
+                    + 'AND work_id COLLATE "C">%s ORDER BY work_id COLLATE '
+                    '"C" LIMIT %s',
                     (
                         *scope,
                         permit.teamId,
@@ -114,12 +129,40 @@ class FixedWorkAuthoringOwner:
                         size + 1,
                     ),
                 ).fetchall()
+                verified = {}
                 items = []
                 for row in rows[:size]:
                     value = store.read(
                         c, scope, row["work_id"], row["head_revision_id"]
                     )
-                    items.append({"draft": value["record"], "digest": value["digest"]})
+                    if row["work_id"] not in verified:
+                        chain = succession_rows(c, scope, work_id=row["work_id"])
+                        # Request-local: never reuse across transactions.
+                        for fact in chain:
+                            verified[fact["work_id"]] = chain
+                        verified[row["work_id"]] = chain
+                    successor = next(
+                        (
+                            r
+                            for r in verified[row["work_id"]]
+                            if r["work_id"] == row["work_id"]
+                        ),
+                        None,
+                    )
+                    items.append(
+                        {
+                            "draft": value["record"],
+                            "digest": value["digest"],
+                            **(
+                                {
+                                    "logicalWorkId": successor["logical_work_id"],
+                                    "successionDigest": successor["digest"],
+                                }
+                                if successor
+                                else {}
+                            ),
+                        }
+                    )
                 return {
                     "items": items,
                     "team": team_ref,
@@ -159,7 +202,20 @@ class FixedWorkAuthoringOwner:
                 permit.teamDigest,
             ):
                 raise WorkbenchOwnerError("FIXED_WORK_DRAFT_NOT_FOUND", 404)
+            from .fixed_work_succession_postgres import transition
+
+            successor = transition(
+                c, scope, row["record"]["workId"], row["record"]["revisionId"]
+            )
             return {
+                **(
+                    {
+                        "configurationRevisionFixed": True,
+                        "logicalWorkId": successor["logical_work_id"],
+                    }
+                    if successor
+                    else {}
+                ),
                 "draft": row["record"],
                 "digest": row["digest"],
                 "aggregateVersion": version,

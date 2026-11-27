@@ -103,13 +103,21 @@ def was_denied(connection, context, grant):
 def prepare(policy, grants, context, connection, key, expected_selection_digest=None):
     """Caller owns transaction. Original keys recover decisions, never renew expiry."""
     grants._validate_idempotency_key(key)
+    from .test_domain_resource_read import require_subject
+
     issuer, lifetime = policy.authenticate(grants, context)
+    require_subject(policy, grants, context, connection)
     from .ontology_published_read import lineage_block, resolve, validate_selection_key
     from .published_test_resources import lineage_block as resource_lineage_block
+    from .test_domain_resource_read import lineage_block as domain_lineage_block
 
     selected = (
         resolve(policy, context, connection)
-        if (policy.publishedOntologyIds or getattr(policy, "publishedResources", ()))
+        if (
+            policy.publishedOntologyIds
+            or getattr(policy, "publishedResources", ())
+            or getattr(policy, "registeredResources", ())
+        )
         else None
     )
     if selected:
@@ -141,8 +149,15 @@ def prepare(policy, grants, context, connection, key, expected_selection_digest=
             (
                 lineage_block(connection, context, target.resource)
                 if target.owner == "BUSINESS_ONTOLOGY"
-                else resource_lineage_block(
-                    connection, context, target.resource, policy, bound.generation
+                else (
+                    domain_lineage_block(
+                        connection, context, target, policy, bound.generation
+                    )
+                    if target.owner in {"TEAM", "EMPLOYEE"}
+                    and getattr(policy, "registeredResources", ())
+                    else resource_lineage_block(
+                        connection, context, target.resource, policy, bound.generation
+                    )
                 )
             )
             if target.resource in dynamic
@@ -271,9 +286,12 @@ def install_test_read_access(policy, grants, authorizer):
         @app.get(PREFIX + "/test-resource-access/status")
         def status(request: Request):
             def read(context, connection):
-                if not policy.enabled or context.principal_id not in policy.subjects:
+                if not policy.enabled or not policy.allows_subject(context):
                     return {"available": False}
+                from .test_domain_resource_read import require_subject
+
                 policy.authenticate(grants, context)
+                require_subject(policy, grants, context, connection)
                 from .ontology_published_read import resolve
 
                 selection = (
@@ -281,6 +299,7 @@ def install_test_read_access(policy, grants, authorizer):
                     if (
                         policy.publishedOntologyIds
                         or getattr(policy, "publishedResources", ())
+                        or getattr(policy, "registeredResources", ())
                     )
                     else None
                 )

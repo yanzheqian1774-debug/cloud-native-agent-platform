@@ -65,7 +65,15 @@ OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "ASSIGNMENT": frozenset({"CREATE", "READ"}),
     "PLACEMENT": frozenset({"READ"}),
     "EXECUTION": frozenset(
-        {"START", "READ", "CANCEL", "RETRY", "ACCEPT_DELIVERY", "RETRACT_DELIVERY"}
+        {
+            "START",
+            "READ",
+            "CANCEL",
+            "RETRY",
+            "ACCEPT_DELIVERY",
+            "RETRACT_DELIVERY",
+            "QUESTION_ANSWER",
+        }
     ),
     "SKILL": frozenset(
         {

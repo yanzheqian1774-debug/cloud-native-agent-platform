@@ -281,6 +281,27 @@ class PrivateConversations:
             links = links_query.fetchall()
             facts = facts_query.fetchall() if facts_query is not None else []
             intents = intents_query.fetchall() if intents_query is not None else []
+            if (
+                row["owner_id"] == ctx.principal_id
+                and not row["archived_at"]
+                and c.execute(
+                    "SELECT to_regclass('conversation_goals.messages') t"
+                ).fetchone()["t"]
+            ):
+                from .conversation_goal_slots import owned as own_goal
+
+                associations = c.execute(
+                    "SELECT message_id,goal_id FROM conversation_goals.messages "
+                    "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s "
+                    "AND message_id=ANY(%s)",
+                    (*scope, [m["message_id"] for m in messages]),
+                ).fetchall()
+                for goal_id in {g["goal_id"] for g in associations}:
+                    own_goal(c, self, ctx, identity, goal_id)
+                mapped = {g["message_id"]: g["goal_id"] for g in associations}
+                for item in messages:
+                    if item["message_id"] in mapped:
+                        item["goalId"] = mapped[item["message_id"]]
         by_id = {f["message_id"]: f for f in facts}
         intent_by_id = {i["intent_id"]: i for i in intents}
         for message in messages:
@@ -300,7 +321,9 @@ class PrivateConversations:
                 require_fixed_basis(facts_reader, ctx, identity, details)
                 message["kind"] = fact["kind"]
                 message["facts"] = {
-                    k: v for k, v in details.items() if k != "fixedCycleFocus"
+                    k: v
+                    for k, v in details.items()
+                    if k not in {"fixedCycleFocus", "fixedCycleQuestion"}
                 }
                 if fact["kind"] == "ACTION_INTENT":
                     intent = intent_by_id[details["intentId"]]
@@ -335,7 +358,17 @@ class PrivateConversations:
         for link in links:
             try:
                 resolved = self.resolve_link(ctx, link["target"])
-                if "fixedCycleFocus" in link["target"]:
+                if "fixedCycleQuestion" in link["target"]:
+                    visible.append(
+                        {
+                            "link_id": link["link_id"],
+                            "target": None,
+                            "readable": True,
+                            "title": resolved["title"],
+                            "fixedQuestion": resolved["fixedQuestion"],
+                        }
+                    )
+                elif "fixedCycleFocus" in link["target"]:
                     visible.append(
                         {
                             "link_id": link["link_id"],
@@ -401,6 +434,16 @@ class PrivateConversations:
             self.resolve_link(ctx, target)
         with self.connect() as c:
             row = self.owned(c, ctx, identity, True)
+            goal_id = body.get("goalId")
+            if goal_id is not None:
+                from .conversation_goal_slots import enabled, owned, require
+
+                require(enabled(), "CONVERSATION_GOALS_DISABLED")
+                require(
+                    action == "message" and not body.get("focusLinkId"),
+                    "CONVERSATION_GOAL_MESSAGE_INVALID",
+                )
+                owned(c, self, ctx, identity, goal_id)
             scope = (*self.scope(ctx), identity)
             table = "messages" if action == "message" else "links"
             old = c.execute(
@@ -468,6 +511,10 @@ class PrivateConversations:
                         hashed,
                     ),
                 )
+            if goal_id is not None:
+                from .conversation_goal_slots import attach_message
+
+                attach_message(c, self, ctx, identity, goal_id, identity_new)
             c.execute(
                 "UPDATE private_conversation.conversations SET version=version+1 "
                 "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",

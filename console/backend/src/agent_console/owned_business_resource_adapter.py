@@ -170,7 +170,10 @@ def readonly_work(work):
     from .readonly_continuation_policy import ReadonlyWork
 
     scope = work.businessScope
-    return ReadonlyWork(
+    from .native_readonly_protocol import NativeReadonlyWork
+
+    projected = NativeReadonlyWork if scope.case == "native_readonly" else ReadonlyWork
+    return projected(
         **{
             key: getattr(work, key)
             for key in (
@@ -182,6 +185,7 @@ def readonly_work(work):
                 "expiresAt",
             )
         },
+        **({"adapter": scope.adapter} if scope.case == "native_readonly" else {}),
         case=scope.case,
         nativeAgentName=scope.nativeAgentName,
         documentRules=scope.documentRules,
@@ -246,6 +250,24 @@ def require_preparation(work, preparation):
             raise AuthorityError("OWNED_BUSINESS_CORRECTION_PLAN_MISMATCH")
     require_reference(work, "knowledge", preparation.source_snapshot)
     for participant in preparation.participants:
+        if work.businessScope.case == "native_readonly":
+            from .native_data_skill import exact_executor
+            from .skill_invocation_domain import ExecutorRevision
+
+            try:
+                adapter = exact_executor(
+                    ExecutorRevision(
+                        participant.executor_id,
+                        participant.executor_revision,
+                        participant.executor_digest,
+                    )
+                ).adapter
+            except ValueError as exc:
+                raise AuthorityError("OWNED_BUSINESS_NATIVE_ADAPTER_MISMATCH") from exc
+            if adapter.descriptor() != work.businessScope.adapter.model_dump(
+                mode="json"
+            ):
+                raise AuthorityError("OWNED_BUSINESS_NATIVE_ADAPTER_MISMATCH")
         require_reference(work, "employee", participant.definition)
         require_reference(work, "runtime", participant.profile)
         for resource in (participant.skill, *participant.resources):

@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from .native_data_skill import SYNTHETIC_BOUNDARY as NATIVE_DATA_SYNTHETIC_BOUNDARY
 from .plan_suggestion_domain import (
     ConfirmedPlanRevision,
     Digest,
@@ -113,7 +114,9 @@ def execution_successor(
     ]
     record["boundaries"] = [
         (
-            DOCUMENT_SYNTHETIC_ONLY
+            NATIVE_DATA_SYNTHETIC_BOUNDARY
+            if request.case == "native_readonly"
+            else DOCUMENT_SYNTHETIC_ONLY
             if request.case == "document"
             else TABULAR_SYNTHETIC_ONLY
             if request.case == "tabular"

@@ -121,8 +121,24 @@ def input_snapshot(connection, command, *, sales_v2_candidate=False):
             NativeDefinitionQuerySkillExecutor.revision,
         )
     }
+    from .native_data_skill import EXECUTOR_IDS
+
+    is_native_data = participant.executor_id in EXECUTOR_IDS
+    if is_native_data:
+        from .native_data_skill import exact_executor
+        from .skill_invocation_domain import ExecutorRevision
+
+        exact_executor(
+            ExecutorRevision(
+                participant.executor_id,
+                participant.executor_revision,
+                participant.executor_digest,
+            )
+        )
     result = {
-        "schemaVersion": "document-review-input.v1"
+        "schemaVersion": "native-data-input.v1"
+        if is_native_data
+        else "document-review-input.v1"
         if is_document
         else "tabular-diagnostic-input.v1"
         if is_tabular

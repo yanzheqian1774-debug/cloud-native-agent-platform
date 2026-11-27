@@ -135,6 +135,9 @@ def read(c, scope, work_id, revision_id):
 
 
 def save(c, scope, actor, data, team, policy_digest, decision_id, now):
+    from .fixed_work_succession_postgres import lock_writes
+
+    lock_writes(c, scope)
     payload = digest(
         {"data": data.model_dump(mode="json"), "team": team, "actor": actor}
     )
@@ -145,6 +148,9 @@ def save(c, scope, actor, data, team, policy_digest, decision_id, now):
         )
     ):
         c.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,67))", (key,))
+    from .fixed_work_succession_postgres import require_current
+
+    require_current(c, scope, data.workId)
     prior = c.execute(
         "SELECT * FROM fixed_work_authoring.receipts WHERE namespace=%s AND "
         "security_domain=%s AND actor_id=%s AND command_id=%s",
@@ -156,6 +162,13 @@ def save(c, scope, actor, data, team, policy_digest, decision_id, now):
         return read(c, scope, prior["work_id"], prior["revision_id"]), prior[
             "aggregate_version"
         ]
+    from .fixed_work_succession_postgres import rows as succession_rows
+
+    if any(
+        row["work_id"] == data.workId
+        for row in succession_rows(c, scope, work_id=data.workId)
+    ):
+        raise WorkbenchOwnerError("FIXED_WORK_SUCCESSION_CONFIGURATION_FIXED", 409)
     head = c.execute(
         "SELECT * FROM fixed_work_authoring.heads WHERE namespace=%s AND "
         "security_domain=%s AND work_id=%s FOR UPDATE",

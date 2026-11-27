@@ -39,7 +39,7 @@ from test_local_accounts_postgres import login
 
 
 @contextmanager
-def typed_client(e, preparation, question, tmp_path):
+def typed_client(e, preparation, question, tmp_path, *, additional_installers=()):
     previous_service = e.adoption_client.app.state.understanding_adoption.routing
     previous = previous_service.authorization.context_admission
     service = copy.copy(previous_service)
@@ -162,6 +162,7 @@ def typed_client(e, preparation, question, tmp_path):
             install_draft_assistance_routes(
                 e.draft, service, retained_routing_services=(previous_service, e.route)
             ),
+            *additional_installers,
         ),
     )
     records = app.state.conversation_actions.records

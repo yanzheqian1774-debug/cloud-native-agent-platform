@@ -1,6 +1,7 @@
+import type {FixedQuestionSelection} from '../api/fixedQuestionDelegation';
 import type {FixedCycleFocus} from '../api/conversationFixedFocus';
-import {useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {FixedCycleNativeReading} from './FixedCycleNativeReading';
+import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {FixedCycleNativeReading,type FixedCycleQuestion} from './FixedCycleNativeReading';
 import type {WorkbenchSession} from '../api/businessWorkspace';
 import {conversationScope} from './conversationViewState';
 import {ConversationPlacement} from './ConversationPlacement';
@@ -11,7 +12,7 @@ import {useFixedConversationCycles} from './useFixedConversationCycles';
 import {readViewString,saveViewString} from './workViewState';
 import './FixedCycleConversation.css';
 
-export function ConversationFixedCycles({conversation,session,rail,hidden,onBound,onFocus,returnFocus}:{returnFocus?:{key:string;focus:FixedCycleFocus}|null;onFocus?:(focus:FixedCycleFocus|null)=>void;conversation:string;session:WorkbenchSession;rail:HTMLElement|null;hidden:boolean;onBound:(bound:boolean)=>void}){
+export function ConversationFixedCycles({conversation,session,rail,hidden,onBound,onFocus,returnFocus,onQuestion,delegationEnabled=false}:{delegationEnabled?:boolean;onQuestion?:(question:FixedQuestionSelection|null)=>void;returnFocus?:{key:string;focus:FixedCycleFocus}|null;onFocus?:(focus:FixedCycleFocus|null)=>void;conversation:string;session:WorkbenchSession;rail:HTMLElement|null;hidden:boolean;onBound:(bound:boolean)=>void}){
  const cycle=useFixedConversationCycles(conversation,session),section=useRef<HTMLElement>(null),restore=useRef(false);
  const [waiting,setWaiting]=useState(false),[returnIssue,setReturnIssue]=useState(false);
  const returnKey=useRef<string|null>(null),expectedReturn=useRef<FixedCycleFocus|null>(null);
@@ -24,6 +25,7 @@ export function ConversationFixedCycles({conversation,session,rail,hidden,onBoun
  useEffect(()=>{onFocus?.(cycle.page?.state==='BOUND'&&row?.phase==='EXECUTION'&&cycle.view&&!cycle.error&&!cycle.readError&&!returnIssue?{bindingDigest:cycle.page.bindingDigest,workDigest:cycle.page.work.digest,eventId:row.eventId,receiptDigest:row.receiptDigest,preparationDigest:row.preparationDigest,runId:row.runId}:null);return()=>onFocus?.(null)},[cycle.page,cycle.view,cycle.error,cycle.readError,row,onFocus,returnIssue]);
  useEffect(()=>{if(!returnFocus||returnKey.current===returnFocus.key)return;returnKey.current=returnFocus.key;expectedReturn.current=returnFocus.focus;cycle.select(returnFocus.focus.eventId);},[returnFocus,cycle]);
  useEffect(()=>{const expected=expectedReturn.current;if(!expected||!cycle.page)return;const item=cycle.page.items.find(i=>i.eventId===expected.eventId);if(!item)return;const mismatch=cycle.page.bindingDigest!==expected.bindingDigest||cycle.page.work.digest!==expected.workDigest||item.phase!=='EXECUTION'||item.receiptDigest!==expected.receiptDigest||item.preparationDigest!==expected.preparationDigest||item.runId!==expected.runId;void Promise.resolve().then(()=>setReturnIssue(mismatch));},[cycle.page]);
+ const receiveQuestion=useCallback((question:FixedCycleQuestion|null)=>{onQuestion?.(question&&delegationEnabled&&cycle.page?.state==='BOUND'&&row?.phase==='EXECUTION'&&cycle.view&&!cycle.error&&!cycle.readError&&!returnIssue?{bindingDigest:cycle.page.bindingDigest,workDigest:cycle.page.work.digest,eventId:row.eventId,receiptDigest:row.receiptDigest,preparationDigest:row.preparationDigest,runId:row.runId,invocationId:question.invocationId,questionKey:question.questionKey,questionDigest:question.questionDigest,question:question.question,expiresAt:question.expiresAt}:null)},[onQuestion,delegationEnabled,cycle.page,row,cycle.view,cycle.error,cycle.readError,returnIssue]);
  // A successful exact read may precede the next directory projection.
  if(row?.phase==='EXECUTION'&&cycle.view&&!options.some(x=>x.eventId===row.eventId))options.push({eventId:row.eventId,scheduledAt:row.scheduledAt,recordedAt:row.recordedAt,state:cycle.view.progress?.state});
  function select(event:string){expectedReturn.current=null;setReturnIssue(false);const stream=section.current?.closest('.px-message-stream');if(stream&&cycle.selected)saveViewString(key+':'+cycle.selected,'scroll',String(stream.scrollTop));restore.current=true;cycle.select(event)}
@@ -51,8 +53,8 @@ export function ConversationFixedCycles({conversation,session,rail,hidden,onBoun
    <strong>{cycle.error?'读取待核实':row?status:'等待运行记录'}</strong>
    {!returnIssue&&cycle.view&&<p>{cycle.view.progress?.tasks.filter(x=>x.state==='SUCCEEDED').length??0}/{cycle.view.preparation.semantics.tasks.length} 项任务完成 · {cycle.view.artifacts.length} 份已保存产物</p>}
    <p>仅显示本次运行的过程、资源与成果。</p>
-   <details><summary>必要追问的处理边界</summary><p>执行问题须有本题与本次运行的正式回答入口；当前未接通回答委托，读取结果不会代为回答。</p></details>
+   <details><summary>必要追问的处理边界</summary><p>执行问题须有本题与本次运行的正式回答入口；{delegationEnabled?'系统核实本题后，可由你补充必要信息；执行仍由系统按原任务继续。':'当前未接通回答委托，读取结果不会代为回答。'}</p></details>
   </section></ConversationPlacement>
-   {!returnIssue&&cycle.view&&row?.phase==='EXECUTION'&&<FixedCycleNativeReading key={row.eventId+row.runId} digest={row.preparationDigest} runId={row.runId} session={session} rail={hidden?null:rail} onWaiting={setWaiting} terminal={['SUCCEEDED','FAILED','CANCELLED'].includes(cycle.view.progress?.state??'')} uncertain={['RECOVERY_REQUIRED','UNKNOWN'].includes(cycle.view.progress?.state??'')}/>}
+   {!returnIssue&&cycle.view&&row?.phase==='EXECUTION'&&<FixedCycleNativeReading delegationEnabled={delegationEnabled} onQuestion={receiveQuestion} key={row.eventId+row.runId} digest={row.preparationDigest} runId={row.runId} session={session} rail={hidden?null:rail} onWaiting={setWaiting} terminal={['SUCCEEDED','FAILED','CANCELLED'].includes(cycle.view.progress?.state??'')} uncertain={['RECOVERY_REQUIRED','UNKNOWN'].includes(cycle.view.progress?.state??'')}/>}
  </section>;
 }

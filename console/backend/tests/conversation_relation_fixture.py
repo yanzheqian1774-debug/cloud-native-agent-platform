@@ -28,11 +28,12 @@ from psycopg.types.json import Jsonb
 from test_local_accounts_postgres import login
 
 
-def existing_work(e, authorizer, sessions):
+def existing_work(e, authorizer, sessions, *, initialize_schema=True):
     migrations = Path(__file__).parents[1] / "migrations"
-    with e.repo.connection_scope() as c:
-        for version in range(1, 13):
-            c.execute(next(migrations.glob(f"{version:04d}_*.sql")).read_text())
+    if initialize_schema:
+        with e.repo.connection_scope() as c:
+            for version in range(1, 13):
+                c.execute(next(migrations.glob(f"{version:04d}_*.sql")).read_text())
     repository = PostgresBusinessProblemRepository(
         e.repo.pool.conninfo,
         migration_path=migrations / "0013_business_problem_authority.sql",

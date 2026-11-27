@@ -98,9 +98,27 @@ def begin_bound(
                 )
         except AuthorityError as exc:
             raise DraftAssistanceError(exc.reason_code) from exc
+    goal_metadata = None
+    if conversation and message_id and admission is not None:
+        from .conversation_goal_selection import PORT
+        from .conversation_goal_slots import enabled, message_goal
+
+        with admission.repository.connection_scope() as c:
+            goal_id = message_goal(c, PORT, context, conversation, message_id)
+            if goal_id is not None:
+                if not enabled():
+                    raise DraftAssistanceError("CONVERSATION_GOALS_DISABLED")
+                goal_metadata = {
+                    "conversationId": conversation,
+                    "messageId": message_id,
+                    "goalId": goal_id,
+                }
+    from .conversation_relation_context import bind_goal
+
     token = _binding.set((conversation, message_id, kwargs["key"], question_only))
     try:
-        return service.begin(context, **kwargs)
+        with bind_goal(goal_metadata):
+            return service.begin(context, **kwargs)
     finally:
         _binding.reset(token)
 

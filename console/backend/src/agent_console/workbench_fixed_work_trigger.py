@@ -48,6 +48,14 @@ class FixedWorkTriggerOwner:
             "governed-execution:prepared:" + path["digest"],
         )
         compatible(c)
+        if write:
+            from .fixed_work_succession_postgres import require_current
+
+            c.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s,67))",
+                (digest(("work", *scope, path["work_id"])),),
+            )
+            require_current(c, scope, path["work_id"], path["revision_id"])
         # Stable lock serializes both event identity and preparation reuse.
         for key in sorted(
             (

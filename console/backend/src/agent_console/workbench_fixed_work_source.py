@@ -98,6 +98,9 @@ class FixedWorkSourceOwner:
             conv["owner_id"] == ctx.principal_id and conv["archived_at"] is None,
             "CONVERSATION_CHANGED",
         )
+        # This frozen handoff names the default conversation journal. Goal slots
+        # never retarget an existing BOUND work; a future slot-aware handoff needs
+        # its own explicit persisted source contract.
         journal = c.execute(
             "SELECT version,state FROM private_conversation.journeys WHERE "
             "tenant_id=%s AND security_domain=%s AND conversation_id=%s FOR "
@@ -108,6 +111,25 @@ class FixedWorkSourceOwner:
         handoff = store.read(c, scope, "handoffs", work.resource_id, work.revision_id)
         if body:
             store.require(body.workDigest == work.digest, "WORK_CHANGED")
+        from .fixed_work_succession_postgres import (
+            require_current,
+        )
+        from .fixed_work_succession_postgres import (
+            rows as succession_rows,
+        )
+
+        if not write and any(
+            r["predecessor_work_id"] == work.resource_id
+            for r in succession_rows(c, scope, work_id=work.resource_id)
+        ):
+            return {
+                "state": "SUPERSEDED",
+                "work": work.model_dump(),
+                "handoff": public_fact(handoff),
+                "historyOnly": True,
+                "executionEnabled": False,
+            }
+        require_current(c, scope, work.resource_id, work.revision_id)
         if operation == "PREPARE_FIXED_WORK_CONVERSATION":
             store.require(
                 len(saved["draft"]["instruction"]) <= 2048, "INSTRUCTION_TOO_LONG"
@@ -129,7 +151,7 @@ class FixedWorkSourceOwner:
             }
             if handoff:
                 store.require(handoff["record"] == value, "CONFLICT")
-                return handoff
+                return public_fact(handoff)
             store.require(
                 not state
                 and not c.execute(
@@ -140,7 +162,7 @@ class FixedWorkSourceOwner:
                 "CONVERSATION_NOT_EMPTY",
             )
             store.require(body.previewDigest is None, "COMMAND_INVALID")
-            return store.append(c, scope, "handoffs", value)
+            return public_fact(store.append(c, scope, "handoffs", value))
         store.require(
             handoff is not None
             and handoff["record"]["subjectId"] == ctx.principal_id
@@ -155,7 +177,7 @@ class FixedWorkSourceOwner:
             return {
                 "state": "AWAITING_CONFIRMED_TARGET",
                 "work": work.model_dump(),
-                "handoff": handoff,
+                "handoff": public_fact(handoff),
                 "executionEnabled": False,
             }
         provenance = self.confirmed(call, saved, state, conversation)
@@ -174,7 +196,9 @@ class FixedWorkSourceOwner:
                 body.previewDigest == canonical_digest(preview), "PREVIEW_CHANGED"
             )
             value = {
-                "schemaVersion": "fixed-work-confirmed-source.v1",
+                "schemaVersion": "fixed-work-confirmed-source.v2"
+                if handoff["record"]["schemaVersion"] == "fixed-work-conversation.v2"
+                else "fixed-work-confirmed-source.v1",
                 **preview,
                 "commandId": body.commandId,
                 "executionEnabled": False,
@@ -189,7 +213,7 @@ class FixedWorkSourceOwner:
             "state": "BOUND" if bound else "READY_TO_CONFIRM",
             "preview": preview,
             "previewDigest": canonical_digest(preview),
-            "binding": bound,
+            "binding": public_fact(bound),
             "executionEnabled": False,
             "readiness": {
                 name: "NOT_EVALUATED"
@@ -209,6 +233,9 @@ class FixedWorkSourceOwner:
             "SELECT pg_advisory_xact_lock(hashtextextended(%s,67))",
             (digest(("work", *scope, work.resource_id)),),
         )
+        from .fixed_work_succession_postgres import require_current
+
+        require_current(c, scope, work.resource_id, work.revision_id)
         head = c.execute(
             "SELECT head_revision_id FROM fixed_work_authoring.heads WHERE "
             "namespace=%s AND security_domain=%s AND work_id=%s",
@@ -344,3 +371,8 @@ def source_operations(owner, *, enabled=False):
             ("BIND_FIXED_WORK_SOURCE", "POST", "/source"),
         )
     )
+
+
+def public_fact(value):
+    """Preserve the original public receipt shape; SQL identity stays internal."""
+    return {"record": value["record"], "digest": value["digest"]} if value else None

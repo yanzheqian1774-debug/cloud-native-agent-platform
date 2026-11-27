@@ -195,6 +195,18 @@ def run(
                 "validationScope": "READ_ONLY_OPERATION_COMPUTATION",
             }
             result["verificationContext"] = verification_context
+        from .native_data_skill import NativeDataSkillExecutor
+
+        if isinstance(executor, NativeDataSkillExecutor):
+            from .native_data_resource_test import NativeDataResourceTest
+
+            executor = NativeDataResourceTest(executor.adapter)
+            verification_context = {
+                **(verification_context or {}),
+                "nativeDecisionValidation": "NOT_RUN_REQUIRES_NATIVE_ATTEMPT",
+                "validationScope": "READ_ONLY_OPERATION_COMPUTATION",
+            }
+            result["verificationContext"] = verification_context
         limits = op["ioLimits"]
         if inputs.get("synthetic") is not True:
             raise SkillInvocationError("TEST_SYNTHETIC_INPUT_REQUIRED")

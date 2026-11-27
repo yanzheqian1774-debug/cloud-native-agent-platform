@@ -1,0 +1,1 @@
+import {defineConfig} from '@playwright/test';export default defineConfig({testDir:'./tests/fixed-succession',testMatch:'*.spec.ts',workers:1,retries:0,use:{baseURL:'http://127.0.0.1:4201',headless:true},webServer:{command:'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4201',url:'http://127.0.0.1:4201',reuseExistingServer:false}});

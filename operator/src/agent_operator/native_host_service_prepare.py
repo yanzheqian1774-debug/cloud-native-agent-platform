@@ -14,7 +14,20 @@ from .native_host_startup import owned_file
 def prepare(manifest_path, state_directory, output, *, enabled=False, max_hosts=2):
     from agent_console.owned_business_policy import OwnedBusinessPolicy
 
-    policy = OwnedBusinessPolicy.load(os.environ["OWNED_BUSINESS_ADMISSION_POLICY"])
+    if os.environ.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY") and os.environ.get(
+        "OWNED_BUSINESS_ADMISSION_POLICY"
+    ):
+        raise ValueError("HOST_SERVICE_MIXED_AUTHORITY_MODE")
+    policy_name = "OWNED_BUSINESS_ADMISSION_POLICY"
+    if os.environ.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY"):
+        from agent_console.fixed_work_bound_policy import BoundServicePlanningPolicy
+
+        policy_name = "NATIVE_BOUND_SERVICE_EXECUTION_POLICY"
+        policy = BoundServicePlanningPolicy.model_validate_json(
+            owned_file(os.environ[policy_name])
+        )
+    else:
+        policy = OwnedBusinessPolicy.load(os.environ[policy_name])
     if not policy.enabled or policy.expiresAt <= datetime.now(UTC):
         raise ValueError("HOST_SERVICE_CURRENT_OWNED_POLICY_REQUIRED")
     manifest_path = Path(manifest_path)
@@ -42,13 +55,14 @@ def prepare(manifest_path, state_directory, output, *, enabled=False, max_hosts=
     required = (
         "NATIVE_DISPATCH_AUTHORITY_CONFIGURATION",
         "NATIVE_DISPATCH_CONTINUATION_POLICY",
-        "OWNED_BUSINESS_ADMISSION_POLICY",
+        policy_name,
     )
     names = (
         *required,
         *(
             name
             for name in (
+                "OWNED_BUSINESS_ADMISSION_POLICY",
                 "NATIVE_LOOP_RUNTIME_FILE",
                 "NATIVE_DURABLE_WAIT_CONFIGURATION",
                 "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",

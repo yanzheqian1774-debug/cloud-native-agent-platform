@@ -90,8 +90,14 @@ class OwnedBusinessPolicy(BaseModel):
             raw = json.loads(path.read_text())
             if not isinstance(raw, dict):
                 raise AuthorityError("OWNED_BUSINESS_POLICY_INVALID")
+            if raw.get("schemaVersion") == "owned-business-admission.v4":
+                from .owned_business_native_policy import OwnedBusinessPolicyV4
+
+                return OwnedBusinessPolicyV4.model_validate(raw)
             policy_type = (
-                OwnedBusinessPolicyV2
+                OwnedBusinessPolicyV3
+                if raw.get("schemaVersion") == "owned-business-admission.v3"
+                else OwnedBusinessPolicyV2
                 if raw.get("schemaVersion") == "owned-business-admission.v2"
                 else cls
             )
@@ -151,3 +157,17 @@ class OwnedBusinessPolicyV2(OwnedBusinessPolicy):
         ):
             raise ValueError("OWNED_BUSINESS_RETAINED_HISTORY_INVALID")
         return self
+
+
+class IndependentGoalProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    profileRevisionId: str = Field(min_length=1, max_length=200)
+    profileDigest: str = Field(pattern="^[a-f0-9]{64}$")
+    adapterRevision: Literal["v4-structured-conversation"]
+
+
+class OwnedBusinessPolicyV3(OwnedBusinessPolicyV2):
+    """Explicit single-response independent goal origin; old policy bytes unchanged."""
+
+    schemaVersion: Literal["owned-business-admission.v3"]
+    independentGoalProfile: IndependentGoalProfile

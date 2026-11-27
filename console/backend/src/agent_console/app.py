@@ -1959,6 +1959,7 @@ def _configure_workbench() -> None:
     planning_unavailable = "PLANNING_NOT_CONFIGURED"
     planning_path = os.environ.get("PLANNING_RUNTIME_FILE", "")
     prepared_knowledge_pool = None
+    fixed_question_owner = None
     try:
         from agent_console.sales_supplement_runtime import SalesSupplementFeatures
 
@@ -2060,6 +2061,21 @@ def _configure_workbench() -> None:
                 "knowledge": KnowledgeLifecycleService(prepared_knowledge),
                 "agent": _agent_definition_service,
             }
+        from agent_console.fixed_question_startup import (
+            configure as configure_questions,
+        )
+
+        fixed_question_owner = configure_questions(
+            os.environ,
+            tuple(
+                composition.service
+                for composition in (
+                    _typed_question_answer_composition,
+                    _structured_understanding_composition,
+                )
+                if composition is not None
+            ),
+        )
         _workbench_composition = build_workbench_composition(
             runtime_configuration_path=Path(runtime_path),
             allowed_host=allowed_host,
@@ -2116,6 +2132,9 @@ def _configure_workbench() -> None:
                 if _structured_understanding_composition is not None
                 else None
             ),
+            fixed_question_composition=(
+                fixed_question_owner.composition if fixed_question_owner else None
+            ),
             managed_closeables=(
                 (_draft_assistance_composition,)
                 if _draft_assistance_composition is not None
@@ -2147,11 +2166,14 @@ def _configure_workbench() -> None:
                 else ()
             )
             + ((planning_runtime,) if planning_runtime is not None else ())
+            + ((fixed_question_owner,) if fixed_question_owner is not None else ())
             + ((prepared_knowledge_pool,) if prepared_knowledge_pool else ()),
         )
         workbench_app = _workbench_composition.application
         _workbench_startup_error = ""
     except (OSError, ValueError):
+        if fixed_question_owner is not None:
+            fixed_question_owner.close()
         if prepared_knowledge_pool is not None:
             prepared_knowledge_pool.close()
         if planning_runtime is not None:

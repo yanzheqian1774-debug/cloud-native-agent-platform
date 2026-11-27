@@ -28,16 +28,23 @@ def build(monkeypatch, bundle, subject=PRINCIPAL):
         return NS(subject=subject)
 
     monkeypatch.setattr(native_loop_runtime, "NativeLoopRuntime", runtime)
-    module.compose(
-        None,
-        None,
-        None,
-        None,
-        NS(policy_version="p"),
-        lambda *args: True,
-        native_loop_path="configured",
-        authorization_bundle_check=bundle,
-    )
+    from tempfile import NamedTemporaryFile
+
+    # Production composition now reads the explicit optional adapter descriptor
+    # list; this old authority fixture uses a real default-off configuration.
+    with NamedTemporaryFile(mode="w", suffix=".json") as config:
+        config.write("{}")
+        config.flush()
+        module.compose(
+            None,
+            None,
+            None,
+            None,
+            NS(policy_version="p"),
+            lambda *args: True,
+            native_loop_path=config.name,
+            authorization_bundle_check=bundle,
+        )
     command = NS(
         principal_id=PRINCIPAL,
         scope=NS(namespace=SCOPE[0], security_domain=SCOPE[1]),

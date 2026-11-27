@@ -83,7 +83,12 @@ def automation(repository, case, services, tmp_path, request, monkeypatch):
     "automation", [{"resources": "existing", "continuation": True}], indirect=True
 )
 def test_bound_committed_event_is_read_in_original_chat_without_human_model_lease(
-    automation, monkeypatch, tmp_path
+    automation,
+    monkeypatch,
+    tmp_path,
+    *,
+    delegated_answer=False,
+    delegated_read_policy=None,
 ):
     a = automation
     sessions = BrowserSessionService(
@@ -287,6 +292,11 @@ def test_bound_committed_event_is_read_in_original_chat_without_human_model_leas
             ],
         )
     )
+    if delegated_answer:
+        policy = delegated_read_policy()
+        assert policy.scopes[0].conversationId == conversation
+        assert policy.scopes[0].bindingDigest == bound["digest"]
+        assert policy.scopes[0].subjectId == ctx.principal_id
     owner = FixedChatDelivery(
         policy, records, a.automation, WorkbenchCursorCodec(b"c" * 32)
     )
@@ -308,10 +318,18 @@ def test_bound_committed_event_is_read_in_original_chat_without_human_model_leas
         assert result["problem"] == bound["record"]["target"]["problem"]
         assert result["answerDelegation"] == "UNAVAILABLE"
         assert len(result["items"]) == before >= 1
-        assert all(
-            item["readState"] == "READ_REQUIRED" and item["execution"] is None
-            for item in result["items"]
-        )
+        if delegated_answer:
+            # The answer presenter already obtained exact run READ before C1.
+            assert all(
+                item["readState"] == "READABLE"
+                and item["execution"]["state"] == "SUCCEEDED"
+                for item in result["items"]
+            )
+        else:
+            assert all(
+                item["readState"] == "READ_REQUIRED" and item["execution"] is None
+                for item in result["items"]
+            )
         assert all(
             item["scheduledAt"] and len(item["readTargetDigest"]) == 64
             for item in result["items"]
@@ -339,6 +357,7 @@ def test_bound_committed_event_is_read_in_original_chat_without_human_model_leas
         runId=item["runId"],
         readTargetDigest=item["readTargetDigest"],
         commandId="first-read",
+        previousCommandId="question-read" if delegated_answer else None,
     )
 
     def invoke():
@@ -357,16 +376,30 @@ def test_bound_committed_event_is_read_in_original_chat_without_human_model_leas
             )
             return access.prepare(call, conversation, command)
 
+    with a.authority.connection_scope() as c:
+        prior_grant_ids = (
+            {
+                r["grant_id"]
+                for r in c.execute(
+                    "SELECT grant_id FROM authorization_admin.grants WHERE subject_principal_id=%s",
+                    (ctx.principal_id,),
+                ).fetchall()
+            }
+            if delegated_answer
+            else set()
+        )
     first = invoke()
     assert first["state"] == "READ_READY" and first["readTargetRelation"] == "SAME"
     assert invoke() == first
     with a.authority.connection_scope() as c:
         reads = c.execute(
-            "SELECT owner,action FROM authorization_admin.grants WHERE subject_principal_id=%s",
+            "SELECT grant_id,owner,action FROM authorization_admin.grants WHERE subject_principal_id=%s",
             (ctx.principal_id,),
         ).fetchall()
         assert reads and all(
-            r["action"] in {"READ", "READ_RESOURCE", "READ_REFERENCE"} for r in reads
+            r["action"] in {"READ", "READ_RESOURCE", "READ_REFERENCE"}
+            for r in reads
+            if r["grant_id"] not in prior_grant_ids
         )
         assert (
             c.execute("SELECT count(*) n FROM fixed_work_triggers.receipts").fetchone()[
@@ -423,7 +456,7 @@ def test_bound_committed_event_is_read_in_original_chat_without_human_model_leas
     )
     assert invoke()["state"] == "UNKNOWN"
     replacement = command.model_copy(
-        update={"commandId": "cannot-evade", "previousCommandId": "first-read"}
+        update={"commandId": "cannot-evade", "previousCommandId": command.commandId}
     )
     with pytest.raises(WorkbenchOwnerError), a.authority.connection_scope() as c:
         auth = AuthorizedOwnerAuthority(a.adapter, ctx, c, 1, ())

@@ -113,6 +113,7 @@ class PreparedNativeCoordinator:
             repository.decide(
                 app.scope, request, placement, require_employee_lineage=True
             )
+            from .native_data_skill import executors as native_data_executors
             from .native_document_skill import (
                 NativeDefinitionQuerySkillExecutor,
                 NativeDocumentSkillExecutor,
@@ -130,6 +131,7 @@ class PreparedNativeCoordinator:
             )
 
             loop_revisions = (
+                *(e.revision for e in native_data_executors()),
                 NativeDocumentSkillExecutor.revision,
                 NativeEmployeeDocumentSkillExecutor.revision,
                 NativeUserScopeDocumentSkillExecutor.revision,

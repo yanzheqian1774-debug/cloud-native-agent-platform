@@ -251,3 +251,6 @@
   height:100%;max-height:100%;align-self:stretch;overscroll-behavior:contain;
  }
 }
+
+.f3-conversation .fixed-question-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.f3-conversation .fixed-question-actions button{background:#fff;color:#315db8;border:1px solid #c5d5f2}

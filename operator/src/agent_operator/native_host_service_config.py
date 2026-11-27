@@ -4,13 +4,16 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from types import MappingProxyType
 
 from .native_host_service_state import private_directory
 from .native_host_startup import owned_file
 
 
 class Configuration:
-    def __init__(self, path):
+    def __init__(self, path, *, environment=None):
+        self._ambient_environment = environment is None
+        environment = dict(os.environ if environment is None else environment)
         self.path = str(Path(path))
         self.raw = owned_file(path)
         self.value = json.loads(self.raw)
@@ -89,12 +92,20 @@ class Configuration:
             ):
                 raise ValueError("HOST_SERVICE_MANIFEST_INVALID")
             self.files[str(p)] = expected_digest
+        if environment.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY") and environment.get(
+            "OWNED_BUSINESS_ADMISSION_POLICY"
+        ):
+            raise ValueError("HOST_SERVICE_MIXED_AUTHORITY_MODE")
         required = {
             "NATIVE_DISPATCH_AUTHORITY_CONFIGURATION",
             "NATIVE_DISPATCH_CONTINUATION_POLICY",
-            "OWNED_BUSINESS_ADMISSION_POLICY",
+            "NATIVE_BOUND_SERVICE_EXECUTION_POLICY"
+            if environment.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY")
+            else "OWNED_BUSINESS_ADMISSION_POLICY",
         }
         allowed = required | {
+            "OWNED_BUSINESS_ADMISSION_POLICY",
+            "NATIVE_BOUND_SERVICE_EXECUTION_POLICY",
             "NATIVE_LOOP_RUNTIME_FILE",
             "NATIVE_DURABLE_WAIT_CONFIGURATION",
             "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
@@ -105,7 +116,7 @@ class Configuration:
             or not required <= set(value["policyFiles"]) <= allowed
         ):
             raise ValueError("HOST_SERVICE_POLICY_BINDING_REQUIRED")
-        self.environment = dict(os.environ)
+        self.environment = MappingProxyType(environment)
         if (
             self.environment.get("NATIVE_DISPATCH_PREPARED_SKILL")
             != "registered-readonly-v1"
@@ -123,6 +134,25 @@ class Configuration:
             if name == "NATIVE_LOOP_RUNTIME_FILE":
                 model = json.loads(owned_file(file_path))
                 self.files[model["modelRuntimeFile"]] = model["modelRuntimeDigest"]
+        if self.environment.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY"):
+            from agent_console import bound_service_execution
+            from agent_console.fixed_work_bound_policy import BoundServicePlanningPolicy
+
+            bridge_path = Path(bound_service_execution.__file__).resolve()
+            if (
+                not bridge_path.is_relative_to(root)
+                or str(bridge_path.relative_to(root)) not in manifest["sourceHashes"]
+            ):
+                raise ValueError("HOST_SERVICE_BOUND_BRIDGE_SOURCE_REQUIRED")
+            policy = BoundServicePlanningPolicy.model_validate_json(
+                owned_file(self.environment["NATIVE_BOUND_SERVICE_EXECUTION_POLICY"])
+            )
+            if not policy.enabled or (
+                value["namespace"],
+                value["securityDomain"],
+                value["principalId"],
+            ) != (policy.tenantId, policy.securityDomain, policy.subjectId):
+                raise ValueError("HOST_SERVICE_BOUND_POLICY_SCOPE_MISMATCH")
         if any(
             name in self.environment
             for name in (
@@ -141,7 +171,7 @@ class Configuration:
             for p, h in self.files.items()
         ):
             raise ValueError("HOST_SERVICE_PINNED_SOURCE_CHANGED")
-        if any(
+        if self._ambient_environment and any(
             os.environ.get(name) != self.environment.get(name)
             for name in self.value["policyFiles"]
         ):

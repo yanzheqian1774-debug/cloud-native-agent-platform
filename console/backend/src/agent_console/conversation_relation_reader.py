@@ -2,6 +2,7 @@
 """Build and recheck minimal current-work context using existing owner READ ports."""
 
 import copy
+import os
 
 from .authority_contracts import ExactGrant
 from .business_problem_authorization import problem_resource
@@ -22,15 +23,14 @@ def _problem_ref(value):
     )
 
 
-def _journal(records, context, conversation):
+def _journal(records, context, conversation, message_id):
     with records.connect() as c:
         owned = records.owned(c, context, conversation)
         if owned["archived_at"]:
             raise ConversationError("CONVERSATION_ARCHIVED")
-        row = c.execute(
-            "SELECT version,state FROM private_conversation.journeys WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s",
-            (*records.scope(context), conversation),
-        ).fetchone()
+        from .conversation_goal_selection import selected_journal
+
+        row = selected_journal(c, context, conversation, message_id=message_id)
         return row or {"version": 0, "state": {}}
 
 
@@ -38,6 +38,15 @@ def reader(application, authorizer, business_problems, actions):
     records = actions.records
 
     def read(context, conversation, message_id, draft_service):
+        question_reader = getattr(
+            getattr(application, "state", None), "fixed_question_reader", None
+        )
+        if question_reader is not None:
+            observed_question = question_reader.read(
+                context, conversation, message_id=message_id, current=True
+            )
+            if observed_question is not None:
+                return observed_question[1]
         focus_reader = getattr(
             getattr(application, "state", None), "fixed_cycle_focus_reader", None
         )
@@ -56,11 +65,21 @@ def reader(application, authorizer, business_problems, actions):
                     "goal": "就所选固定工作周期的已保存结果作普通回复, 不改变工作目标或安排",
                     "scope": "仅解释以下当前有权读取的保存观察; 不是新的执行请求",
                     "stage": "FIXED_CYCLE_OBSERVATION",
+                    **(
+                        {"naturalGoalIntentVersion": "v1"}
+                        if os.environ.get("CONVERSATION_GOAL_NATURAL_ENABLED") == "1"
+                        else {}
+                    ),
                     "currentQuestion": None,
                     "fixedCycleObservation": observed,
                 },
             )
-        journal = _journal(records, context, conversation)
+        from .conversation_goal_neutral import read as read_neutral
+
+        neutral = read_neutral(records, context, conversation, message_id)
+        if neutral is not None:
+            return neutral
+        journal = _journal(records, context, conversation, message_id)
         state = journal["state"] or {}
         current = {
             "goal": None,
@@ -98,16 +117,26 @@ def reader(application, authorizer, business_problems, actions):
                 ):
                     raise ConversationError("CONVERSATION_ROUTING_CONTEXT_INVALID", 409)
                 origins = call.connection.execute(
-                    "SELECT r.subject_id,r.record->>'conversation_id' AS conversation_id FROM authorization_admin.context_call_objects o JOIN authorization_admin.context_call_requests r USING(tenant_id,security_domain,context_id) WHERE o.tenant_id=%s AND o.security_domain=%s AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s LIMIT 2",
+                    "SELECT r.subject_id,r.record->>'conversation_id' AS conversation_id,r.record->>'first_user_message_id' AS first_user_message_id FROM authorization_admin.context_call_objects o JOIN authorization_admin.context_call_requests r USING(tenant_id,security_domain,context_id) WHERE o.tenant_id=%s AND o.security_domain=%s AND o.owner='BUSINESS_PROBLEM' AND o.resource_id=%s LIMIT 2",
                     (*records.scope(context), identity),
                 ).fetchall()
-                if origins != [
-                    {
-                        "subject_id": context.principal_id,
-                        "conversation_id": conversation,
-                    }
-                ]:
+                if len(origins) != 1 or (
+                    origins[0]["subject_id"],
+                    origins[0]["conversation_id"],
+                ) != (context.principal_id, conversation):
                     raise ConversationError("CONVERSATION_ROUTING_CONTEXT_INVALID", 409)
+                from .conversation_goal_slots import message_goal
+
+                first_message = origins[0].get("first_user_message_id")
+                original_goal = (
+                    message_goal(
+                        call.connection, records, context, conversation, first_message
+                    )
+                    if first_message
+                    else None
+                )
+                if original_goal != journal.get("goalId"):
+                    raise ConversationError("CONVERSATION_GOAL_ORIGIN_CHANGED", 409)
                 owner = copy.copy(business_problems)
                 owner.authority = call.authority
                 view = owner.read_problem(
@@ -283,9 +312,15 @@ def reader(application, authorizer, business_problems, actions):
         # identifiers and a fingerprint. Preserve full owner question, never truncate.
         if any(isinstance(v, str) and len(v) > 4000 for v in current.values()):
             raise ConversationError("CONVERSATION_ROUTING_CONTEXT_TOO_LARGE", 422)
-        if _journal(records, context, conversation)["version"] != journal["version"]:
+        if (
+            _journal(records, context, conversation, message_id)["version"]
+            != journal["version"]
+        ):
             raise ConversationError("CONVERSATION_ROUTING_CONTEXT_CHANGED", 409)
-        return sealed_snapshot(conversation, message_id, target, current)
+        snapshot = sealed_snapshot(conversation, message_id, target, current)
+        if journal.get("goalId") is not None:
+            snapshot["goalId"] = journal["goalId"]
+        return snapshot
 
     def safe_read(context, conversation, message_id, draft_service):
         from psycopg import Error as StorageError

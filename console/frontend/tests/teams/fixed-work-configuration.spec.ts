@@ -108,3 +108,16 @@ test('fixed read access requires a separate click for a current-record request a
  await page.route('**/activity-read',route=>{reads.push(route.request().postDataJSON());return reads.length===1?route.fulfill({status:409,json:{reasonCode:'IDEMPOTENCY_PAYLOAD_MISMATCH'}}):route.fulfill({status:201,json:envelope({state:'NO_RECORD',workDigest:state.items[0].digest})})});
  await page.goto(direct);await draft(page);await previewSave(page);await page.getByRole('button',{name:'读取最近执行与结果',exact:true}).click();await expect(page.getByRole('button',{name:'按当前记录重新核对只读权限',exact:true})).toBeVisible();expect(reads).toHaveLength(1);await page.getByRole('button',{name:'按当前记录重新核对只读权限',exact:true}).click();await expect(page.getByText('当前工作版本尚无执行记录。',{exact:true})).toBeVisible();expect(reads).toHaveLength(2);expect(reads[1].commandId).not.toBe(reads[0].commandId);expect(state.posts).toHaveLength(1);
 });
+
+test('global routines distinguishes loading from an observed empty team directory',async({page})=>{
+ await fixture(page);let release!:()=>void;
+ const gate=new Promise<void>(resolve=>{release=resolve});
+ await page.route('**/api/workbench/v1/teams?*',async route=>{await gate;await route.fulfill({json:envelope({items:[],nextCursor:null})})});
+ await page.goto('/teams?view=routines');
+ await expect(page.getByRole('status')).toContainText('正在读取可访问的团队');
+ await expect(page.getByText('当前目录未返回可选团队；也可从已可读的团队详情进入。',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('固定工作调度尚未接通',{exact:false})).toHaveCount(0);
+ release();
+ await expect(page.getByText('当前目录未返回可选团队；也可从已可读的团队详情进入。',{exact:true})).toBeVisible();
+ await expect(page.getByRole('link',{name:'返回团队目录',exact:true})).toHaveAttribute('href','/teams');
+});

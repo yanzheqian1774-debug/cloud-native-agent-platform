@@ -1,0 +1,10 @@
+import '../../src/styles/app.css';
+import '../../src/styles/product-experience.css';
+import '../../src/styles/workspace-system.css';
+import '../../src/styles/prototype-frame.css';
+import '../../src/styles/f3-platform.css';
+import '../../src/teams/TeamsPage.css';
+import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';
+import {FixedWorkSuccession} from '../../src/teams/FixedWorkSuccession';import {teamDigest} from '../../src/teams/teamState';import {session,record,item} from './fixture';
+import '../../src/teams/FixedWorkConfigurationPage.css';
+void(async()=>{const team={teamId:record.team_id,revisionId:record.revision_id,digest:await teamDigest(record)};createRoot(document.getElementById('root')!).render(<React.StrictMode><MemoryRouter><main className="f3-team-page f3-fixed-work"><FixedWorkSuccession session={session} team={team} item={item(team)} canSave/></main></MemoryRouter></React.StrictMode>)})();

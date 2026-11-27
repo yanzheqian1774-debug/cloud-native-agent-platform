@@ -66,7 +66,10 @@ def test_prepared_targets_are_exact_read_only_and_source_bound(mutation):
             one = None
             many = []
             if "to_regclass" in sql:
-                one = {"present": True}
+                one = {
+                    "present": "private_conversation.journeys" in sql,
+                    "t": None,
+                }
             elif "private_conversation.journeys" in sql:
                 one = {
                     "state": {
@@ -76,6 +79,7 @@ def test_prepared_targets_are_exact_read_only_and_source_bound(mutation):
                         "execution": p.digest,
                     }
                 }
+                many = [one]
             elif "private_conversation.links" in sql:
                 many = [
                     {

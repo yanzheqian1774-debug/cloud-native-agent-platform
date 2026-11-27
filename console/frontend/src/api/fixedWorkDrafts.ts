@@ -2,7 +2,7 @@ export type FixedTeam = {teamId:string;revisionId:string;digest:string};
 export type FixedTrigger = {kind:'SCHEDULE'|'EVENT';timezone:string|null;localTime:string|null;cadence:'DAILY'|'WEEKDAY'|null;eventDescription:string|null};
 export type FixedCommand = {workId:string;revisionId:string;predecessorRevisionId:string|null;expectedVersion:number;commandId:string;title:string;instruction:string;trigger:FixedTrigger};
 export type FixedDraft = {schemaVersion:'fixed-work-draft.v1';state:'DRAFT_ONLY';team:FixedTeam;workId:string;revisionId:string;predecessorRevisionId:string|null;aggregateVersion:number;title:string;instruction:string;trigger:FixedTrigger;createdBy:string;createdAt:string};
-export type FixedItem = {draft:FixedDraft;digest:string};
+export type FixedItem = {draft:FixedDraft;digest:string;configurationRevisionFixed?:true;logicalWorkId?:string};
 export type FixedResult = FixedItem & {aggregateVersion:number;executionEnabled:false;authorityGranted:false;triggerCreated:false;validation:'CONFIGURATION_STRUCTURE_ONLY'};
 export type FixedPage = {items:FixedItem[];team:FixedTeam;nextCursor:string|null;configurationCanSave:boolean;executionEnabled:false;authorityGranted:false;triggerCreated:false};
 function canonical(value:unknown):string {

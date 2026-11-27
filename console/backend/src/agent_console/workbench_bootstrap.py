@@ -96,6 +96,7 @@ def build_workbench_composition(
     conversation_source_adoption: DraftAssistanceService | None = None,
     conversation_typed_answers: DraftAssistanceService | None = None,
     conversation_structured_understanding: DraftAssistanceService | None = None,
+    fixed_question_composition=None,
     model_grant_target_validator=None,
     model_repository=None,
     planning_v2_enabled: bool = False,
@@ -403,11 +404,24 @@ def build_workbench_composition(
     )
     from .workbench_workflow_policy import policy_publication_operations
 
+    question_targets = ()
+    if fixed_question_composition is not None:
+        from .fixed_question_composition import FixedQuestionComposition
+        from .fixed_question_grants import QuestionGrantTargets
+        from .fixed_question_store import FixedQuestionStore
+
+        if not isinstance(fixed_question_composition, FixedQuestionComposition):
+            raise ValueError("FIXED_QUESTION_COMPOSITION_REQUIRED")
+        with business_problems.problems.pool.connection() as connection:
+            FixedQuestionStore.compatible(connection)
+        question_targets = (QuestionGrantTargets(),)
+
     grant_targets = WorkbenchGrantTargetValidator(
         business_problems.problems,
         agent_definitions,
         employee_definitions,
         additional=(ManagementTargets(), DefinitionTargets())
+        + question_targets
         + ((WorkflowAuthoringTargets(),) if workflows is not None else ())
         + team_targets
         + capability_targets
@@ -1083,6 +1097,19 @@ def build_workbench_composition(
             fixed_work_source_routes = source_operations(
                 fixed_work_source_owner, enabled=True
             )
+        if os.environ.get("FIXED_WORK_SUCCESSION_ENABLED") == "true":
+            if fixed_work_source_owner is None:
+                raise ValueError("FIXED_WORK_SUCCESSION_SOURCE_OWNER_REQUIRED")
+            from .fixed_work_succession_postgres import (
+                compatible as succession_compatible,
+            )
+            from .workbench_fixed_work_succession import (
+                operations as succession_operations,
+            )
+
+            with business_problems.problems.pool.connection() as connection:
+                succession_compatible(connection)
+            fixed_work_source_routes += succession_operations(fixed_work_source_owner)
         fixed_chat_path = os.environ.get("FIXED_CHAT_READ_POLICY")
         if fixed_chat_path:
             from .fixed_chat_api import install_fixed_chat
@@ -1099,8 +1126,11 @@ def build_workbench_composition(
                     authorizer,
                     resource_automation,
                     WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
+                    question_composition=fixed_question_composition,
                 ),
             )
+        elif fixed_question_composition is not None:
+            raise ValueError("FIXED_QUESTION_CHAT_READ_OWNERS_REQUIRED")
         application = create_workbench_bff(
             foundation.sessions,
             authorizer,

@@ -25,18 +25,19 @@ class ReviewAuthority:
         return SimpleNamespace(decision_id="test-exact-review-authority")
 
 
-def seed_criteria(repo, p):
+def seed_criteria(repo, p, *, schema_prepared=False):
     target = p.semantics.target
     digest = hashlib.sha256(b"fixture").hexdigest()
     key = p.namespace, p.security_domain
     with repo.pool.connection() as c, c.transaction():
         c.row_factory = dict_row
-        c.execute(
-            (
-                Path(__file__).parents[1]
-                / "migrations/0013_business_problem_authority.sql"
-            ).read_text()
-        )
+        if not schema_prepared:
+            c.execute(
+                (
+                    Path(__file__).parents[1]
+                    / "migrations/0013_business_problem_authority.sql"
+                ).read_text()
+            )
         migrate(c)
         migrate(c)
         c.execute(

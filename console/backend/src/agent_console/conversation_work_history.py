@@ -13,12 +13,25 @@ def targets(service, records, c, context, conversation):
     ).fetchone()["present"]:
         return set()
     scope = records.scope(context)
-    journal = c.execute(
-        "SELECT state FROM private_conversation.journeys WHERE tenant_id=%s "
-        "AND security_domain=%s AND conversation_id=%s FOR SHARE",
+    from .conversation_goal_selection import journal_relation
+
+    journals = c.execute(
+        f"SELECT state FROM {journal_relation(c)} j WHERE tenant_id=%s "
+        "AND security_domain=%s AND conversation_id=%s",
         (*scope, conversation),
-    ).fetchone()
-    state = (journal or {}).get("state") or {}
+    ).fetchall()
+    result = set()
+    for journal in journals:
+        result.update(
+            _targets_for_state(
+                service, records, c, context, conversation, journal.get("state") or {}
+            )
+        )
+    return result
+
+
+def _targets_for_state(service, records, c, context, conversation, state):
+    scope = records.scope(context)
     problem = state.get("problem")
     if not problem:
         return set()

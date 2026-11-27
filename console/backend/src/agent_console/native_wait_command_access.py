@@ -78,14 +78,24 @@ class NativeWaitCommandAccess:
         if row is None:
             raise AuthorityError("NATIVE_WAIT_PREPARATION_REQUIRED")
         p = parse_preparation(row["preparation"])
-        binding = self.work.owned_business.work(
-            c,
-            context,
-            p.semantics.target.problem,
-        )
+        if command.principal_id.startswith("service:"):
+            reader = getattr(self.runtime, "bound_service_execution", None)
+            if reader is None:
+                raise AuthorityError("NATIVE_WAIT_SERVICE_BINDING_REQUIRED")
+            binding = reader.read(c, context, command, p)
+            bound_source = binding.source
+            if cp.identity.conversation_id != binding.conversation_id:
+                raise AuthorityError("NATIVE_WAIT_SERVICE_BINDING_CHANGED")
+        else:
+            binding = self.work.owned_business.work(
+                c,
+                context,
+                p.semantics.target.problem,
+            )
+            bound_source = binding.scope.source
         config = self.runtime.durable_wait
         if (
-            binding.scope.source != p.source_snapshot
+            bound_source != p.source_snapshot
             or cp.identity.preparation_digest != p.digest
             or cp.source_digest != p.source_snapshot.digest
             or cp.identity.task_id != row["task_id"]

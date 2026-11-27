@@ -1,3 +1,4 @@
+import {readConversationJournal,saveConversationJournal,type GoalReference} from '../api/conversationGoals';
 import {ensureConversationResourceReads} from '../components/testResourcePreparation';
 import {executionPreparationFeedback,executionReceiptLog,journeyLogText,resourcePreparationLog} from './executionPreparationFeedback';
 import {activityInputFailure,preparationNotice} from '../planning/preparationNotice';
@@ -39,7 +40,7 @@ const settledUnderstandingFailure=(draft?:DraftAssistanceResult)=>draft?.state==
 const coverageFailure='Error: AUTOMATIC_SELECTION_COVERAGE_BLOCKED';
 const canRepair=(s:State)=>s.phase==='SELECT_RESOURCES'&&s.pending==='select-resources'&&s.error===coverageFailure&&(s.cycle??0)<2;
 
-export function ConversationJourney({cycleBound=false,initialAdoption=false,conversation,session,onActive,onCreatePaused,onFixedWorkReview,onExecutionContext,onProgressVisible,onRoutingWorkEligible,onMessagesChanged,composerTarget,railTarget,returnTarget,contentHidden=false,separatePreparation=false,composerEnabled=true,onFocusComposer}:{cycleBound?:boolean;initialAdoption?:boolean;onCreatePaused?:(paused:boolean)=>void;onFixedWorkReview?:(paused:boolean)=>void;contentHidden?:boolean;composerEnabled?:boolean;onFocusComposer?:()=>void;separatePreparation?:boolean;returnTarget?:HTMLElement|null;composerTarget?:HTMLElement|null;railTarget?:HTMLElement|null;conversation:string;session:WorkbenchSession;onActive:(active:boolean)=>void;onExecutionContext?:(value:ExecutionView|null)=>void;onProgressVisible?:(visible:boolean)=>void;onRoutingWorkEligible?:(eligible:boolean)=>void;onMessagesChanged?:()=>Promise<void>}){
+export function ConversationJourney({goal,cycleBound=false,initialAdoption=false,conversation,session,onActive,onCreatePaused,onFixedWorkReview,onExecutionContext,onProgressVisible,onRoutingWorkEligible,onMessagesChanged,composerTarget,railTarget,returnTarget,contentHidden=false,separatePreparation=false,composerEnabled=true,onFocusComposer}:{goal?:GoalReference|null;cycleBound?:boolean;initialAdoption?:boolean;onCreatePaused?:(paused:boolean)=>void;onFixedWorkReview?:(paused:boolean)=>void;contentHidden?:boolean;composerEnabled?:boolean;onFocusComposer?:()=>void;separatePreparation?:boolean;returnTarget?:HTMLElement|null;composerTarget?:HTMLElement|null;railTarget?:HTMLElement|null;conversation:string;session:WorkbenchSession;onActive:(active:boolean)=>void;onExecutionContext?:(value:ExecutionView|null)=>void;onProgressVisible?:(visible:boolean)=>void;onRoutingWorkEligible?:(eligible:boolean)=>void;onMessagesChanged?:()=>Promise<void>}){
  const routingContext=useContext(ConversationRoutingContext);
  const fixedWorkReview=useRef(false);
  const [journal,setJournal]=useState<Journal|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[execution,setExecution]=useState<ExecutionView|null>(null);
@@ -51,14 +52,15 @@ export function ConversationJourney({cycleBound=false,initialAdoption=false,conv
  const [correctionSources,setCorrectionSources]=useState<Source[]|null>(null),[correctionChoice,setCorrectionChoice]=useState<Source|null>(null),[correctionUnknown,setCorrectionUnknown]=useState(false);
  const [stream,setStream]=useState<ModelProgress|null>(null);
  const [sourceRefreshMessage,setSourceRefreshMessage]=useState('');
- const sourceContext=conversationScope(session)+':'+conversation,sourceContextRef=useRef(sourceContext);sourceContextRef.current=sourceContext;
+ const sourceContext=conversationScope(session)+':'+conversation+':'+(goal?.goalId??'default'),sourceContextRef=useRef(sourceContext);sourceContextRef.current=sourceContext;
  const current=useRef<Journal|null>(null),flight=useRef(false),alive=useRef(true),recoveryAttempts=useRef(new Set<string>());
  const readSources=useCallback(async(protocol?:number)=>{
   try{return protocol===3?await conversationRequest<{items:Source[]}>('/'+conversation+'/sources'):await planningRequest<{items:Source[]}>('conversation-sources')}
   catch(e){throw Error('资料读取失败，原问题和已有处理记录已保存。可在本会话重新读取可用资料。'+String(e),{cause:e})}
  },[conversation]);
  useEffect(()=>{alive.current=true;let live=true;
-  conversationRequest<Journal>('/'+conversation+'/journey').then(async j=>{
+  readConversationJournal<State>(conversation,goal).then(async value=>{
+   let j:Journal=value;
    if(live)setSourceRefreshMessage('');
    fixedWorkReview.current=j.fixedWorkSource?.mode==='TARGET_REVIEW_ONLY';
    const s=j.state;
@@ -74,7 +76,7 @@ export function ConversationJourney({cycleBound=false,initialAdoption=false,conv
    }
    if(live&&!flight.current&&current.current===loaded){current.current=j;setJournal(j);onActive(Boolean(j.state))}
   }).catch(e=>{if(live)setError(String(e))});return()=>{live=false;alive.current=false}
- },[conversation,onActive,readSources]);
+ },[conversation,goal,onActive,readSources]);
  async function reloadSources(){
   const s=current.current?.state;if(flight.current||!s||s.pending!=='source-discovery')return;
   flight.current=true;setBusy(true);setError('');const scope=sourceContext;
@@ -83,7 +85,7 @@ export function ConversationJourney({cycleBound=false,initialAdoption=false,conv
   }catch(e){if(alive.current)setError(String(e))}finally{flight.current=false;setBusy(false)}
  }
  async function verify(){const actual=await readWorkbenchSession();if(JSON.stringify(actual.principal)!==JSON.stringify(session.principal))throw Error('登录身份已变化，请重新登录后继续。')}
- async function save(state:State){await verify();const j=await conversationRequest<Journal>('/'+conversation+'/journey',session.csrfToken,{expectedVersion:current.current!.version,state});current.current=j;if(alive.current)setJournal(j);return state}
+ async function save(state:State){await verify();const j=await saveConversationJournal(conversation,session.csrfToken,{expectedVersion:current.current!.version,state},goal);current.current=j;if(alive.current)setJournal(j);return state}
  async function pending(s:State,name:string){setStream(null);return save({...s,pending:name,error:undefined})}
  async function repairCoverage(s:State){
   if((s.cycle??0)>=2)throw Error('现有能力仍不能完成该方案，已保留资料与方案缺口。');
@@ -166,7 +168,7 @@ export function ConversationJourney({cycleBound=false,initialAdoption=false,conv
  }
  async function readCorrection(){
   if(flight.current)return;flight.current=true;setBusy(true);
-  try{await verify();const next=await conversationRequest<Journal>('/'+encodeURIComponent(conversation)+'/journey');current.current=next;setJournal(next);setCorrectionUnknown(false);setError('');setCorrectionChoice(null);setCorrectionSources(null);await onMessagesChanged?.()}catch{setCreateReadNotice('当前记录尚未读取成功，请稍后再读取。不会重复提交。')}finally{flight.current=false;setBusy(false)}
+  try{await verify();const next=await readConversationJournal<State>(conversation,goal);current.current=next;setJournal(next);setCorrectionUnknown(false);setError('');setCorrectionChoice(null);setCorrectionSources(null);await onMessagesChanged?.()}catch{setCreateReadNotice('当前记录尚未读取成功，请稍后再读取。不会重复提交。')}finally{flight.current=false;setBusy(false)}
  }
  async function continueSavedCreate(){
   const j=current.current,s=j?.state,d=s?.draft;
@@ -362,7 +364,7 @@ export function ConversationJourney({cycleBound=false,initialAdoption=false,conv
    if(known&&(known.kind||known.content!==text.trim()))throw Error('上次补充已保存，请保留原补充内容继续，避免重复提交。');
    const saved=savedMessageId?c.messages.find(message=>message.message_id===savedMessageId):undefined;
    if(savedMessageId&&(!saved||saved.kind||saved.content!==text.trim()))throw Error('原补充消息核对不一致，未继续原任务。');
-   const sent=saved?{identity:saved.message_id}:known?{identity:known.message_id}:await conversationRequest<{identity:string}>('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:replyKey,content:text.trim()});
+   const sent=saved?{identity:saved.message_id}:known?{identity:known.message_id}:await conversationRequest<{identity:string}>('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:replyKey,content:text.trim(),...(goal?{goalId:goal.goalId}:{})});
    notifyConversationSend(conversation);
    await save({...state,pending:undefined,error:undefined,phase:'PLAN',planningPredecessor:previous,planningReply:(state.planningReply??0)+1,planningAnswers:[...(state.planningAnswers??[]),text.trim()],messages:[...state.messages,{id:'user:'+sent.identity,text:text.trim()}],log:[...state.log,'已收到补充，沿用原问题、资料和完成标准继续准备方案。']});
    await onMessagesChanged?.();return true;
@@ -374,7 +376,7 @@ export function ConversationJourney({cycleBound=false,initialAdoption=false,conv
   }
   return answer(text,source);
  }
- async function answer(text:string,source?:Source){if(flight.current||!state||!text.trim())return false;flight.current=true;setBusy(true);try{await verify();const c=await readConversationHead(conversation);const sent=await conversationRequest<{identity:string}>('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:state.key+':answer:'+(state.userMessageId??state.messages.length),content:text});notifyConversationSend(conversation);await save({...state,...(state.phase==='DIRECT_DONE'?{key:'question:'+sent.identity,question:text.trim(),planningAnswers:undefined,planningReply:undefined,planningPredecessor:undefined,sources:undefined,problem:undefined,criterion:undefined,planning:undefined,confirmation:undefined,execution:undefined,cycle:undefined,expectedPlanVersion:undefined,coverageFeedback:undefined,selectionRetry:undefined,resourceRetry:undefined,understandingRetry:undefined}:{}),userMessageId:sent.identity,source:source??(state.phase==='DIRECT_DONE'?undefined:state.source),phase:'UNDERSTAND',pending:undefined,error:undefined,messages:[...state.messages,{id:'user:'+sent.identity,text:text.trim()}],log:[...state.log,'已收到补充，继续理解并核对分析范围。']});if(state.understandingProtocol===3)await onMessagesChanged?.();return true}catch(e){setError(String(e));return false}finally{flight.current=false;setBusy(false)}}
+ async function answer(text:string,source?:Source){if(flight.current||!state||!text.trim())return false;flight.current=true;setBusy(true);try{await verify();const c=await readConversationHead(conversation);const sent=await conversationRequest<{identity:string}>('/'+conversation+'/messages',session.csrfToken,{expectedVersion:c.conversation.version,idempotencyKey:state.key+':answer:'+(state.userMessageId??state.messages.length),content:text,...(goal?{goalId:goal.goalId}:{})});notifyConversationSend(conversation);await save({...state,...(state.phase==='DIRECT_DONE'?{key:'question:'+sent.identity,question:text.trim(),planningAnswers:undefined,planningReply:undefined,planningPredecessor:undefined,sources:undefined,problem:undefined,criterion:undefined,planning:undefined,confirmation:undefined,execution:undefined,cycle:undefined,expectedPlanVersion:undefined,coverageFeedback:undefined,selectionRetry:undefined,resourceRetry:undefined,understandingRetry:undefined}:{}),userMessageId:sent.identity,source:source??(state.phase==='DIRECT_DONE'?undefined:state.source),phase:'UNDERSTAND',pending:undefined,error:undefined,messages:[...state.messages,{id:'user:'+sent.identity,text:text.trim()}],log:[...state.log,'已收到补充，继续理解并核对分析范围。']});if(state.understandingProtocol===3)await onMessagesChanged?.();return true}catch(e){setError(String(e));return false}finally{flight.current=false;setBusy(false)}}
  const planningAnswerHandler=useRef<typeof answerPlanning|null>(null);
  useEffect(()=>{planningAnswerHandler.current=answerPlanning});
  const routePlanning=useCallback(async(text:string,messageId:string)=>{if(!state?.planning?.invocation?.target?.invocation_id||current.current?.version!==journal?.version||current.current?.state?.planning?.invocation?.target?.invocation_id!==state.planning.invocation.target.invocation_id)return false;return planningAnswerHandler.current?planningAnswerHandler.current(text,messageId):false},[journal?.version,state?.planning?.invocation?.target?.invocation_id]);

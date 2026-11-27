@@ -75,17 +75,31 @@ class FixedWorkCycleHost:
                     prepared and receipt[0]["actor_id"] == context.principal_id,
                     "FIXED_WORK_SERVICE_RECEIPT_CONFLICT",
                 )
-                with self.call_scope(context) as call:
-                    call.authority.require(
-                        principal,
-                        "EXECUTION",
-                        "READ",
-                        "governed-execution:prepared:"
-                        + receipt[0]["preparation_digest"],
-                    )
+        if receipt:
+            # The observation transaction above must finish before call_scope
+            # opens a new connection and acquires the same governance lock.
+            # Reauthenticate and recheck the exact immutable receipt/current
+            # authority inside that original owner transaction.
+            with self.call_scope(context) as call:
+                current_receipt = call.connection.execute(
+                    "SELECT * FROM fixed_work_triggers.receipts WHERE namespace=%s "
+                    "AND security_domain=%s AND work_id=%s AND event_id=%s",
+                    identity,
+                ).fetchall()
+                require(
+                    len(current_receipt) == 1 and current_receipt[0] == receipt[0],
+                    "FIXED_WORK_SERVICE_RECEIPT_CONFLICT",
+                )
+                call.authority.require(
+                    principal,
+                    "EXECUTION",
+                    "READ",
+                    "governed-execution:prepared:"
+                    + current_receipt[0]["preparation_digest"],
+                )
                 return {
                     "stage": "START_COMMITTED",
-                    "receipt": FixedWorkTriggerOwner.receipt(receipt[0]),
+                    "receipt": FixedWorkTriggerOwner.receipt(current_receipt[0]),
                 }
         if prepared is None:
             saved = self.runtime.begin(context, event)

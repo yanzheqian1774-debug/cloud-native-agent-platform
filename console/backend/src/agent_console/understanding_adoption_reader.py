@@ -10,7 +10,7 @@ from .private_conversation import ConversationError, digest
 
 def reader(existing_reader, records, primary, routing, *, retained=()):
     def read(context, conversation, message_id, _service):
-        journal = _journal(records, context, conversation)
+        journal = _journal(records, context, conversation, message_id)
         state = journal["state"] or {}
         if state.get("phase") != "CLARIFY":
             existing = existing_reader(context, conversation, message_id, primary)
@@ -23,7 +23,11 @@ def reader(existing_reader, records, primary, routing, *, retained=()):
                 }
                 current["currentQuestionType"] = owner
                 return sealed_snapshot(
-                    conversation, message_id, existing["target"], current
+                    conversation,
+                    message_id,
+                    existing["target"],
+                    current,
+                    goal_id=journal.get("goalId"),
                 )
             return existing
         if state.get("pending") or state.get("error") or state.get("problem"):
@@ -44,8 +48,13 @@ def reader(existing_reader, records, primary, routing, *, retained=()):
             raise ConversationError("CONVERSATION_ROUTING_SERVICE_UNAVAILABLE", 503)
         response = selected.read(context, identity)
         original = response.invocation
+        from .conversation_goal_selection import goal_for_invocation
+
+        with records.connect() as c:
+            original_goal = goal_for_invocation(c, context, original)
         if (
-            original.initiating_principal_id != context.principal_id
+            original_goal != journal.get("goalId")
+            or original.initiating_principal_id != context.principal_id
             or original.state is not DraftInvocationState.SUCCEEDED
             or not (
                 original.result_kind
@@ -196,8 +205,13 @@ def reader(existing_reader, records, primary, routing, *, retained=()):
         }
         if any(len(v) > 4000 for v in current.values()):
             raise ConversationError("CONVERSATION_ROUTING_CONTEXT_TOO_LARGE", 422)
-        if _journal(records, context, conversation)["version"] != journal["version"]:
+        if (
+            _journal(records, context, conversation, message_id)["version"]
+            != journal["version"]
+        ):
             raise ConversationError("CONVERSATION_ROUTING_CONTEXT_CHANGED", 409)
-        return sealed_snapshot(conversation, message_id, target, current)
+        return sealed_snapshot(
+            conversation, message_id, target, current, goal_id=journal.get("goalId")
+        )
 
     return read

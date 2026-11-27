@@ -1,0 +1,34 @@
+G1: exact Bound service execution bridge, default off (P0, independent of 0078)
+Base: frozen natural-goal backend tree 4137364f1c13883501952c01129847f5bd4c9da4.
+No new tables, public lifecycle, execution authority or scheduler. No actual action.
+
+Confirmed first-run limitation: current once-host Discovery requires Human
+owned_business and selects only receipts with ownedBusiness. The existing fixed
+service's formal ReadonlyContinuation receipt has service policy provenance and
+no Human admission. Thus existing GENERAL exact service subject support does not
+prove once-host discovery for Bound service work. Durable composition additionally
+hard-requires the Human reader. Manual per-prep startup is not an acceptance fix.
+
+Add explicit pinned NATIVE_BOUND_SERVICE_EXECUTION_POLICY pointing to one enabled
+BoundServicePlanningPolicy v2. Reuse original ServicePlanningRegistry/read-only
+source facts, committed 0070/0073, exact original readonly START receipt and actual
+current SERVICE_CREDENTIAL authorization. Restrict each host to the policy's exact
+subject/scope/credential/work/binding; no service catalogue discovery. Existing
+Human discovery/receipt checks remain unchanged. Neither port nor READ gives START.
+Current original command authorization, ModelUse checks, prepared grants, deadline,
+claim/GO/worker/startup/stop/effect fencing and UNKNOWN suppression remain intact.
+
+Host prepare/config/startup all pin this optional file, reject ambient unpinned
+input or changed bytes. Old required Human policy remains required unless this
+explicit service policy selects the separate mode; incompatible mixed mode fails.
+Load validates file identity/permissions and immutable hash before registry reads.
+Service runtime/WAIT binding references the same bridge without creating 0078
+question authority, tables or records. Question answer delegation remains off.
+
+Verify original service registry -> model Plan/START -> actual Discovery -> original
+Native worker with controlled provider/tools -> original completion/result receipt,
+then original-chat projected event/run/result. Verify wrong service/scope, revoked
+current grant, UNKNOWN no replay, missing/changed private pin, and legacy Human path.
+Fixtures are isolated random 53429 only; no actual provider/DB/config/process writes.
+No catch-up slot or work schedule changes. Production model/owner authorization
+and future slot activation remain root-only after independent final review.

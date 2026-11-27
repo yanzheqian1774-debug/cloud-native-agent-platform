@@ -109,18 +109,31 @@ def migrate(c):
 def read(c, scope, table, work_id, revision_id):
     require(table in {"handoffs", "bindings"}, "TABLE_INVALID")
     row = c.execute(
-        "SELECT record,digest FROM fixed_work_sources."
+        "SELECT * FROM fixed_work_sources."
         + table
         + " WHERE namespace=%s AND security_domain=%s AND work_id=%s AND "
         "revision_id=%s",
         (*scope, work_id, revision_id),
     ).fetchone()
     if row:
+        require(
+            row["record"].get("schemaVersion")
+            not in {"fixed-work-conversation.v2", "fixed-work-confirmed-source.v2"},
+            "SUCCESSION_STORE_REQUIRED",
+        )
         require(digest(row["record"]) == row["digest"], "RECORD_INVALID")
-    return row
+        return row
+    from .fixed_work_succession_postgres import source
+
+    return source(c, scope, table, work_id, revision_id)
 
 
 def append(c, scope, table, value):
+    if value.get("schemaVersion") == "fixed-work-confirmed-source.v2":
+        require(table == "bindings", "TABLE_INVALID")
+        from .fixed_work_succession_postgres import append_binding
+
+        return append_binding(c, scope, value)
     old = read(
         c, scope, table, value["work"]["resource_id"], value["work"]["revision_id"]
     )
@@ -170,7 +183,14 @@ def conversation_mode(c, context, identity):
     if not rows:
         return None
     require(len(rows) == 1, "HANDOFF_CHANGED")
-    row = rows[0]
+    from .fixed_work_succession_postgres import conversation_source
+
+    row = (
+        conversation_source(
+            c, (context.scope.tenant_id, context.scope.security_domain), identity
+        )
+        or rows[0]
+    )
     require(digest(row["record"]) == row["digest"], "RECORD_INVALID")
     require(
         row["record"].get("conversationId") == identity
@@ -184,3 +204,19 @@ def conversation_mode(c, context, identity):
         "work": row["record"]["work"],
         "team": row["record"]["team"],
     }
+
+
+def conversation_binding(c, scope, conversation):
+    from .fixed_work_succession_postgres import conversation_source
+
+    current = conversation_source(c, scope, conversation)
+    if current:
+        return read(c, scope, "bindings", current["work_id"], current["revision_id"])
+    values = c.execute(
+        "SELECT * FROM fixed_work_sources.bindings WHERE namespace=%s AND "
+        "security_domain=%s "
+        "AND conversation_id=%s",
+        (*scope, conversation),
+    ).fetchall()
+    require(len(values) <= 1, "BOUND_AMBIGUOUS")
+    return values[0] if values else None

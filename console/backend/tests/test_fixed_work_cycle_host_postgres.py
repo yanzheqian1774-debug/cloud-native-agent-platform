@@ -479,12 +479,9 @@ def test_host_restarts_saved_event_through_existing_owners(
                 ).fetchone()["n"]
                 == 1
             )
-            assert (
-                c.execute(
-                    "SELECT count(*) n FROM execution_authority.workflow_runs"
-                ).fetchone()["n"]
-                == 1
-            )
+            assert c.execute(
+                "SELECT count(*) n FROM execution_authority.workflow_runs"
+            ).fetchone()["n"] == 1 + getattr(a, "expected_existing_runs", 0)
         assert provider.calls == 1
         if loop is not None:
             from agent_console.fixed_work_bound_composition import inspect_bound_cycle
@@ -510,7 +507,7 @@ def test_host_restarts_saved_event_through_existing_owners(
                     len(sem.tasks),
                     expected_definitions=definitions,
                     exact_run_id=receipt["runId"],
-                    expected_runs=1,
+                    expected_runs=1 + getattr(a, "expected_existing_runs", 0),
                 )
                 with native.pool.connection() as c:
                     prepared, progress = PreparedExecutionStore(c).read(

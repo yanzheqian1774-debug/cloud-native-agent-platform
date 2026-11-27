@@ -30,12 +30,32 @@ def perimeter(policy):
 
 def successor_perimeter(policy):
     value = perimeter(policy)
-    for key in ("schemaVersion", "retainedReadPolicyDigests", "adoptionPolicyDigest"):
+    for key in (
+        "schemaVersion",
+        "retainedReadPolicyDigests",
+        "adoptionPolicyDigest",
+        "independentGoalProfile",
+    ):
         value.pop(key, None)
     for scope in value["scopes"]:
         scope.pop("skills")
         scope.pop("employees")
     return value
+
+
+def compatible_history(old, current):
+    from .owned_business_native_policy import OwnedBusinessPolicyV4
+
+    if not isinstance(current, OwnedBusinessPolicyV4):
+        return successor_perimeter(old) == successor_perimeter(current)
+    before, after = successor_perimeter(old), successor_perimeter(current)
+    old_scopes, new_scopes = before.pop("scopes"), after.pop("scopes")
+    if before != after:
+        return False
+    by_id = {scope["scopeId"]: scope for scope in new_scopes}
+    # Explicitly pinned history may retain a strict subset of unchanged scope
+    # perimeters. A new Native scope never converts an old scope's authority.
+    return all(by_id.get(scope["scopeId"]) == scope for scope in old_scopes)
 
 
 def retained_readers(current, paths):
@@ -57,6 +77,11 @@ def retained_readers(current, paths):
             current.generation,
             current.recovery_epoch,
             _retained_read_only=True,
+            **(
+                {"environment": current.environment}
+                if getattr(current, "environment", None) is not None
+                else {}
+            ),
         )
         require(
             old.policy.enabled
@@ -64,8 +89,7 @@ def retained_readers(current, paths):
                 perimeter(old.policy) == perimeter(current.policy)
                 if pins is None
                 else old.policy.digest in pins
-                and successor_perimeter(old.policy)
-                == successor_perimeter(current.policy)
+                and compatible_history(old.policy, current.policy)
             )
             and old.policy.expiresAt <= current.policy.expiresAt
             and old.policy.digest != current.policy.digest

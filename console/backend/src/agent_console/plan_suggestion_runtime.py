@@ -515,6 +515,7 @@ def build_planning_runtime(
     runtime_configuration_path,
     migrations_path,
     allow_local_https_mock=False,
+    environment=None,
 ):
     """Called by app's formal startup. Tests may explicitly allow loopback HTTPS."""
     # Database and app assembly imports belong to the parent, not spawned transport.
@@ -573,7 +574,10 @@ def build_planning_runtime(
         budget.migrate_and_configure()
         from .provider_budget_extension import configure_from_environment
 
-        configure_from_environment(budget)
+        if environment is None:
+            configure_from_environment(budget)
+        else:
+            configure_from_environment(budget, environment)
         credentials = planning_credentials(configuration, profile)
         dependencies = PlanningInvocationDependencies(
             profile=PlanningProfile(

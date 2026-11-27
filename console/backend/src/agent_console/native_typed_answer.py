@@ -111,10 +111,11 @@ def verified_interpretation(
         and contract["sourceReference"]
         == preparation.source_snapshot.model_dump(mode="json")
     )
-    journal = c.execute(
-        "SELECT version,state FROM private_conversation.journeys WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s FOR UPDATE",
-        (*scope, conversation),
-    ).fetchone()
+    from .conversation_goal_selection import selected_journal
+
+    journal = selected_journal(
+        c, context, conversation, invocation=invocation, lock=True
+    )
     require(
         journal
         and journal["version"] == target.get("journalVersion")

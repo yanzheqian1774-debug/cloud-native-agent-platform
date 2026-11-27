@@ -14,6 +14,9 @@ from .workbench_prepared_resources import reference
 def require_bound_source(c, context, policy, saved, authorization, kwargs):
     require(isinstance(policy, BoundServicePlanningPolicy))
     scope = policy.tenantId, policy.securityDomain
+    from .fixed_work_succession_postgres import require_current
+
+    require_current(c, scope, policy.work.resource_id, policy.work.revision_id)
     bound = read(c, scope, "bindings", policy.work.resource_id, policy.work.revision_id)
     handoff = read(
         c, scope, "handoffs", policy.work.resource_id, policy.work.revision_id
@@ -79,6 +82,9 @@ def require_bound_preparation(c, policy, receipt):
 
     require(isinstance(policy, BoundServicePlanningPolicy))
     scope = policy.tenantId, policy.securityDomain
+    from .fixed_work_succession_postgres import require_current
+
+    require_current(c, scope, policy.work.resource_id, policy.work.revision_id)
     bound = read(c, scope, "bindings", policy.work.resource_id, policy.work.revision_id)
     require(
         bound and bound["digest"] == policy.sourceBindingDigest,

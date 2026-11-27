@@ -3,6 +3,8 @@
 import json
 
 from .authority_contracts import AuthorityError
+from .native_data_skill import EXECUTOR_IDS
+from .native_data_skill import executors as native_data_executors
 from .native_document_skill import (
     NativeDefinitionQuerySkillExecutor,
     NativeDocumentSkillExecutor,
@@ -39,6 +41,7 @@ EXECUTORS = SkillExecutorRegistry(
         SyntheticDeliverySkillExecutor(),
         SyntheticDeliverySkillExecutorV2(),
         SyntheticCostSkillExecutor(),
+        *native_data_executors(),
     )
 )
 SCHEMAS = {
@@ -47,6 +50,7 @@ SCHEMAS = {
     SalesDiagnosticSkillExecutor.revision.executor_id: "sales-diagnostic",
     SyntheticDeliverySkillExecutor.revision.executor_id: "synthetic-delivery",
     SyntheticCostSkillExecutor.revision.executor_id: "synthetic-cost",
+    **{identity: "native-data" for identity in EXECUTOR_IDS},
 }
 
 
@@ -71,6 +75,7 @@ def executor_registry(*, sales_v2_candidate=False):
             SyntheticDeliverySkillExecutor(),
             SyntheticDeliverySkillExecutorV2(),
             SyntheticCostSkillExecutor(),
+            *native_data_executors(),
             SalesGrossProfitSkillExecutor(),
         )
     )
@@ -154,10 +159,16 @@ def validate(
                 if op["name"] not in OPERATIONS:
                     raise AuthorityError("RESOURCE_EXECUTOR_OPERATION_UNAVAILABLE")
             prefix = SCHEMAS[revision.executor_id]
-            if (
-                expected_source_schema
-                and expected_source_schema != prefix + "-source.v1"
-            ):
+            if revision.executor_id in EXECUTOR_IDS:
+                from .native_data_skill import exact_executor
+
+                adapter = exact_executor(revision).adapter
+                if op["name"] not in adapter.operations:
+                    raise AuthorityError("RESOURCE_EXECUTOR_OPERATION_UNAVAILABLE")
+                expected_schema = adapter.source_schema
+            else:
+                expected_schema = prefix + "-source.v1"
+            if expected_source_schema and expected_source_schema != expected_schema:
                 raise AuthorityError("RESOURCE_EXECUTOR_SOURCE_MISMATCH")
             if op.get("sideEffectClass") != "READ_ONLY" or op.get(
                 "sideEffectPolicy"

@@ -145,6 +145,14 @@ def verify_skill(
             raise AuthorityError("RESOURCE_DOCUMENT_RULE_POLICY_REQUIRED")
         extra_inputs, rule_evidence = document_inputs()
         validate_rule_inputs(extra_inputs, source, source_ref)
+    from .native_data_skill import EXECUTOR_IDS
+
+    native_data = all(
+        op["executorId"] in EXECUTOR_IDS
+        for op in revision["content"].get("operations", [])
+    )
+    if native_data:
+        prefix = "native-data"
     suffix = ".v2" if sales_v2 else ".v1"
     names = [x["name"] for x in revision["content"].get("operations", [])]
     from .synthetic_delivery_skill_v2 import (
@@ -213,7 +221,13 @@ def verify_skill(
             comparison="subset",
             revision_id=ref.revision_id,
             persist=persist,
-            verify=(lambda output: independent(source, output, reference))
+            verify=(
+                lambda output: independent(
+                    source,
+                    output["resourceTestReport"] if native_data else output,
+                    reference,
+                )
+            )
             if operation == "RENDER_REPORT"
             else None,
             executor_registry=executor_registry(sales_v2_candidate=sales_v2_candidate),

@@ -39,8 +39,11 @@ def binding_facts(bound, handoff, saved, permit):
     h = source_fact(handoff, scope, permit.subjectId, permit.conversationId, work)
     value = saved["record"]
     require(
-        b["schemaVersion"] == "fixed-work-confirmed-source.v1"
-        and h["schemaVersion"] == "fixed-work-conversation.v1"
+        (b["schemaVersion"], h["schemaVersion"])
+        in {
+            ("fixed-work-confirmed-source.v1", "fixed-work-conversation.v1"),
+            ("fixed-work-confirmed-source.v2", "fixed-work-conversation.v2"),
+        }
         and bound["digest"] == permit.bindingDigest
         and b["handoffDigest"] == handoff["digest"]
         and saved["digest"] == work.digest == digest(value)

@@ -10,7 +10,9 @@ def fixture(monkeypatch, *, anchor=True, archived=False):
     seen = []
 
     class Connection:
-        def execute(self, sql, args):
+        def execute(self, sql, args=None):
+            if "to_regclass" in sql:
+                return NS(fetchone=lambda: {"t": None})
             assert sql.startswith("SELECT")
             seen.append((sql, args))
             if sql.startswith("SELECT created_at"):

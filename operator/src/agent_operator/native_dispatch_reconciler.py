@@ -530,18 +530,26 @@ class NativeDispatchWorker:
         )
 
 
-def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
+def build_native_dispatch_from_environment(
+    *, environment=None
+) -> NativeDispatchAssembly | None:
     """Compose the worker only from explicit, externally supplied authority state."""
-    database_url = os.environ.get("NATIVE_DISPATCH_DATABASE_URL", "")
+    explicit_environment = environment is not None
+    environment = dict(os.environ if environment is None else environment)
+    database_url = environment.get("NATIVE_DISPATCH_DATABASE_URL", "")
     if not database_url:
         return None
-    authority_configuration_path = os.environ.get(
+    if environment.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY") and environment.get(
+        "OWNED_BUSINESS_ADMISSION_POLICY"
+    ):
+        raise NativeDispatchWorkerError("HOST_SERVICE_MIXED_AUTHORITY_MODE")
+    authority_configuration_path = environment.get(
         "NATIVE_DISPATCH_AUTHORITY_CONFIGURATION", ""
     )
-    execution_migration = os.environ.get("NATIVE_DISPATCH_EXECUTION_MIGRATION", "")
-    dispatch_migration = os.environ.get("NATIVE_DISPATCH_SCHEMA_MIGRATION", "")
-    worker_id = os.environ.get("NATIVE_DISPATCH_WORKER_ID", "")
-    task_prefix = os.environ.get("NATIVE_DISPATCH_TASK_PREFIX", "native-dispatch")
+    execution_migration = environment.get("NATIVE_DISPATCH_EXECUTION_MIGRATION", "")
+    dispatch_migration = environment.get("NATIVE_DISPATCH_SCHEMA_MIGRATION", "")
+    worker_id = environment.get("NATIVE_DISPATCH_WORKER_ID", "")
+    task_prefix = environment.get("NATIVE_DISPATCH_TASK_PREFIX", "native-dispatch")
     if not all(
         (
             authority_configuration_path,
@@ -558,6 +566,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
     )
     from agent_console.authority_contracts import (
         AuthenticationSource,
+        AuthorityError,
         AuthorityScope,
         TrustedRequestContext,
     )
@@ -617,6 +626,19 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
         execution.native_dispatch_compatibility(Path(dispatch_migration))
 
         continuation_work = None
+        service_bridge = None
+        service_policy_path = environment.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY")
+        if service_policy_path:
+            from agent_console.bound_service_execution import (
+                BoundServiceExecutionBridge,
+            )
+            from agent_console.plan_suggestion_postgres import (
+                PostgresPlanningRepository,
+            )
+
+            service_bridge = BoundServiceExecutionBridge.load(
+                service_policy_path, PostgresPlanningRepository(execution.pool), reader
+            )
 
         def authorization_check(connection, command):
             return authorization_bundle_check(connection, command, ())
@@ -637,6 +659,11 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
             )
             from agent_console.owned_business_resource_adapter import authorize_dispatch
 
+            if service_bridge is not None:
+                try:
+                    service_bridge.authorize(connection, context, command)
+                except (AuthorityError, ValueError):
+                    return False
             if not authorize_dispatch(
                 continuation_work.owned_business if continuation_work else None,
                 connection,
@@ -735,7 +762,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
 
         transport = HttpNativeTransport()
         ready_driver = None
-        prepared_mode = os.environ.get("NATIVE_DISPATCH_PREPARED_SKILL", "")
+        prepared_mode = environment.get("NATIVE_DISPATCH_PREPARED_SKILL", "")
         if prepared_mode:
             if prepared_mode not in {
                 "synthetic-cost-v1",
@@ -755,9 +782,10 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 generation,
                 authorization_check,
                 mode=prepared_mode,
-                native_loop_path=os.getenv("NATIVE_LOOP_RUNTIME_FILE"),
-                durable_wait_path=os.getenv("NATIVE_DURABLE_WAIT_CONFIGURATION"),
+                native_loop_path=environment.get("NATIVE_LOOP_RUNTIME_FILE"),
+                durable_wait_path=environment.get("NATIVE_DURABLE_WAIT_CONFIGURATION"),
                 authorization_bundle_check=authorization_bundle_check,
+                **({"environment": environment} if explicit_environment else {}),
             )
             transport = ManagedSkillNativeTransport(caller)
             from agent_console.prepared_native_composition import (
@@ -771,7 +799,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
             )
         after_tick = None
         dispatch_repository = execution
-        continuation_path = os.environ.get("NATIVE_DISPATCH_CONTINUATION_POLICY")
+        continuation_path = environment.get("NATIVE_DISPATCH_CONTINUATION_POLICY")
         if continuation_path:
             if ready_driver is None:
                 raise NativeDispatchWorkerError("CONTINUATION_MANAGED_SKILL_REQUIRED")
@@ -781,7 +809,7 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
             )
 
             owned_business = None
-            business_policy_path = os.environ.get("OWNED_BUSINESS_ADMISSION_POLICY")
+            business_policy_path = environment.get("OWNED_BUSINESS_ADMISSION_POLICY")
             if business_policy_path:
                 from agent_console.owned_business_retained_history import (
                     configured_paths,
@@ -795,8 +823,9 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                     reader,
                     generation.generation,
                     recovery_epoch,
+                    **({"environment": environment} if explicit_environment else {}),
                     retained_history_paths=configured_paths(
-                        os.environ.get("OWNED_BUSINESS_RETAINED_HISTORY_POLICIES")
+                        environment.get("OWNED_BUSINESS_RETAINED_HISTORY_POLICIES")
                     ),
                 )
                 if candidate.policy.enabled:
@@ -807,16 +836,31 @@ def build_native_dispatch_from_environment() -> NativeDispatchAssembly | None:
                 owner_authority_factory(reader, generation, authorization_check),
                 sales_v2_candidate=prepared_mode == "sales-gross-profit-v2-candidate",
                 **({"owned_business": owned_business} if owned_business else {}),
+                **(
+                    {"bound_service_execution": service_bridge}
+                    if service_bridge
+                    else {}
+                ),
             )
             continuation_work = work
             if prepared_composition is not None:
                 for runtime in prepared_composition.closeables:
                     if getattr(runtime, "durable_wait", None) is not None:
-                        if owned_business is None:
+                        if owned_business is None and service_bridge is None:
                             raise NativeDispatchWorkerError(
                                 "NATIVE_WAIT_OWNED_BUSINESS_REQUIRED"
                             )
                         runtime.owned_business = owned_business
+                        runtime.bound_service_execution = service_bridge
+                        if service_bridge is not None:
+                            policy = service_bridge.registry._policy()
+                            if (runtime.subject, runtime.service_credential_id) != (
+                                policy.subjectId,
+                                policy.credentialId,
+                            ):
+                                raise NativeDispatchWorkerError(
+                                    "NATIVE_BOUND_SERVICE_RUNTIME_MISMATCH"
+                                )
                         from agent_console.native_wait_command_access import (
                             NativeWaitCommandAccess,
                         )

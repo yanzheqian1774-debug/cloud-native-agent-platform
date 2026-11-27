@@ -1,0 +1,5 @@
+import type {WorkbenchSession,TeamRecord} from '../../src/api/digitalEmployees';
+import type {FixedItem,FixedTeam} from '../../src/api/fixedWorkDrafts';
+export const session={schemaVersion:'workbench-session.v1',principal:{principalId:'human:test',tenantId:'tenant',securityDomain:'domain'},csrfToken:'controlled-token',expiresAt:'2099-01-01T00:00:00Z'} as WorkbenchSession;
+export const record={schemaVersion:'team-definition.v1',scope:{namespace:'tenant',security_domain:'domain'},team_id:'team:test',revision_id:'team:1',title:'资料核对团队',goal:'核对合成资料',owner_id:'human:test',members:[],predecessor_revision_id:null} as TeamRecord;
+export function item(team:FixedTeam):FixedItem{return {draft:{schemaVersion:'fixed-work-draft.v1',state:'DRAFT_ONLY',team,workId:'work:original',revisionId:'work-revision:1',predecessorRevisionId:null,aggregateVersion:1,title:'定期资料核对',instruction:'每天核对合成资料并报告差异',trigger:{kind:'SCHEDULE',timezone:'Asia/Shanghai',localTime:'20:00',cadence:'DAILY',eventDescription:null},createdBy:'human:test',createdAt:'2026-11-21T00:00:00+00:00'},digest:'a'.repeat(64)}}

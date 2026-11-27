@@ -68,9 +68,13 @@ class NativeLoopRuntime:
         authorize_current=None,
         durable_wait_path=None,
         skill_repository=None,
+        environment=None,
     ):
         self.authorize_current = authorize_current
         self.config = json.loads(Path(path).read_text())
+        from .native_data_adapters import configured
+
+        self.native_data_adapters = configured(self.config)
         self.subject = configured_subject(self.config)
         self.service_credential_id = configured_service_credential(self.config)
         if self.subject != PRINCIPAL and authorize_current is None:
@@ -92,6 +96,7 @@ class NativeLoopRuntime:
             raise ValueError("NATIVE_LOOP_MODEL_CONFIGURATION_MISMATCH")
         self.policy_digest = digest(self.config)
         self.skill_repository, self.owned_business = skill_repository, None
+        self.bound_service_execution = None
         self.durable_wait = None
         if durable_wait_path:
             from .native_wait_configuration import DurableWaitConfiguration
@@ -111,6 +116,7 @@ class NativeLoopRuntime:
             database_url=database_url,
             runtime_configuration_path=self.config["modelRuntimeFile"],
             migrations_path=migrations,
+            **({"environment": environment} if environment is not None else {}),
         )
         # This reuses transport/binding/budget construction, NOT the planning
         # invocation service. All invocations below are NATIVE_TASK_DECISION.
@@ -208,6 +214,7 @@ class NativeLoopRuntime:
                     ("native-document-review", "6"),
                     ("native-document-review", "7"),
                 }
+                | {(adapter.adapter_id, "1") for adapter in self.native_data_adapters}
             ):
                 raise ValueError("NATIVE_LOOP_INVOCATION_REQUIRED")
         employee_mode = (
@@ -295,11 +302,32 @@ class NativeLoopRuntime:
                 employee_context = employee_snapshot(c)
         journal = NativeLoopJournal(self.pool, scope, invocation_id)
         document_mode = output["schemaVersion"] == "document-review-output.v1"
+        from .native_data_skill import EXECUTOR_IDS
         from .native_document_tools import NativeDocumentTools
 
-        library = (NativeDocumentTools if document_mode else NativeDiagnosticTools)(
-            output["source"], output["sourceSnapshot"]
-        )
+        data_mode = invocation["executor_id"] in EXECUTOR_IDS
+        if data_mode:
+            from .native_data_skill import exact_executor
+            from .skill_invocation_domain import ExecutorRevision
+
+            executor = exact_executor(
+                ExecutorRevision(
+                    invocation["executor_id"],
+                    invocation["executor_revision"],
+                    invocation["executor_configuration_digest"],
+                )
+            )
+            if (
+                executor.adapter not in self.native_data_adapters
+                or output.get("schemaVersion") != "native-data-output.v1"
+                or output.get("adapter") != executor.adapter.descriptor()
+            ):
+                raise ValueError("NATIVE_DATA_RUNTIME_BINDING_MISMATCH")
+            library = executor.adapter.tools(output["source"], output["sourceSnapshot"])
+        else:
+            library = (NativeDocumentTools if document_mode else NativeDiagnosticTools)(
+                output["source"], output["sourceSnapshot"]
+            )
 
         def rule_snapshot(connection):
             from .ontology_execution import DocumentSemanticsBinding, published_content
@@ -511,6 +539,15 @@ class NativeLoopRuntime:
                     ),
                     "authorityGeneration": command.authority_generation.value,
                     "recoveryEpoch": command.recovery_epoch.value,
+                    **(
+                        {
+                            "domain": "NATIVE_READONLY_DATA",
+                            "nativeDataAdapter": executor.adapter.descriptor(),
+                            "answerSchema": library.answer_schema,
+                        }
+                        if data_mode
+                        else {}
+                    ),
                     **({"employeeContext": employee_context} if employee_mode else {}),
                     **(
                         {"confirmedScopeEvidence": scope_evidence}
@@ -634,6 +671,11 @@ class NativeLoopRuntime:
                 "代替上线批准。"
                 if document_mode
                 else (
+                    "依据资料声明的口径调用只读工具核对原始证据，保留缺口和限制；"
+                    "不推断因果、不代表业务接受。"
+                )
+                if data_mode
+                else (
                     "核对声明上限，检查异常和缺失的原始行，返回可独立复算的报告；不证"
                     "明因果或业务改善。"
                 )
@@ -646,6 +688,15 @@ class NativeLoopRuntime:
                         "documentInventory": library.inventory(),
                     }
                     if document_mode
+                    else {}
+                ),
+                **(
+                    {
+                        "domain": "NATIVE_READONLY_DATA",
+                        "nativeDataAdapter": executor.adapter.descriptor(),
+                        "answerSchema": library.answer_schema,
+                    }
+                    if data_mode
                     else {}
                 ),
                 **({"employeeContext": employee_context} if employee_mode else {}),

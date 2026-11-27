@@ -129,11 +129,9 @@ class UnderstandingAdoptionApplication:
             # Same order as journal writes: conversation row, then draft context.
             owned = self.actions.records.owned(c, context, conversation, lock=True)
             require(not owned["archived_at"], "CONVERSATION_ARCHIVED")
-            row = c.execute(
-                "SELECT version,state FROM private_conversation.journeys WHERE "
-                "tenant_id=%s AND security_domain=%s AND conversation_id=%s",
-                (*self.actions.records.scope(context), conversation),
-            ).fetchone()
+            from .conversation_goal_selection import selected_journal
+
+            row = selected_journal(c, context, conversation, invocation=result)
             require(
                 row
                 and row["version"] == target.journal_version

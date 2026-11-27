@@ -53,7 +53,26 @@ def bind_steps(semantics, skills, *, source_schema, case, sales_v2_candidate=Fal
             else "EXACT_APPROVED_MEMBER_OPERATION",
         }
         selected_operations.append(operation)
-    if case == "delivery":
+    if case == "native_readonly":
+        from .native_data_skill import exact_executor
+        from .prepared_readonly_contract import validate_mapping
+        from .skill_invocation_domain import ExecutorRevision
+
+        revisions = {
+            ExecutorRevision(
+                o["executorId"], o["executorRevision"], o["executorConfigurationDigest"]
+            )
+            for o in selected_operations
+        }
+        if len(revisions) != 1:
+            raise ValueError("NATIVE_DATA_EXACT_ADAPTER_REQUIRED")
+        executor = exact_executor(next(iter(revisions)))
+        if executor.adapter.source_schema != source_schema:
+            raise ValueError("NATIVE_DATA_SOURCE_SCHEMA_MISMATCH")
+        validate_mapping(
+            semantics.model_dump(mode="json"), selected_operations, executor.revision
+        )
+    elif case == "delivery":
         from .prepared_delivery_contract import validate_delivery_mapping
 
         validate_delivery_mapping(

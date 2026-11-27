@@ -47,7 +47,14 @@ class ReadonlyContinuationPolicy(BaseModel):
         path = Path(path)
         if not path.is_absolute():
             raise AuthorityError("READONLY_WORK_CONFIGURATION_INVALID")
-        return cls.model_validate_json(path.read_text())
+        raw = path.read_text()
+        import json
+
+        if json.loads(raw).get("schemaVersion") == "readonly-work-policy.v2":
+            from .readonly_native_policy import ReadonlyContinuationPolicyV2
+
+            return ReadonlyContinuationPolicyV2.model_validate_json(raw)
+        return cls.model_validate_json(raw)
 
     @property
     def digest(self):

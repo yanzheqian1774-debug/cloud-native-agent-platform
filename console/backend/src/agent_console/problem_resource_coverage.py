@@ -110,6 +110,13 @@ def assess(semantics, members, contents, work, runtime, *, sales_v2_candidate=Fa
         "sales-diagnostic-source.v1": "sales",
         "synthetic-delivery-source.v1": "delivery",
     }.get(schema)
+    from .native_readonly_protocol import scope_adapter
+
+    native_adapter = scope_adapter(work)
+    if native_adapter is not None:
+        if native_adapter.sourceSchema != schema:
+            raise ValueError("NATIVE_DATA_SOURCE_SCHEMA_MISMATCH")
+        case = "native_readonly"
     if case is None:
         raise ValueError("BUSINESS_RULE_FAMILY_UNSUPPORTED")
     bindings = bind_steps(

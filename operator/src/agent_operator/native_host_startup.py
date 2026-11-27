@@ -105,6 +105,11 @@ class StartupObservation:
             Path(inspect.getfile(PreparedNativeSkillCaller)).resolve(),
             Path(__file__).with_name("native_dispatch_host.py").resolve(),
         ]
+        if os.environ.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY"):
+            from agent_console import bound_service_execution
+
+            critical.append(Path(bound_service_execution.__file__).resolve())
+
         require(all(str(p) in self.files for p in critical))
         require(isinstance(cfg["policyFiles"], dict) and cfg["policyFiles"])
         policies = {}
@@ -116,6 +121,7 @@ class StartupObservation:
                     "NATIVE_LOOP_RUNTIME_FILE",
                     "NATIVE_DISPATCH_CONTINUATION_POLICY",
                     "OWNED_BUSINESS_ADMISSION_POLICY",
+                    "NATIVE_BOUND_SERVICE_EXECUTION_POLICY",
                     "NATIVE_DURABLE_WAIT_CONFIGURATION",
                     "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
                     "PROVIDER_BUDGET_EXTENSION_POLICY",
@@ -137,12 +143,19 @@ class StartupObservation:
                 policies[env]["modelRuntimeDigest"] = runtime_digest
         require("NATIVE_DISPATCH_AUTHORITY_CONFIGURATION" in policies)
         require(
+            not (
+                "NATIVE_BOUND_SERVICE_EXECUTION_POLICY" in policies
+                and "OWNED_BUSINESS_ADMISSION_POLICY" in policies
+            )
+        )
+        require(
             all(
                 not os.environ.get(key) or key in policies
                 for key in (
                     "NATIVE_LOOP_RUNTIME_FILE",
                     "NATIVE_DISPATCH_CONTINUATION_POLICY",
                     "OWNED_BUSINESS_ADMISSION_POLICY",
+                    "NATIVE_BOUND_SERVICE_EXECUTION_POLICY",
                     "NATIVE_DURABLE_WAIT_CONFIGURATION",
                     "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
                     "PROVIDER_BUDGET_EXTENSION_POLICY",

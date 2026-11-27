@@ -462,3 +462,68 @@ def test_machine_lock_path_is_canonical_and_not_environment_selected(monkeypatch
     assert first.parent == Path("/tmp").resolve()
     assert first.name == "native-exact-host-service-" + str(os.getuid())
     assert all(p.resolve() == p for p in seen)
+
+
+def test_one_manager_launches_two_typed_leaves_with_separate_child_environments(
+    service,
+):
+    from agent_operator.native_host_policy_set import (
+        DiscoveryLeaf,
+        LeafKind,
+        PolicySetDiscovery,
+    )
+
+    human, bound = item("a"), {**item("b"), "principalId": "service:exact"}
+    leaves = []
+    configurations = {}
+    for kind, candidate in (
+        (LeafKind.HUMAN_OWNED, human),
+        (LeafKind.BOUND_SERVICE, bound),
+    ):
+        leaf = SimpleNamespace(
+            fingerprint="db-a",
+            scope=tuple(
+                candidate[k] for k in ("namespace", "securityDomain", "principalId")
+            ),
+            service=object() if kind == LeafKind.BOUND_SERVICE else None,
+            work=SimpleNamespace(
+                owned_business=object() if kind == LeafKind.HUMAN_OWNED else None
+            ),
+            wait_access=None,
+            page=lambda limit, c=candidate: [c],
+            current=lambda c, expected=candidate: c if c == expected else None,
+            maintain=lambda c, record: c,
+        )
+        leaves.append(DiscoveryLeaf(kind, leaf))
+        configurations[candidate["principalId"]] = SimpleNamespace(
+            value=service.config.value,
+            environment={**service.config.environment, "CONTROLLED_LEAF": kind.value},
+        )
+    service.discovery = PolicySetDiscovery(leaves)
+    service.config.for_candidate = lambda c: configurations[c["principalId"]]
+    observed = []
+    original_spawn = service.popen
+
+    def capture(command, **kwargs):
+        observed.append(kwargs["env"]["CONTROLLED_LEAF"])
+        return original_spawn(command, **kwargs)
+
+    service.popen = capture
+    service.tick()
+    assert len(service.children) == 2
+    assert observed == ["HUMAN_OWNED", "BOUND_SERVICE"]
+    assert service.identity(human) != service.identity(bound)
+    service.tick()
+    assert len(service.spawned) == 2  # Same manager/claim identities do not relaunch.
+    assert service._wait_access(human) is None
+    assert service._wait_access(bound) is None
+    leaves[1].discovery.maintain = lambda *_: None
+    leaves[1].discovery.current = lambda *_: None
+    leaves[1].discovery.page = lambda _limit: []
+    service.tick()  # Only the withdrawn leaf loses its control channel.
+    bound_process = service.children[service.identity(bound)].process
+    bound_process.wait(timeout=3)
+    service.tick()
+    assert set(service.children) == {service.identity(human)}
+    assert service.children[service.identity(human)].process.poll() is None
+    assert len(service.spawned) == 2

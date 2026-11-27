@@ -32,6 +32,7 @@ class MessageCommand(BaseModel):
     expectedVersion: int = Field(ge=0)
     content: str = Field(min_length=1, max_length=2048)
     focusLinkId: str | None = Field(default=None, min_length=1, max_length=128)
+    goalId: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class CorrectConversationSource(BaseModel):
@@ -173,6 +174,24 @@ def install_private_conversations(
         return jsonable_encoder(dict(result))
 
     def resolve(ctx, target):
+        if "fixedCycleQuestion" in target:
+            reader = getattr(app.state, "fixed_question_reader", None)
+            if reader is None:
+                raise ConversationError("CONVERSATION_SOURCE_UNAVAILABLE", 503)
+            ref = target["fixedCycleQuestion"]
+            presentation, _ = reader.read(ctx, ref["conversationId"], target=target)
+            i = presentation.identity
+            return {
+                "title": "固定工作必要问题",
+                "fixedQuestion": {
+                    "presentationId": presentation.presentationId,
+                    "questionDigest": i.questionDigest,
+                    "invocationId": i.invocationId,
+                    "questionKey": i.questionKey,
+                    "runId": i.runId,
+                    "preparationDigest": i.preparationDigest,
+                },
+            }
         if "fixedCycleFocus" in target:
             read_focus = getattr(app.state, "fixed_cycle_focus_reader", None)
             if read_focus is None:
@@ -452,6 +471,12 @@ def install_private_conversations(
         from .conversation_journey import install as install_journey
 
         install_journey(app, service, safe)
+        import os
+
+        if os.environ.get("CONVERSATION_GOAL_SLOTS_ENABLED") == "1":
+            from .conversation_goal_api import install as install_goals
+
+            install_goals(app, service, safe)
         if "READ_CAPABILITY_REVISION" in reads:
             from .capability_work_journal import install as install_capability_journal
 
@@ -462,17 +487,43 @@ def install_private_conversations(
         _, context = authenticate(request)
         history = getattr(app.state, "conversation_history_access_available", None)
         fixed = getattr(app.state, "fixed_work_activity_available", None)
+        from .conversation_goal_slots import enabled as goals_enabled
+        from .conversation_goal_slots import require_schema
+
+        goals_available = False
+        if service and goals_enabled():
+            try:
+                with service.connect() as c:
+                    require_schema(c)
+                goals_available = True
+            except ConversationError:
+                pass
+        from .conversation_goal_adoption import from_app
+
+        goal_adoption = from_app(app)
+        natural_available = bool(goal_adoption and goal_adoption.available())
         return {
             "result": {
                 "enabled": bool(service),
                 "schemaVersion": 1,
                 "historyReadPreparation": bool(history and history(context)),
                 "fixedWorkActivity": bool(fixed and fixed(context)),
+                "fixedQuestionDelegation": bool(
+                    getattr(
+                        app.state,
+                        "fixed_question_delegation_available",
+                        lambda _: False,
+                    )(context)
+                ),
                 "fixedWorkFollowup": bool(
                     fixed
                     and fixed(context)
                     and getattr(app.state, "fixed_cycle_focus_reader", None)
                 ),
+                "conversationGoalSlots": goals_available,
+                "conversationNaturalRouting": goals_available and natural_available,
+                "naturalIndependentAdoptionReady": goals_available
+                and natural_available,
             }
         }
 
@@ -571,7 +622,12 @@ def install_private_conversations(
     def append(request: Request, identity: str, body: MessageCommand):
         return safe(
             request,
-            lambda ctx: service.mutate(ctx, identity, body.model_dump(), "message"),
+            lambda ctx: service.mutate(
+                ctx,
+                identity,
+                body.model_dump(exclude={"goalId"} if body.goalId is None else set()),
+                "message",
+            ),
             True,
         )
 

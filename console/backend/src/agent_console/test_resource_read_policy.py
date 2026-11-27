@@ -121,6 +121,7 @@ class TestReadPolicy(BaseModel):
             "test-resource-read-policy.v2": PublishedTestReadPolicy,
             "test-resource-read-policy.v3": PublishedMcpTestReadPolicy,
             "test-resource-read-policy.v4": CuratedPublishedTestReadPolicy,
+            "test-resource-read-policy.v5": IsolatedDomainTestReadPolicy,
         }.get(kind, cls)
         return model.model_validate_json(raw)
 
@@ -131,13 +132,16 @@ class TestReadPolicy(BaseModel):
             value.pop("publishedOntologyIds")
         return canonical_digest(value)
 
+    def allows_subject(self, subject):
+        return subject.principal_id in self.subjects
+
     def authenticate(self, grants, subject):
         now = grants.clock()
         if not self.enabled:
             raise AuthorityError("TEST_READ_POLICY_DISABLED")
         if (
             subject.authentication_source != AuthenticationSource.BROWSER_SESSION
-            or subject.principal_id not in self.subjects
+            or not self.allows_subject(subject)
             or subject.scope.tenant_id != self.tenant
             or subject.scope.security_domain != self.securityDomain
             or now >= self.expiresAt
@@ -254,3 +258,67 @@ class CuratedPublishedTestReadPolicy(TestReadPolicy):
         ):
             raise ValueError("TEST_READ_SELECTOR_INVALID")
         return self
+
+
+class TestDomainResourceSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["team", "employee"]
+    mode: Literal["CREATOR_ONLY", "ISOLATED_TEST_DOMAIN_SHARE"]
+    purpose: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def no_invented_employee_creator(self):
+        if self.kind == "employee" and self.mode != "ISOLATED_TEST_DOMAIN_SHARE":
+            raise ValueError("TEST_READ_CREATOR_UNVERIFIABLE")
+        return self
+
+
+class EnrolledTestResource(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["team", "employee"]
+    logicalId: str = Field(
+        min_length=1, max_length=512, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    )
+
+
+class IsolatedDomainTestReadPolicy(CuratedPublishedTestReadPolicy):
+    """Explicit administrator opt-in; never implicit authority from CREATE."""
+
+    schemaVersion: Literal["test-resource-read-policy.v5"]
+    testDomainMode: Literal["ISOLATED_TEST_DOMAIN"]
+    shareWithCurrentLocalHumans: Literal[True]
+    registeredResources: tuple[TestDomainResourceSelection, ...] = Field(
+        min_length=1, max_length=2
+    )
+
+    enrolledResources: tuple[EnrolledTestResource, ...] = Field(
+        default=(), max_length=128
+    )
+
+    @model_validator(mode="after")
+    def bounded_test_domain(self):
+        if len({s.kind for s in self.registeredResources}) != len(
+            self.registeredResources
+        ):
+            raise ValueError("TEST_READ_SELECTOR_INVALID")
+        if len({(r.kind, r.logicalId) for r in self.enrolledResources}) != len(
+            self.enrolledResources
+        ):
+            raise ValueError("TEST_READ_ENROLLMENT_DUPLICATE")
+        sharing = {
+            r.kind
+            for r in self.registeredResources
+            if r.mode == "ISOLATED_TEST_DOMAIN_SHARE"
+        }
+        if any(r.kind not in sharing for r in self.enrolledResources) or any(
+            not any(e.kind == kind for e in self.enrolledResources) for kind in sharing
+        ):
+            raise ValueError("TEST_READ_EXPLICIT_ENROLLMENT_REQUIRED")
+        if self.grantTTLSeconds > 3600 or self.expiresAt > datetime(
+            2026, 12, 12, 23, 30, 12, 350586, tzinfo=UTC
+        ):
+            raise ValueError("TEST_READ_PROJECT_WINDOW_EXCEEDED")
+        return self
+
+    def allows_subject(self, subject):
+        return subject.principal_id.startswith("human:")

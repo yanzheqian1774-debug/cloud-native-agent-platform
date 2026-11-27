@@ -1,0 +1,3 @@
+import {defineConfig} from '@playwright/test';
+import base from './playwright.fixed-cycle-conversation.config';
+export default defineConfig({...base,testMatch:['fixed-question-delegation.spec.ts','fixed-cycle-conversation.spec.ts'],workers:1,retries:0,use:{...base.use,baseURL:'http://127.0.0.1:4196'},webServer:{...base.webServer,timeout:240000,command:'VITE_FIXED_WORK_SOURCE_ENABLED=true VITE_RESOURCE_AUTHORING_ENABLED=true VITE_RESOURCE_DIRECTORY_ENABLED=true VITE_SUPPLIER_QUALITY_DEMO_MODE=live VITE_PROBLEM_DRAFT_ASSISTANCE=enabled npm run build && npm run preview -- --host 127.0.0.1 --port 4196',url:'http://127.0.0.1:4196',reuseExistingServer:false}});

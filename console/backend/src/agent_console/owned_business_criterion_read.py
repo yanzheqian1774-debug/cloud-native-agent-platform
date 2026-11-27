@@ -58,11 +58,9 @@ class OwnedBusinessCriterionRead:
     def _read(self, c, ctx, conversation, invocation_id, key):
         row, _, now, _, value, _, _ = self.owner._source(c, ctx, invocation_id)
         scope = (ctx.scope.tenant_id, ctx.scope.security_domain)
-        journal = c.execute(
-            "SELECT version,state FROM private_conversation.journeys WHERE "
-            "tenant_id=%s AND security_domain=%s AND conversation_id=%s",
-            (*scope, conversation),
-        ).fetchone()
+        from .conversation_goal_selection import selected_journal
+
+        journal = selected_journal(c, ctx, conversation, invocation=value)
         state = journal["state"] if journal else {}
         draft, problem, source = (
             state.get("draft") or {},

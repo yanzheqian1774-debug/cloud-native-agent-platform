@@ -81,6 +81,20 @@ def validate_approved_preparation(connection, preparation):
         SalesOntologyExecutor.revision.executor_id: SALES_SYNTHETIC_ONLY,
     }.get(next(iter(executors)), SYNTHETIC_ONLY)
 
+    from .native_data_skill import EXECUTOR_IDS, SYNTHETIC_BOUNDARY, exact_executor
+    from .skill_invocation_domain import ExecutorRevision
+
+    if next(iter(executors)) in EXECUTOR_IDS:
+        for participant in p.participants:
+            exact_executor(
+                ExecutorRevision(
+                    participant.executor_id,
+                    participant.executor_revision,
+                    participant.executor_digest,
+                )
+            )
+        boundary = SYNTHETIC_BOUNDARY
+
     if (
         EXECUTION_ONLY not in plan.semantics.business_rules
         or boundary not in plan.semantics.boundaries

@@ -6,7 +6,7 @@ from agent_console.context_call_admission import bind_criterion
 from agent_console.workbench_business_problem import business_problem_operations
 
 
-def activate_created(e):
+def activate_created(e, *, criterion_payloads=None):
     """Use the actual BFF operation contracts, grants and owner; no direct inserts."""
     identity = e.created["revision"]["business_problem_id"]
 
@@ -41,32 +41,39 @@ def activate_created(e):
     def detail():
         return perform("READ_PROBLEM", {}, {"problem_id": identity})
 
-    criterion = perform(
-        "WRITE_CRITERION",
-        {
-            "problemId": identity,
-            "criterionType": "HUMAN_EVALUATED",
-            "measurement": {
-                "rubric": "回答已确认的用户目标："
-                + e.created["revision"]["description"]
-                + "。展示来源依据、异常与资料缺口；区分观察和推测。"
-                "仅作为测试资料分析，不代表真实业务问题已经解决。"
-            },
-            "requiredEvidenceKinds": [],
-            "evaluatorType": "HUMAN",
-            "evaluatorVersion": "v1",
-            "applicability": {
-                "sourceReference": e.business_result["inputSource"]["source"]
-            },
-            "idempotencyKey": "owned-criterion",
+    default_criterion = {
+        "problemId": identity,
+        "criterionType": "HUMAN_EVALUATED",
+        "measurement": {
+            "rubric": "回答已确认的用户目标："
+            + e.created["revision"]["description"]
+            + "。展示来源依据、异常与资料缺口；区分观察和推测。"
+            "仅作为测试资料分析，不代表真实业务问题已经解决。"
         },
-        {},
-    )
+        "requiredEvidenceKinds": [],
+        "evaluatorType": "HUMAN",
+        "evaluatorVersion": "v1",
+        "applicability": {
+            "sourceReference": e.business_result["inputSource"]["source"]
+        },
+        "idempotencyKey": "owned-criterion",
+    }
+    written = [
+        perform("WRITE_CRITERION", payload, {})
+        for payload in (
+            criterion_payloads
+            if criterion_payloads is not None
+            else [default_criterion]
+        )
+    ]
+    criterion = written[0]
     criteria = perform(
         "WRITE_CRITERIA_SET",
         {
             "problemRevisionId": e.created["revision"]["revision_id"],
-            "orderedCriterionRevisionIds": [criterion["revision"]["revision_id"]],
+            "orderedCriterionRevisionIds": [
+                item["revision"]["revision_id"] for item in written
+            ],
             "expectedVersion": detail()["problem"]["aggregate_version"],
             "idempotencyKey": "owned-criteria-set",
         },

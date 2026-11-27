@@ -411,6 +411,9 @@ class PostgresDraftAssistanceRepository(_Pool):
                     if current is None:
                         raise DraftAssistanceError("DRAFT_STORAGE_UNAVAILABLE")
                     return current, False
+                from .conversation_goal_selection import require_claim_binding
+
+                require_claim_binding(connection, candidate)
                 if candidate.parent_turn_id is not None:
                     from .understanding_adoption_postgres import (
                         lock_context,

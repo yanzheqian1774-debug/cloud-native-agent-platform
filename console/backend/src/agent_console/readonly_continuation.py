@@ -291,6 +291,9 @@ class ReadonlyContinuation:
                     approved_work = self.policy.work(
                         call.context, plan.semantics.target.problem, digest, now
                     )
+            from .readonly_native_policy import require_source as require_native_source
+
+            require_native_source(approved_work, source, revision["content"])
             work = resource_work.model_copy(
                 update={
                     "expiresAt": min(resource_work.expiresAt, approved_work.expiresAt)
@@ -346,6 +349,9 @@ class ReadonlyContinuation:
                 raise WorkbenchOwnerError("READONLY_RESOURCE_PREPARATION_REQUIRED", 409)
             ready = ready["record"]
             owned_resources.require_ready(work, ready)
+            from .readonly_native_policy import require_ready as require_native_ready
+
+            require_native_ready(approved_work, ready)
             if ready["planDigest"] != plan.digest:
                 raise WorkbenchOwnerError(
                     "READONLY_PREPARATION_PLAN_DIGEST_MISMATCH", 409
@@ -405,6 +411,11 @@ class ReadonlyContinuation:
                 c,
                 {
                     "case": approved_work.case,
+                    **(
+                        {"nativeAdapter": approved_work.adapter.model_dump(mode="json")}
+                        if approved_work.case == "native_readonly"
+                        else {}
+                    ),
                     "namespace": scope.namespace,
                     "securityDomain": scope.security_domain,
                     "resources": [
@@ -456,7 +467,19 @@ class ReadonlyContinuation:
             source_proposal = app.repository.proposal(
                 cur, scope, plan.source_proposal_id, plan.source_proposal_revision
             )
-            request = CostExecutionRevisionRequest(
+            from .native_readonly_protocol import NativeExecutionRevisionRequest
+
+            request_type = (
+                NativeExecutionRevisionRequest
+                if approved_work.case == "native_readonly"
+                else CostExecutionRevisionRequest
+            )
+            request = request_type(
+                **(
+                    {"adapter": approved_work.adapter}
+                    if approved_work.case == "native_readonly"
+                    else {}
+                ),
                 case=approved_work.case,
                 plan_version=version,
                 plan_digest=plan.digest,
@@ -526,6 +549,9 @@ class ReadonlyContinuation:
                 semantics=execution_plan.semantics,
             )
             owned_resources.require_preparation(work, p)
+            from .readonly_native_policy import require_prepared_members
+
+            require_prepared_members(approved_work, p)
             prepared = self.owner(
                 replace(
                     call,
@@ -574,6 +600,10 @@ class ReadonlyContinuation:
                 "humanResourceApprovalClicks": 0,
                 "executionStarted": True,
             }
+            from .readonly_native_policy import ServiceNativeReadonlyWork
+
+            if isinstance(approved_work, ServiceNativeReadonlyWork):
+                record["nativeServiceScopeDigest"] = approved_work.binding_digest
             if owned_resources.evidence(work):
                 record["ownedBusiness"] = owned_resources.evidence(work)
                 if work.ontologyCorrection is not None:

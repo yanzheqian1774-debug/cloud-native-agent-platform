@@ -8,14 +8,16 @@ from .development_administrator import for_call
 
 
 def read_execution_origin(call, digest, problem_id):
+    from .conversation_goal_selection import journal_relation
+
     row = call.connection.execute(
-        """
+        f"""
         SELECT l.conversation_id,
           coalesce(j.state->>'execution'=%s,false) AS verified
         FROM private_conversation.links l
         JOIN private_conversation.conversations c
           USING(tenant_id,security_domain,conversation_id)
-        LEFT JOIN private_conversation.journeys j
+        LEFT JOIN {journal_relation(call.connection)} j
           USING(tenant_id,security_domain,conversation_id)
         WHERE l.tenant_id=%s AND l.security_domain=%s
           AND c.schema_version=1 AND (c.owner_id=%s OR %s)
@@ -23,7 +25,7 @@ def read_execution_origin(call, digest, problem_id):
           AND (l.target->>'executionDigest'=%s OR (
             l.target->>'executionDigest' IS NULL
             AND j.state->>'execution'=%s
-            AND j.state#>>'{problem,business_problem_id}'=%s))
+            AND j.state#>>'{{problem,business_problem_id}}'=%s))
         ORDER BY verified DESC,l.created_at,l.conversation_id,l.link_id
         LIMIT 1
         """,

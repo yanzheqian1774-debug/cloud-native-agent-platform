@@ -15,7 +15,9 @@ class SnapshotConnection:
         self.rows = rows
         self.calls = []
 
-    def execute(self, sql, params):
+    def execute(self, sql, params=None):
+        if "to_regclass" in sql:
+            return SimpleNamespace(fetchone=lambda: {"t": None})
         self.calls.append((sql, params))
         return SimpleNamespace(fetchall=lambda: self.rows)
 

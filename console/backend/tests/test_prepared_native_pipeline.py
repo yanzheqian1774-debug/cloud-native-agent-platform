@@ -67,7 +67,7 @@ class FixtureKubernetes:
     "case", ["cost", "delivery", "delivery-v2", "sales", "sales-v2-candidate"]
 )
 def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
-    repository, tmp_path, case
+    repository, tmp_path, case, principal_id="fixture-requester"
 ):
     baseline = PostgresExecutionAuthorityRepository(
         repository.pool.conninfo,
@@ -127,7 +127,7 @@ def test_six_task_managed_skill_pipeline_restart_readback_and_no_redispatch(
                 )
     scope = ScopeIdentity(p.namespace, p.security_domain)
     principal = SimpleNamespace(
-        principal_id="fixture-requester",
+        principal_id=principal_id,
         tenant_id=p.namespace,
         security_domain=p.security_domain,
     )

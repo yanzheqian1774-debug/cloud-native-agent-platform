@@ -31,11 +31,11 @@ def correct(reader, records, ctx, conversation, body):
             "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s AND request_key=%s",
             (*scope, body["idempotencyKey"]),
         ).fetchone()
-        journal = c.execute(
-            "SELECT version,state FROM private_conversation.journeys WHERE "
-            "tenant_id=%s AND security_domain=%s AND conversation_id=%s FOR UPDATE",
-            scope,
-        ).fetchone()
+        from .conversation_goal_selection import invocation_journal
+
+        journal, original = invocation_journal(
+            c, ctx, conversation, body["draftInvocationId"], lock=True
+        )
         if message:
             if (
                 message["author_id"] != ctx.principal_id
@@ -150,11 +150,18 @@ def correct(reader, records, ctx, conversation, body):
                 "已核实尚未创建工作，并按你的确认更正资料；原记录保留。",
             ],
         }
-        c.execute(
-            "UPDATE private_conversation.journeys SET version=version+1,state=%s,updated_at=now() "
-            "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s AND version=%s",
-            (Jsonb(next_state), *scope, journal["version"]),
-        )
+        goal_id = (original.conversation_context or {}).get("goalId")
+        if goal_id is not None:
+            from .conversation_goal_slots import attach_message, save
+
+            attach_message(c, records, ctx, conversation, goal_id, identity)
+            save(c, records, ctx, conversation, goal_id, journal["version"], next_state)
+        else:
+            c.execute(
+                "UPDATE private_conversation.journeys SET version=version+1,state=%s,updated_at=now() "
+                "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s AND version=%s",
+                (Jsonb(next_state), *scope, journal["version"]),
+            )
         return {
             "version": journal["version"] + 1,
             "state": next_state,

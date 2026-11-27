@@ -8,6 +8,7 @@ from .draft_assistance import DraftAssistanceError
 from .private_conversation import digest
 
 _snapshot = ContextVar("server_current_conversation", default=None)
+_goal = ContextVar("server_conversation_goal", default=None)
 
 
 def current_snapshot():
@@ -27,6 +28,12 @@ def metadata_for_snapshot(value, *, include_source_branch=True):
             "target",
         )
     }
+    if value.get("input", {}).get("naturalGoalIntentVersion") == "v1":
+        metadata["naturalGoalIntentVersion"] = "v1"
+    if value.get("neutralBinding") is not None:
+        metadata["neutralBinding"] = value["neutralBinding"]
+    if value.get("goalId") is not None:
+        metadata["goalId"] = value["goalId"]
     if value.get("failedRetryOf") is not None:
         metadata["failedRetryOf"] = value["failedRetryOf"]
         metadata["failedRetryInputDigest"] = value["failedRetryInputDigest"]
@@ -40,7 +47,24 @@ def metadata_for_snapshot(value, *, include_source_branch=True):
 
 
 def current_metadata():
-    return metadata_for_snapshot(current_snapshot())
+    metadata = metadata_for_snapshot(current_snapshot())
+    goal = _goal.get()
+    if goal is not None:
+        if metadata is not None and any(
+            metadata.get(k, v) != v for k, v in goal.items()
+        ):
+            raise DraftAssistanceError("CONVERSATION_GOAL_BINDING_CHANGED")
+        metadata = {**(metadata or {}), **goal}
+    return metadata
+
+
+@contextmanager
+def bind_goal(value):
+    token = _goal.set(value)
+    try:
+        yield
+    finally:
+        _goal.reset(token)
 
 
 @contextmanager
@@ -52,7 +76,7 @@ def bind_snapshot(value):
         _snapshot.reset(token)
 
 
-def sealed_snapshot(conversation, message, target, current):
+def sealed_snapshot(conversation, message, target, current, *, goal_id=None):
     # Only the minimal authorized business input reaches the model. The mapping
     # to owner identifiers remains in non-content invocation metadata.
     fingerprint = digest(
@@ -60,6 +84,7 @@ def sealed_snapshot(conversation, message, target, current):
     )
     question_token = fingerprint if target is not None else None
     return {
+        **({"goalId": goal_id} if goal_id is not None else {}),
         "conversationId": conversation,
         "messageId": message,
         "contextDigest": fingerprint,
@@ -93,4 +118,11 @@ def validated_route(result, request_payload):
         or token != snapshot.get("currentQuestionToken")
     ):
         raise ValueError("CONVERSATION_ROUTING_QUESTION_MISMATCH")
-    return {"relation": result["relation"], "currentQuestionToken": token}
+    route = {"relation": result["relation"], "currentQuestionToken": token}
+    if snapshot.get("naturalGoalIntentVersion") == "v1":
+        if snapshot.get("kind") != "SERVER_CURRENT_CONVERSATION" or result.get(
+            "intent"
+        ) not in {"TASK", "ANSWER"}:
+            raise ValueError("CONVERSATION_GOAL_INTENT_INVALID")
+        route["intent"] = result["intent"]
+    return route

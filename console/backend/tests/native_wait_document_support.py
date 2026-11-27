@@ -48,6 +48,7 @@ def compose(
     typed_questions=False,
     decision_factory=None,
     worker_id="durable-controlled-host",
+    bound_service_execution=None,
 ):
     calls, sessions, runner_errors = [], [], []
     now = datetime.now(UTC)
@@ -55,6 +56,7 @@ def compose(
     runtime = NS(
         pool=native.pool,
         owned_business=e.business_owner,
+        bound_service_execution=bound_service_execution,
         config={
             "maximumDecisions": 8,
             "modelRuntimeDigest": "a" * 64,
@@ -83,11 +85,10 @@ def compose(
             adapter,
         )
         app.validate(p)
-        e.business_owner.work(
-            c,
-            context,
-            p.semantics.target.problem,
-        )
+        if bound_service_execution is not None:
+            bound_service_execution.read(c, context, command, p)
+        else:
+            e.business_owner.work(c, context, p.semantics.target.problem)
         return context, adapter
 
     runtime.authorize_current = lambda c, command: bool(authority(c, command))

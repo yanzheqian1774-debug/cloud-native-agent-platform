@@ -45,6 +45,7 @@ def compose(
     native_loop_path=None,
     durable_wait_path=None,
     authorization_bundle_check=None,
+    environment=None,
 ):
     if mode == "ontology-sales-v1":
         from .sales_ontology_executor import SalesOntologyExecutor
@@ -112,6 +113,21 @@ def compose(
                 NativeLoopSkillExecutor,
                 NativeValidatedLoopSkillExecutor,
             )
+        )
+        import json
+        from pathlib import Path
+
+        from .native_data_adapters import configured
+        from .native_data_skill import NativeDataSkillExecutor
+
+        executors += tuple(
+            NativeDataSkillExecutor(
+                adapter,
+                lambda identity, output, timeout: native_runtime[0].run(
+                    identity, output, timeout
+                ),
+            )
+            for adapter in configured(json.loads(Path(native_loop_path).read_text()))
         )
     if durable_wait_path:
         if not native_loop_path:
@@ -237,6 +253,7 @@ def compose(
                 generation,
                 authorize,
                 durable_wait_path=durable_wait_path,
+                **({"environment": environment} if environment is not None else {}),
                 skill_repository=composition.invocation_repository,
                 authorize_current=authorize_native
                 if authorization_bundle_check

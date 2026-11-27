@@ -104,12 +104,12 @@ def source_reader(
     def read(context, conversation, message_id, *, connection=None):
         def resolve(call):
             records.owned(call.connection, context, conversation)
-            row = call.connection.execute(
-                "SELECT state FROM private_conversation.journeys WHERE "
-                "tenant_id=%s AND security_domain=%s AND conversation_id=%s",
-                (*records.scope(context), conversation),
-            ).fetchone()
-            if not row or not row["state"].get("source"):
+            from .conversation_goal_selection import selected_journal
+
+            row = selected_journal(
+                call.connection, context, conversation, message_id=message_id
+            )
+            if not row or not (row["state"] or {}).get("source"):
                 return None
             state = row["state"]
             if adoption:
@@ -156,12 +156,12 @@ def source_reader(
                     raise ConversationError(
                         "CONVERSATION_REQUEST_MESSAGE_MISMATCH", 409
                     )
-                selected = c.execute(
-                    "SELECT state FROM private_conversation.journeys WHERE "
-                    "tenant_id=%s AND security_domain=%s AND conversation_id=%s",
-                    (*records.scope(context), conversation),
-                ).fetchone()
-                if not selected or not selected["state"].get("source"):
+                from .conversation_goal_selection import selected_journal
+
+                selected = selected_journal(
+                    c, context, conversation, message_id=message_id
+                )
+                if not selected or not (selected["state"] or {}).get("source"):
                     return None
             if connection is not None:
                 if owned_access is None:

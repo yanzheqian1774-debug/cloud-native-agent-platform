@@ -183,6 +183,21 @@ def install_draft_assistance_routes(
 
             value = service.repository.get(DraftScope.from_context(context), identity)
             if value and value.conversation_context:
+                metadata = value.conversation_context
+                if set(metadata) == {"conversationId", "messageId", "goalId"}:
+                    if not (
+                        value.profile_revision_id == service.profile.profile_revision_id
+                        and value.snapshot is not None
+                        and value.snapshot.profile_digest
+                        == service.profile.profile_digest
+                        and value.snapshot.adapter_revision
+                        == service.profile.adapter_revision
+                        and value.conversation_route is None
+                    ):
+                        raise DraftAssistanceError(
+                            "CONVERSATION_GOAL_SERVICE_UNAVAILABLE"
+                        )
+                    return service
                 matches = [
                     candidate
                     for candidate in (routing_service, *retained_routing_services)

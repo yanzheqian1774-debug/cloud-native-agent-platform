@@ -96,7 +96,7 @@ def _assemble(
     sales_v2_candidate=False,
 ):
     case = bundle.get("case", "cost")
-    if case not in ("delivery", "sales", "tabular", "document"):
+    if case not in ("delivery", "sales", "tabular", "document", "native_readonly"):
         raise ValueError("RESOURCE_CASE_UNSUPPORTED")
     scope = ScopeIdentity(bundle["namespace"], bundle["securityDomain"])
     if not re.fullmatch(r"[0-9a-f]{64}", plan_digest) or not actor:
@@ -200,6 +200,12 @@ def _assemble(
             if case == "sales"
             else "synthetic-delivery-source.v1"
         )
+        if case == "native_readonly":
+            from .native_data_adapters import resolve
+
+            adapter = resolve(bundle.get("nativeAdapter"))
+            adapter.validate(source)
+            expected_schema = adapter.source_schema
         if (
             source.get("schemaVersion") != expected_schema
             or source.get("synthetic") is not True

@@ -25,16 +25,18 @@ class FixedChatDelivery:
             and owned["archived_at"] is None
         )
         scope = permit.tenantId, permit.securityDomain
-        rows = []
-        for table in ("bindings", "handoffs"):
-            rows.append(
-                call.connection.execute(
-                    "SELECT * FROM fixed_work_sources."
-                    + table
-                    + " WHERE namespace=%s AND security_domain=%s AND work_id=%s AND revision_id=%s",
-                    (*scope, permit.work.resource_id, permit.work.revision_id),
-                ).fetchone()
+        from .fixed_work_sources_postgres import read
+
+        rows = [
+            read(
+                call.connection,
+                scope,
+                table,
+                permit.work.resource_id,
+                permit.work.revision_id,
             )
+            for table in ("bindings", "handoffs")
+        ]
         saved = read_work(
             call.connection, scope, permit.work.resource_id, permit.work.revision_id
         )
@@ -143,14 +145,13 @@ class FixedChatDelivery:
             owned["owner_id"] == call.context.principal_id
             and owned["archived_at"] is None
         )
-        found = call.connection.execute(
-            "SELECT 1 FROM fixed_work_sources.bindings WHERE namespace=%s AND security_domain=%s AND conversation_id=%s LIMIT 1",
-            (
-                call.context.scope.tenant_id,
-                call.context.scope.security_domain,
-                conversation,
-            ),
-        ).fetchone()
+        from .fixed_work_sources_postgres import conversation_binding
+
+        found = conversation_binding(
+            call.connection,
+            (call.context.scope.tenant_id, call.context.scope.security_domain),
+            conversation,
+        )
         if found is None:
             return dict(
                 conversationId=conversation,

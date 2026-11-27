@@ -142,7 +142,10 @@ def test_selected_source_keeps_list_without_claiming_source_stale(
         observed.extend(grants)
         raise failure
 
-    ctx = SimpleNamespace(principal_id="human:test")
+    ctx = SimpleNamespace(
+        principal_id="human:test",
+        scope=SimpleNamespace(tenant_id="t", security_domain="s"),
+    )
     records = input_records({"source": {"selected": True}})
     reader = source.source_reader(None, SimpleNamespace(execute=execute), records)
     with pytest.raises(ConversationError) as error:
@@ -164,11 +167,15 @@ def test_source_reader_distinguishes_storage_failure_from_exact_digest_stale(
     automation, call, selected, _, _ = setup(monkeypatch)
     selected["sourceContentDigest"] = "c" * 64
 
-    def execute_sql(*args):
+    def execute_sql(sql, *args):
         if storage_failure:
             raise OperationalError("private storage details must not escape")
         return SimpleNamespace(
-            fetchone=lambda: {"state": {"source": selected, "userMessageId": "message"}}
+            fetchone=lambda: (
+                {"t": None}
+                if "to_regclass" in sql
+                else {"state": {"source": selected, "userMessageId": "message"}}
+            )
         )
 
     call.connection = SimpleNamespace(execute=execute_sql)
@@ -192,10 +199,12 @@ def test_source_reader_distinguishes_storage_failure_from_exact_digest_stale(
 
 def input_records(state, *, message=True, archived=False):
     connection = SimpleNamespace(
-        execute=lambda sql, args: SimpleNamespace(
+        execute=lambda sql, args=(): SimpleNamespace(
             fetchone=lambda: (
                 ({"ok": 1} if message else None)
                 if "SELECT 1 FROM private_conversation.messages" in sql
+                else {"t": None}
+                if "to_regclass" in sql
                 else {"state": state}
             )
         )
@@ -214,7 +223,17 @@ def test_owned_no_source_never_enters_business_authorization():
     reader = source.source_reader(
         None, SimpleNamespace(execute=unexpected), input_records({})
     )
-    assert reader(SimpleNamespace(principal_id="human:test"), "c", "m") is None
+    assert (
+        reader(
+            SimpleNamespace(
+                principal_id="human:test",
+                scope=SimpleNamespace(tenant_id="t", security_domain="s"),
+            ),
+            "c",
+            "m",
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize("archived,message", [(True, True), (False, False)])
@@ -225,4 +244,11 @@ def test_no_source_requires_current_conversation_and_original_message(
         None, None, input_records({}, archived=archived, message=message)
     )
     with pytest.raises(ConversationError):
-        reader(SimpleNamespace(principal_id="human:test"), "c", "m")
+        reader(
+            SimpleNamespace(
+                principal_id="human:test",
+                scope=SimpleNamespace(tenant_id="t", security_domain="s"),
+            ),
+            "c",
+            "m",
+        )

@@ -65,7 +65,12 @@ def waiting(repository, tmp_path, monkeypatch, request):
             NativeWaitStore.migrate(c)
         journal = NativeLoopJournal(repository.pool, command.scope, invocation_id)
         root = invocation_id + ":loop"
-        action = {"action": "CLARIFY", "question": "Which authorized scope?"}
+        action = {
+            "action": "CLARIFY",
+            "question": "请确认本次检查范围。"
+            if getattr(request, "param", None) == "service"
+            else "Which authorized scope?",
+        }
         from agent_runtime.native_loop import Limits
 
         original_root = {
@@ -91,7 +96,9 @@ def waiting(repository, tmp_path, monkeypatch, request):
             command_id=str(command.command_id),
             skill_invocation_id=invocation_id,
             principal_id=command.principal_id,
-            conversation_id="controlled-original-conversation",
+            conversation_id=getattr(
+                request, "conversation_id", "controlled-original-conversation"
+            ),
         )
         question = {
             "kind": "NATIVE_QUESTION",
@@ -166,7 +173,16 @@ def waiting(repository, tmp_path, monkeypatch, request):
         )
     monkeypatch.setattr(SyntheticCostSkillExecutor, "invoke", controlled_executor)
     with pytest.raises(CheckpointSeeded):
-        pipeline(repository, tmp_path, "cost")
+        pipeline(
+            repository,
+            tmp_path,
+            "cost",
+            principal_id=(
+                "service:fixed-question-test"
+                if getattr(request, "param", None) == "service"
+                else "fixture-requester"
+            ),
+        )
     return result
 
 

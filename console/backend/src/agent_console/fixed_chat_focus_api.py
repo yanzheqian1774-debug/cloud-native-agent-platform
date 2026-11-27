@@ -74,10 +74,66 @@ def install(app, execute, policy, authorizer, automation, cursors):
             ),
         )
 
+    def read_in_transaction(c, context, conversation, target):
+        # Adoption already holds the original chat/context locks. Reuse its
+        # connection for current authorization and provenance, never a second
+        # connection that would wait on that same chat lock.
+        from .workbench_owner_authorization import (
+            AuthorizedOwnerAuthority,
+            AuthorizedOwnerCall,
+        )
+
+        with authorizer.controller.protected_request() as generation:
+            authorizer.authorization.require_current_context(
+                context,
+                (
+                    ExactGrant(
+                        "BUSINESS_PROBLEM", "LIST", "business-problem:collection"
+                    ),
+                ),
+                now=authorizer.clock(),
+                generation=generation.generation,
+                recovery_epoch=authorizer.controller.readiness.recovery_epoch,
+                connection=c,
+            )
+            authority = AuthorizedOwnerAuthority(
+                authorizer, context, c, generation.generation, ()
+            )
+            call = AuthorizedOwnerCall(
+                "READ_FIXED_CYCLE_FOCUS",
+                context,
+                c,
+                {},
+                {},
+                {},
+                (),
+                authority,
+                generation.generation,
+                authorizer.controller.readiness.recovery_epoch,
+            )
+            from .fixed_chat_focus import principal
+
+            authority.require(
+                principal(call),
+                "EXECUTION",
+                "READ",
+                "governed-execution:prepared:"
+                + target["fixedCycleFocus"]["identity"]["preparationDigest"],
+            )
+            return read_basis(
+                call,
+                FixedChatDelivery(
+                    policy, app.state.conversation_actions.records, automation, cursors
+                ),
+                conversation,
+                target,
+            )
+
     app.state.fixed_cycle_focus_reader = read
 
     actions = app.state.conversation_actions
     if actions is not None:
+        actions.fixed_focus_read_in_transaction = read_in_transaction
         actions.fixed_focus_for_message = lambda ctx, conversation, message: read(
             ctx, conversation, message_id=message
         )

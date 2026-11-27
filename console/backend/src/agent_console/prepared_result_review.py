@@ -262,6 +262,30 @@ class PreparedResultReview:
                 == item["digest"]
             ):
                 report = json.loads(row["content"])
+                if (
+                    isinstance(report, dict)
+                    and report.get("schemaVersion") == "native-data-output.v1"
+                ):
+                    from .native_data_evidence import verified_report
+                    from .skill_invocation_domain import ExecutorRevision
+
+                    participants = [
+                        t for t in p.participants if t.task_id == item["task_id"]
+                    ]
+                    report = (
+                        verified_report(
+                            report,
+                            ExecutorRevision(
+                                participants[0].executor_id,
+                                participants[0].executor_revision,
+                                participants[0].executor_digest,
+                            ),
+                            source,
+                            p.source_snapshot.model_dump(mode="json"),
+                        )
+                        if len(participants) == 1
+                        else None
+                    )
         return source, report
 
     def evaluate(self, p, command_key):
@@ -296,6 +320,11 @@ class PreparedResultReview:
         sales_binding = isinstance(
             getattr(p, "business_semantics", None), BusinessSemanticsBinding
         )
+        from .native_data_skill import EXECUTOR_IDS
+
+        native_delivery = delivery and any(
+            t.executor_id in EXECUTOR_IDS for t in p.participants
+        )
         evaluator = (
             "prepared-synthetic-sales-evidence.v2"
             if sales_v2
@@ -303,6 +332,8 @@ class PreparedResultReview:
             if sales_binding
             else "prepared-synthetic-sales-evidence.v1"
             if sales
+            else "prepared-native-synthetic-delivery-evidence.v1"
+            if native_delivery
             else "prepared-synthetic-delivery-evidence.v1"
             if delivery
             else EVALUATOR
