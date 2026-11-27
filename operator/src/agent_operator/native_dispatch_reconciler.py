@@ -845,6 +845,7 @@ def build_native_dispatch_from_environment(
             continuation_work = work
             if prepared_composition is not None:
                 for runtime in prepared_composition.closeables:
+                    runtime.bound_service_execution = service_bridge
                     if getattr(runtime, "durable_wait", None) is not None:
                         if owned_business is None and service_bridge is None:
                             raise NativeDispatchWorkerError(

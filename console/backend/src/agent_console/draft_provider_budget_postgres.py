@@ -184,6 +184,9 @@ class PostgresProviderCallBudget:
 
             require(connection, self)
             guard_budget(connection, self, invocation, quote)
+            from .service_local_budget import dispatch as service_dispatch
+
+            service_dispatch(connection, self, invocation, quote)
             from .provider_budget_extension import dispatch
 
             dispatch(connection, self, invocation)
@@ -202,6 +205,9 @@ class PostgresProviderCallBudget:
 
             require(connection, self)
             guard_budget(connection, self, invocation, quote)
+            from .service_local_budget import dispatch as service_dispatch
+
+            service_dispatch(connection, self, invocation, quote)
             from .provider_budget_extension import dispatch
 
             dispatch(connection, self, invocation)
@@ -245,6 +251,11 @@ class PostgresProviderCallBudget:
                 continuous_development = guard_budget(
                     connection, self, invocation, quote
                 )
+                from . import service_local_budget
+
+                local = service_local_budget.provenance(
+                    connection, self, invocation, quote
+                )
                 policy = connection.execute(
                     "SELECT call_cap,total_cost_cap_microusd "
                     "FROM draft_provider_budget.policies WHERE namespace=%s "
@@ -272,6 +283,9 @@ class PostgresProviderCallBudget:
                         "payload_digest": payload_digest,
                     }:
                         raise DraftAssistanceError("PROVIDER_BUDGET_OPERATION_CONFLICT")
+                    service_local_budget.check_existing(
+                        connection, self, reservation_id, local
+                    )
                     from .provider_profile_pricing import require_reservation
 
                     require_reservation(connection, self, reservation_id)
@@ -315,6 +329,7 @@ class PostgresProviderCallBudget:
                     or totals["cost"] + quote.worst_case_cost_microusd > cost_cap
                 ):
                     raise DraftAssistanceError("PROVIDER_BUDGET_EXHAUSTED")
+                service_local_budget.check_new(connection, self, local, quote)
                 connection.execute(
                     "INSERT INTO draft_provider_budget.reservations"
                     "(namespace,security_domain,ledger_id,reservation_id,"
@@ -340,6 +355,7 @@ class PostgresProviderCallBudget:
                 )
 
                 bind_extension(connection, self, reservation_id, extension)
+                service_local_budget.bind(connection, self, reservation_id, local)
                 return reservation_id
         except DraftAssistanceError:
             raise

@@ -56,6 +56,7 @@ class CycleConfiguration(BaseModel):
     readonlyPolicy: FilePin
     serviceCredential: FilePin
     budgetExtension: FilePin | None = None
+    serviceBudget: FilePin | None = None
     pollSeconds: int = Field(default=30, strict=True, ge=5, le=300)
     policyPlanApprovalEnabled: bool = Field(default=False, strict=True)
 
@@ -85,6 +86,8 @@ class CycleConfiguration(BaseModel):
             "serviceCredential",
         ):
             getattr(self, name).verify()
+        if self.serviceBudget is not None:
+            self.serviceBudget.verify()
         ambient = os.environ.get("PROVIDER_BUDGET_EXTENSION_POLICY")
         if ambient and (
             self.budgetExtension is None or Path(ambient) != self.budgetExtension.path

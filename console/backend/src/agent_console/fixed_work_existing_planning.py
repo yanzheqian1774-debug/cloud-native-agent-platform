@@ -22,7 +22,12 @@ from .plan_suggestion_runtime import (
 
 
 def build_existing_planning(
-    database_url, path, migrations, *, budget_extension_path=None
+    database_url,
+    path,
+    migrations,
+    *,
+    budget_extension_path=None,
+    service_budget_path=None,
 ):
     document = json.loads(path.read_text())
     require(
@@ -87,6 +92,10 @@ def build_existing_planning(
             if budget_extension_path is not None
             else None,
         )
+        if service_budget_path is not None:
+            from .service_local_budget import configure
+
+            configure(budget, service_budget_path)
         dependencies = PlanningInvocationDependencies(
             profile=PlanningProfile(
                 profile_revision_id=profile.profile_revision_id,

@@ -31,6 +31,12 @@ class CycleProcess:
         context = self.loop.current_context()
         policy = self.loop.host.runtime.registry._policy()
         service = self.loop.host.runtime.service
+        if self.configuration.serviceBudget is not None:
+            from .service_local_budget import Selection, check_schema
+
+            Selection(self.configuration.serviceBudget.path).verify().match(policy)
+            with service.budget.owner._connection() as connection:
+                check_schema(connection, service.budget.owner)
         from datetime import UTC, datetime
 
         from .model_binding_resolution import (
@@ -342,6 +348,11 @@ def build_cycle_process(configuration):
                 db,
                 configuration.planningRuntime.path,
                 migrations,
+                **(
+                    {"service_budget_path": configuration.serviceBudget.path}
+                    if configuration.serviceBudget is not None
+                    else {}
+                ),
                 **(
                     {"budget_extension_path": configuration.budgetExtension.path}
                     if configuration.budgetExtension is not None

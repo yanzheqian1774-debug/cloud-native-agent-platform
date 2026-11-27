@@ -295,3 +295,44 @@ def test_owned_business_policy_wrong_digest_or_missing_file_rejected(
     policy.unlink()
     with pytest.raises((ValueError, OSError)):
         startup.StartupObservation(path, assembly)
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_exact_service_local_budget_is_pinned_before_child_claim(
+    setup, monkeypatch, missing
+):
+    from agent_console import bound_service_execution, service_local_budget
+
+    path, cfg, assembly = setup
+    root = path.parent
+    manifest_path = Path(cfg["manifestPath"])
+    manifest = json.loads(manifest_path.read_text())
+    for module in (bound_service_execution, service_local_budget):
+        target = root / (module.__name__.rsplit(".", 1)[1] + ".py")
+        target.write_text("controlled installed source")
+        monkeypatch.setattr(module, "__file__", str(target))
+        manifest["sourceHashes"][target.name] = hashlib.sha256(
+            target.read_bytes()
+        ).hexdigest()
+    cfg["manifestDigest"] = save(manifest_path, manifest)
+    for key in (
+        "NATIVE_BOUND_SERVICE_EXECUTION_POLICY",
+        "NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY",
+    ):
+        target = root / (key + ".json")
+        digest = save(target, {"controlled": True})
+        monkeypatch.setenv(key, str(target))
+        cfg["policyFiles"][key] = digest
+    local_key = "NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY"
+    if missing:
+        del cfg["policyFiles"][local_key]
+    save(path, cfg)
+    if missing:
+        with pytest.raises(ValueError):
+            startup.StartupObservation(path, assembly)
+        assert not Path(cfg["recordPath"]).exists()
+    else:
+        observed = startup.StartupObservation(path, assembly)
+        save(Path(startup.os.environ[local_key]), {"changed": True})
+        with pytest.raises(ValueError):
+            observed.current()

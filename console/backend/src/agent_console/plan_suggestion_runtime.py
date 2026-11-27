@@ -433,6 +433,8 @@ class PlanningBudget:
             invocation_id=identity.invocation_id,
             profile_revision_id=identity.profile_revision_id,
         )
+        if getattr(identity, "service_budget_call", None) is not None:
+            normalized.service_budget_call = identity.service_budget_call
         return self.owner.reserve(key, normalized, quote)
 
     def dispatch_guard(self, identity, quote, *, connection=None):
@@ -441,6 +443,8 @@ class PlanningBudget:
             invocation_id=identity.invocation_id,
             profile_revision_id=identity.profile_revision_id,
         )
+        if getattr(identity, "service_budget_call", None) is not None:
+            normalized.service_budget_call = identity.service_budget_call
         from contextlib import nullcontext
 
         guard = getattr(self.owner, "dispatch_guard", None)
@@ -578,6 +582,9 @@ def build_planning_runtime(
             configure_from_environment(budget)
         else:
             configure_from_environment(budget, environment)
+        from .service_local_budget import configure_from_environment as service_budget
+
+        service_budget(budget, environment)
         credentials = planning_credentials(configuration, profile)
         dependencies = PlanningInvocationDependencies(
             profile=PlanningProfile(

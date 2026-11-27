@@ -499,6 +499,15 @@ class NativeLoopRuntime:
                     invocation_id=key,
                     profile_revision_id=profile.profile_revision_id,
                 )
+                if manager.service_credential_id is not None:
+                    from .service_local_budget import NativeBudgetCall
+
+                    identity.service_budget_call = NativeBudgetCall(
+                        command, invocation_id
+                    )
+                    manager.model.budget.service_budget_native_bridge = (
+                        manager.bound_service_execution
+                    )
                 config = dependency.provider.configuration
                 if remaining_seconds < config.total_timeout_seconds + 2:
                     raise ValueError("NATIVE_LOOP_DECISION_DEADLINE")

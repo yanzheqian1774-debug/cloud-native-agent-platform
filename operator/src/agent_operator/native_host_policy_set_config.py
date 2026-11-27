@@ -23,6 +23,7 @@ ENVIRONMENT_KEYS = frozenset(
         "NATIVE_DISPATCH_PREPARED_SKILL",
         "NATIVE_DISPATCH_CONTINUATION_POLICY",
         "NATIVE_BOUND_SERVICE_EXECUTION_POLICY",
+        "NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY",
         "OWNED_BUSINESS_ADMISSION_POLICY",
         "OWNED_BUSINESS_RETAINED_HISTORY_POLICIES",
         "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
@@ -53,6 +54,7 @@ DI_SOURCES = (
     "console/backend/src/agent_console/owned_business_work_reader.py",
     "console/backend/src/agent_console/owned_business_retained_history.py",
     "console/backend/src/agent_console/ontology_action_correction.py",
+    "console/backend/src/agent_console/service_local_budget.py",
 )
 
 

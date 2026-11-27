@@ -167,13 +167,27 @@ class PreparedResourceOwner:
             (scope, kind, identity) if kind in {"skill", "mcp"} else (scope, identity)
         )
         if call.operation == "READ_PREPARED_RESOURCE":
+            if kind == "skill":
+                call.authority.require(
+                    principal,
+                    "SKILL",
+                    "READ_RESOURCE",
+                    reference(kind, identity, revision),
+                )
             record = service.repository.get(*repo_args)
             exact = next(
                 (r for r in record["revisions"] if r["revisionId"] == revision), None
             )
             if exact is None:
                 raise WorkbenchOwnerError("PREPARED_RESOURCE_NOT_FOUND", 404)
+            from .resource_version_basis import version_basis
+
             return {
+                **(
+                    {"versionBasis": version_basis(record, exact)}
+                    if kind == "skill"
+                    else {}
+                ),
                 "kind": kind,
                 "identity": identity,
                 "name": record["name"],

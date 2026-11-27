@@ -67,6 +67,7 @@ def prepare(manifest_path, state_directory, output, *, enabled=False, max_hosts=
                 "NATIVE_DURABLE_WAIT_CONFIGURATION",
                 "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
                 "PROVIDER_BUDGET_EXTENSION_POLICY",
+                "NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY",
             )
             if os.environ.get(name)
         ),

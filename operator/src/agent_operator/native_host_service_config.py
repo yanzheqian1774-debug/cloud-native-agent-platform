@@ -92,6 +92,10 @@ class Configuration:
             ):
                 raise ValueError("HOST_SERVICE_MANIFEST_INVALID")
             self.files[str(p)] = expected_digest
+        if environment.get(
+            "NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY"
+        ) and not environment.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY"):
+            raise ValueError("HOST_SERVICE_LOCAL_BUDGET_SERVICE_REQUIRED")
         if environment.get("NATIVE_BOUND_SERVICE_EXECUTION_POLICY") and environment.get(
             "OWNED_BUSINESS_ADMISSION_POLICY"
         ):
@@ -110,6 +114,7 @@ class Configuration:
             "NATIVE_DURABLE_WAIT_CONFIGURATION",
             "OWNED_BUSINESS_ONTOLOGY_CORRECTION_POLICY",
             "PROVIDER_BUDGET_EXTENSION_POLICY",
+            "NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY",
         }
         if (
             not isinstance(value["policyFiles"], dict)
@@ -147,6 +152,12 @@ class Configuration:
             policy = BoundServicePlanningPolicy.model_validate_json(
                 owned_file(self.environment["NATIVE_BOUND_SERVICE_EXECUTION_POLICY"])
             )
+            if environment.get("NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY"):
+                from agent_console.service_local_budget import Selection
+
+                Selection(
+                    environment["NATIVE_BOUND_SERVICE_LOCAL_BUDGET_POLICY"]
+                ).verify().match(policy)
             if not policy.enabled or (
                 value["namespace"],
                 value["securityDomain"],
