@@ -173,9 +173,21 @@ def _assemble(
         }
         if expected != actual:
             raise ValueError("EXACT_EMPLOYEE_MEMBER_MAPPING_REQUIRED")
-        assembly.employee_definitions.validate_members(c, revision)
-        skills = [(ref, published(c, scope, "SKILL", ref)) for ref in groups["skill"]]
-        source_content = published(c, scope, "KNOWLEDGE", refs["knowledge"])
+        assembly.employee_definitions.validate_members(
+            c, revision, published_binding=True
+        )
+        employee_ref = ExactReference(
+            resource_id=revision.definition_id,
+            revision_id=revision.revision_id,
+            digest=revision.digest.removeprefix("sha256:"),
+        )
+        skills = [
+            (ref, published(c, scope, "SKILL", ref, employee=employee_ref))
+            for ref in groups["skill"]
+        ]
+        source_content = published(
+            c, scope, "KNOWLEDGE", refs["knowledge"], employee=employee_ref
+        )
         from .plan_suggestion_domain import FlexiblePlanSemantics
         from .planning_source_change import approved_source
 
@@ -211,7 +223,7 @@ def _assemble(
             or source.get("synthetic") is not True
         ):
             raise ValueError("READONLY_ASSEMBLY_SOURCE_FAMILY_MISMATCH")
-        profile = published(c, scope, "RUNTIME", refs["runtime"])
+        profile = published(c, scope, "RUNTIME", refs["runtime"], employee=employee_ref)
         if profile["provider"] != "NATIVE_KUBERNETES":
             raise ValueError("NATIVE_PROFILE_REQUIRED")
     bindings = bind_steps(

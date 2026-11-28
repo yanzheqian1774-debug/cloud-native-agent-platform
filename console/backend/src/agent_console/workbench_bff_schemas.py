@@ -160,7 +160,9 @@ class WorkbenchEmployeeMember(StrictWorkbenchModel):
 
 
 class WorkbenchEmployeeCreateMember(StrictWorkbenchModel):
-    kind: Literal["AGENT", "WORKFLOW", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME_PROFILE"]
+    kind: Literal[
+        "AGENT", "WORKFLOW", "SKILL", "MCP", "KNOWLEDGE", "RUNTIME_PROFILE", "TOOL"
+    ]
     resourceId: str = Field(min_length=1, max_length=200)
     revisionId: str = Field(min_length=1, max_length=200)
     digest: str = Field(pattern=r"^(?:sha256:)?[a-f0-9]{64}$")

@@ -22,7 +22,17 @@ RUNTIME_SCHEMA_VERSION = "authority-foundation-runtime.v1"
 
 OWNER_ACTIONS: dict[str, frozenset[str]] = {
     "TOOL": frozenset(
-        {"IMPORT", "LIST", "READ", "REVISE", "READ_SCOPE", "MAINTAIN_SCOPE"}
+        {
+            "IMPORT",
+            "LIST",
+            "READ",
+            "REVISE",
+            "READ_SCOPE",
+            "MAINTAIN_SCOPE",
+            "VALIDATE",
+            "PUBLISH",
+            "TEST",
+        }
     ),
     "BUSINESS_PROCESS": frozenset(
         {"CREATE", "LIST", "READ", "REVISE", "READ_SCOPE", "MAINTAIN_SCOPE", "PUBLISH"}

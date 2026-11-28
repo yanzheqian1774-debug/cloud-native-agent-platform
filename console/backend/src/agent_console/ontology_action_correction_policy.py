@@ -116,11 +116,15 @@ def verify_compatibility(c, scope, policy, binding):
         "OPERATIONS_CHANGED",
     )
     verify_actions(new, binding.scope)
-    # New skill must be actual published v7, not a name declared only by policy.
+    # The verified owned scope freezes this exact Skill; later publication must
+    # not upgrade it. Current READ/USE remain enforced by the existing owner.
+    # It must be actual published v7, not a name declared only by policy.
     from .native_typed_document_skill import NativeTypedQuestionDocumentSkillExecutor
     from .planning_candidates import read_published
 
-    content, _ = read_published(c, scope, "SKILL", binding.scope.skills[0])
+    content, _ = read_published(
+        c, scope, "SKILL", binding.scope.skills[0], _published_binding=True
+    )
     expected = NativeTypedQuestionDocumentSkillExecutor.revision
     # Canonical published skill contract is validated by the normal preparation owner.
     operations = [

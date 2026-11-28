@@ -438,7 +438,11 @@ class OwnedBusinessWorkReader:
             history=history,
         )
         content, _ = read_published(
-            c, ScopeIdentity(p.tenantId, p.securityDomain), "KNOWLEDGE", selected.source
+            c,
+            ScopeIdentity(p.tenantId, p.securityDomain),
+            "KNOWLEDGE",
+            selected.source,
+            _published_binding=True,
         )
         self.policy.validate_source(r["inputSource"], content)
         actual = c.execute(

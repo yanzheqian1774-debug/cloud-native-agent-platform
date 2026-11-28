@@ -207,6 +207,22 @@ class PostgresToolDefinitionRepository:
         }
 
     @classmethod
+    def was_published(cls, conn, scope, tool_id, revision_id, digest):
+        # An immutable publication receipt fixes an old tuple independently of
+        # the moving current-published pointer. Never treat an old draft as public.
+        return (
+            conn.execute(
+                "SELECT 1 FROM tool_definition.receipts WHERE namespace=%s AND "
+                "security_domain=%s AND result->>'commandKind'='PUBLISH' AND "
+                "EXISTS(SELECT 1 FROM jsonb_array_elements(result->'items') i "
+                "WHERE i->>'toolId'=%s AND i->>'revisionId'=%s "
+                "AND i->>'digest'=%s) LIMIT 1",
+                (*cls._scope(scope), tool_id, revision_id, digest),
+            ).fetchone()
+            is not None
+        )
+
+    @classmethod
     def source(cls, conn, scope, source_digest):
         row = conn.execute(
             "SELECT source_kind,payload FROM tool_definition.sources WHERE "

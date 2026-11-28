@@ -154,6 +154,16 @@ def test_all_supporting_samples_publish_before_employee_construction() -> None:
         (primary_agent, *members),
     )
 
-    assert {member.kind for member in revision.members} == set(SERVER.MemberKind)
+    # This frozen impl-310 fixture publishes its original six owner families.
+    # Later member kinds have their own source/publication prerequisites and
+    # must not silently expand this historical browser-server fixture.
+    assert {member.kind for member in revision.members} == {
+        SERVER.MemberKind.AGENT,
+        SERVER.MemberKind.SKILL,
+        SERVER.MemberKind.MCP,
+        SERVER.MemberKind.KNOWLEDGE,
+        SERVER.MemberKind.RUNTIME_PROFILE,
+        SERVER.MemberKind.WORKFLOW,
+    }
     assert all(member.revision_id for member in members)
     assert all(member.digest for member in members)

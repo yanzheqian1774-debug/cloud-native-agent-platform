@@ -224,12 +224,35 @@ class PostgresSkillInvocationRepository:
             ),
             None,
         )
-        if (
-            revision is None
-            or record.get("publishedRevisionId") != request.skill_revision_id
-            or revision.get("state") != "PUBLISHED"
-            or revision.get("digest") != request.skill_digest
-            or not record.get("enabled")
+        from .plan_suggestion_domain import ExactReference, PlanningError
+        from .resource_publication import eligible
+
+        skill_ref = ExactReference(
+            resource_id=request.skill_id,
+            revision_id=request.skill_revision_id,
+            digest=request.skill_digest,
+        )
+        frozen = record.get("publishedRevisionId") != request.skill_revision_id
+        if frozen:
+            from .digital_employee_definition import EmployeeDefinitionError
+            from .planning_candidates import read_employee_member
+
+            try:
+                read_employee_member(
+                    connection,
+                    request.scope,
+                    ExactReference(
+                        resource_id=request.digital_employee_definition_id,
+                        revision_id=request.digital_employee_definition_revision_id,
+                        digest=request.digital_employee_definition_digest,
+                    ),
+                    "SKILL",
+                    skill_ref,
+                )
+            except (PlanningError, EmployeeDefinitionError) as exc:
+                raise SkillInvocationError("SKILL_REVISION_NOT_ELIGIBLE") from exc
+        if not record.get("enabled") or not eligible(
+            record, revision, skill_ref, frozen=frozen
         ):
             raise SkillInvocationError("SKILL_REVISION_NOT_ELIGIBLE")
         operation = next(

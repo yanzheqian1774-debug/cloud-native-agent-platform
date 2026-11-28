@@ -117,7 +117,7 @@ def test_current_conversation_admission_does_not_create_resource_read(
     )
     monkeypatch.setattr(
         conversation_sources,
-        "read_published",
+        "read_owned_published",
         lambda *a: pytest.fail("unreadable content loaded"),
     )
     assert reader.catalogue(e.reviewer, "new-own") == {

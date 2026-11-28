@@ -67,7 +67,7 @@ def resolve(semantics, members, contents):
 
 def read_and_resolve(call, semantics, employee):
     from .execution_domain import ScopeIdentity
-    from .planning_candidates import read_published, require_read
+    from .planning_candidates import read_employee_member, read_published, require_read
     from .workbench_business_problem import OwnerPrincipal
 
     scope = ScopeIdentity(
@@ -87,7 +87,7 @@ def read_and_resolve(call, semantics, employee):
             digest=member["digest"].removeprefix("sha256:"),
         )
         require_read(call.authority, p, kind, ref)
-        content, _ = read_published(call.connection, scope, kind, ref)
+        content, _ = read_employee_member(call.connection, scope, employee, kind, ref)
         if kind == "SKILL":
             contents["_skills"].append((ref, content))
     try:

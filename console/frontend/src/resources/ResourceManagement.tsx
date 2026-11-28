@@ -13,7 +13,7 @@ import {useSearchParams} from 'react-router-dom';
 import {ResourceBatchImport} from './ResourceBatchImport';
 type Kind='skill'|'mcp';
 import {decodeManagementIntent,verifyManagementReceipt,verifyManagedResource,type ManagementCommandIntent,type ManagementReceipt} from './managementCommandState';
-export type ManagedResourceDirectory={subject:string;scope:{tenantId:string;securityDomain:string};items:SkillMcpResource[]};
+export type ManagedResourceDirectory={accessCandidates?:import('./ownedSkillAccess').OwnedSkillAccess[];subject:string;scope:{tenantId:string;securityDomain:string};items:SkillMcpResource[]};
 const stateNames:Record<string,string>={DRAFT:'草稿',VALIDATED:'验证通过',POLICY_REVIEWED:'策略核验通过',PUBLISHED:'已发布',DEPRECATED:'已弃用'};
 function completedOperation(action:string){
  const messages:Record<string,string>={

@@ -20,6 +20,7 @@ class EmployeeDefinitionError(ValueError):
 class MemberKind(StrEnum):
     AGENT = "AGENT"
     WORKFLOW = "WORKFLOW"
+    TOOL = "TOOL"
     SKILL = "SKILL"
     MCP = "MCP"
     KNOWLEDGE = "KNOWLEDGE"
@@ -128,7 +129,12 @@ class EmployeeRevision:
                 or self.responsibilities.count(binding.responsibility) != 1
                 or binding.member not in self.members
                 or binding.member.kind
-                not in (MemberKind.SKILL, MemberKind.MCP, MemberKind.KNOWLEDGE)
+                not in (
+                    MemberKind.SKILL,
+                    MemberKind.MCP,
+                    MemberKind.KNOWLEDGE,
+                    MemberKind.TOOL,
+                )
             ):
                 raise EmployeeDefinitionError("INVALID_RESPONSIBILITY_BINDING")
             key = (binding.responsibility, binding.member)

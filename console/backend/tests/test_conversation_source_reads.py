@@ -4,6 +4,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from agent_console import conversation_sources as module
+from agent_console import planning_candidates
 from agent_console.authority_contracts import AuthorityError
 from agent_console.plan_suggestion_domain import ExactReference
 from test_native_document_tools import SOURCE
@@ -44,6 +45,13 @@ def readable_source(monkeypatch):
         return [{"identity": "knowledge:docs", "revision": "1", "digest": "a" * 64}]
 
     def read(connection, scope, kind, ref):
+        assert connection is call.connection
+        assert (scope.namespace, scope.security_domain, kind) == (
+            "tenant",
+            "domain",
+            "KNOWLEDGE",
+        )
+        assert ref.resource_id == "knowledge:docs"
         loaded.append(ref)
         return content, "Readable document"
 
@@ -61,7 +69,7 @@ def readable_source(monkeypatch):
         services=None,
     )
     monkeypatch.setattr(module, "identities", identities)
-    monkeypatch.setattr(module, "read_published", read)
+    monkeypatch.setattr(planning_candidates, "read_published", read)
     return NS(
         automation=automation,
         call=call,
@@ -69,6 +77,7 @@ def readable_source(monkeypatch):
         loaded=loaded,
         calls=calls,
         content=content,
+        read=read,
     )
 
 
@@ -117,9 +126,7 @@ def test_understanding_reads_same_document_payload_and_current_exact_permission(
     from test_native_document_tools import SOURCE
 
     f = readable_source
-    monkeypatch.setattr(
-        conversation_source_input, "read_published", module.read_published
-    )
+    monkeypatch.setattr(conversation_source_input, "read_published", f.read)
     selected = {
         "source": {
             "resource_id": "knowledge:docs",

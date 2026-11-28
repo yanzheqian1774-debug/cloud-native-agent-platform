@@ -58,6 +58,7 @@ export function EmployeeProfileLoader({ item, section }: { item: EmployeeDefinit
 }
 
 const kindLabel: Record<EmployeeMember["kind"], string> = {
+  TOOL: "工具",
   AGENT: "Agent 定义",
   WORKFLOW: "工作流定义",
   SKILL: "技能",

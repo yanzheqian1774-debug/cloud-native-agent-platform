@@ -1,3 +1,5 @@
+import {getWorkbenchSession,workbenchPrincipalKey} from '../api/digitalEmployees';
+import {readToolDraft} from '../api/toolDefinitions';
 import {useEffect,useState,type ReactNode} from 'react';
 import {Link} from 'react-router-dom';
 import type {EmployeeDefinition,EmployeeMember} from '../api/digitalEmployees';
@@ -6,27 +8,27 @@ import {employeeMemberHref,exactSkillMcpHref} from '../resources/resourceJourney
 import {exactDefinitionHref} from '../resources/definitionJourney';
 import './EmployeeResourceComposition.css';
 
-const kinds:Record<EmployeeMember['kind'],{name:string;directory:DirectoryKind}>={
- SKILL:{name:'技能',directory:'skill'},MCP:{name:'MCP',directory:'mcp'},KNOWLEDGE:{name:'知识',directory:'knowledge'},
+const kinds:Record<EmployeeMember['kind'],{name:string;directory:DirectoryKind|null}>={
+ TOOL:{name:'工具',directory:null},SKILL:{name:'技能',directory:'skill'},MCP:{name:'MCP',directory:'mcp'},KNOWLEDGE:{name:'知识',directory:'knowledge'},
  AGENT:{name:'职责定义',directory:'agent'},WORKFLOW:{name:'工作流',directory:'workflow'},RUNTIME_PROFILE:{name:'运行配置',directory:'runtime'},
 };
 const memberKey=(m:EmployeeMember)=>JSON.stringify([m.kind,m.resourceId,m.revisionId,m.digest]);
 export function EmployeeBoundResourceCard({member,item}:{member:EmployeeMember;item:EmployeeDefinition}){
  const [attempt,setAttempt]=useState(0);
  const key=memberKey(member)+":"+attempt,kind=kinds[member.kind];
- const [result,setResult]=useState<{key:string;value:DirectoryItem|null}|null>(null);
+ const [result,setResult]=useState<{key:string;value:Pick<DirectoryItem,'name'|'businessPurpose'>|null}|null>(null);
  useEffect(()=>{
   let active=true;const controller=new AbortController();
   const withdraw=()=>{active=false;controller.abort();setResult({key,value:null})};
-  void listReadableResources(kind.directory,member.resourceId,'',null,AbortSignal.any([controller.signal,AbortSignal.timeout(8000)])).then(page=>{
-   const matches=page.items.filter(value=>value.kind===kind.directory&&value.identity===member.resourceId&&value.revisionId===member.revisionId&&value.digest===member.digest.replace(/^sha256:/,''));
+  void (kind.directory===null?getWorkbenchSession(controller.signal).then(async session=>{const tool=await readToolDraft(member.resourceId,member.revisionId,workbenchPrincipalKey(session),controller.signal);return {items:[{kind:'tool',identity:tool.toolId,revisionId:tool.revisionId,digest:tool.digest,name:tool.record.name,businessPurpose:tool.record.purpose}]};}):listReadableResources(kind.directory,member.resourceId,'',null,AbortSignal.any([controller.signal,AbortSignal.timeout(8000)]))).then(page=>{
+   const matches=page.items.filter(value=>value.kind===(kind.directory??'tool')&&value.identity===member.resourceId&&value.revisionId===member.revisionId&&value.digest===member.digest.replace(/^sha256:/,''));
    if(active)setResult({key,value:matches.length===1?matches[0]:null});
   }).catch(()=>{if(active)setResult({key,value:null})});
   window.addEventListener('workbench-session-expired',withdraw);
   return()=>{active=false;controller.abort();window.removeEventListener('workbench-session-expired',withdraw)};
  },[key,kind.directory,member.resourceId,member.revisionId,member.digest]);
  const loaded=result?.key===key,resultValue=loaded?result.value:null;
- const href=member.kind==='SKILL'||member.kind==='MCP'?exactSkillMcpHref(member.kind==='SKILL'?'skill':'mcp',member.resourceId,member.revisionId,member.digest)
+ const href=member.kind==='TOOL'?'/tools/draft?'+new URLSearchParams({id:member.resourceId,revision:member.revisionId}):member.kind==='SKILL'||member.kind==='MCP'?exactSkillMcpHref(member.kind==='SKILL'?'skill':'mcp',member.resourceId,member.revisionId,member.digest)
   :member.kind==='AGENT'||member.kind==='KNOWLEDGE'?exactDefinitionHref(member.kind==='AGENT'?'agent':'knowledge',member.resourceId,member.revisionId,member.digest.replace(/^sha256:/,'')):null;
  return <article className="employee-resource-card" aria-label={kind.name+'绑定资源'}>
   <div><strong>{resultValue?.name||(loaded?'已绑定'+kind.name+' · 名称暂未核对':'正在核对'+kind.name+'名称…')}</strong><p>{resultValue?.businessPurpose||'保留员工定义中的固定版本引用。'}</p>
@@ -37,7 +39,7 @@ export function EmployeeBoundResourceCard({member,item}:{member:EmployeeMember;i
 }
 
 export function EmployeeResourceComposition({item,view="composition",summaryControls,versionLabel,compact=false}:{item:EmployeeDefinition;summaryControls?:ReactNode;versionLabel?:string;compact?:boolean;view?:"composition"|"duties"|"summary"}){
- const business=item.members.filter(member=>["SKILL","MCP","KNOWLEDGE"].includes(member.kind)),internalCount=item.members.length-business.length;
+ const business=item.members.filter(member=>["SKILL","MCP","KNOWLEDGE","TOOL"].includes(member.kind)),internalCount=item.members.length-business.length;
  const entries=Object.entries(kinds) as [EmployeeMember['kind'],typeof kinds[EmployeeMember['kind']]][];
  return <section className="employee-resource-composition" aria-label="员工资源组成">
   {compact?<div className="employee-saved-resource-count">{business.length} 项业务资源{internalCount>0&&<> · <details><summary>{internalCount} 项内部依赖</summary><p>固定引用保持不变，可在专业管理中核对。</p></details></>}</div>:<section className="employee-composition-summary"><div><h3>{versionLabel??(item.publicationState==='PUBLISHED'?'所选已发布记录':'所选未发布修订')}</h3><p>{business.length} 项业务资源 · 已有任务保持原快照</p>{summaryControls}{internalCount>0&&<details className="employee-internal-reference"><summary>{internalCount} 项内部依赖</summary><p>可在专业管理中核对，不计入业务资源数量。</p></details>}</div><div className="employee-composition-counts">{entries.filter(([kind])=>business.some(member=>member.kind===kind)).map(([kind,label])=><span key={kind}>{label.name} <strong>{business.filter(member=>member.kind===kind).length}</strong></span>)}</div></section>}

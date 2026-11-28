@@ -88,11 +88,11 @@ class ToolDefinitionTargets:
             return False
         if grant.action in {"IMPORT", "LIST", "READ_SCOPE", "MAINTAIN_SCOPE"}:
             return grant.exact_resource == COLLECTION
-        if grant.action not in {"READ", "REVISE"}:
+        if grant.action not in {"READ", "REVISE", "VALIDATE", "PUBLISH", "TEST"}:
             return False
         table, expression = (
             ("definitions", "tool_id || ':aggregate'")
-            if grant.action == "REVISE"
+            if grant.action in {"REVISE", "VALIDATE", "PUBLISH", "TEST"}
             else ("revisions", "tool_id || ':' || revision_id")
         )
         return (
@@ -109,7 +109,7 @@ class ToolDefinitionTargets:
         )
 
 
-def tool_definition_operations(repository, cursors):
+def tool_definition_operations(repository, cursors, *, testing=None):
     def require(call, action, target=COLLECTION):
         return require_tool_grant(call, ExactGrant(OWNER, action, target))
 
@@ -129,6 +129,160 @@ def tool_definition_operations(repository, cursors):
             return repository.read(call.connection, scope, tool_id, revision)
 
         try:
+            if call.operation == "TOOL_LIFECYCLE_COMMAND":
+                from .tool_lifecycle import ToolCommand, command
+
+                cmd = ToolCommand.model_validate(call.payload)
+                tool_id = call.path["tool_id"]
+                read(tool_id, cmd.revisionId)
+                action = {
+                    "successor": "REVISE",
+                    "validate": "VALIDATE",
+                    "publish": "PUBLISH",
+                    "test": "TEST",
+                }[cmd.action]
+                decision = require(call, action, tool_id + ":aggregate")
+                return command(
+                    repository,
+                    call.connection,
+                    scope,
+                    tool_id,
+                    cmd,
+                    actor_id=call.context.principal_id,
+                    decision_id=decision.decision_id,
+                    run_test=(
+                        lambda current, command: testing.run(call, current, command)
+                    )
+                    if testing
+                    else None,
+                )
+            if call.operation == "TOOL_EMPLOYEE_CANDIDATES":
+                rows = call.connection.execute(
+                    (
+                        "SELECT tool_id,published_revision_id FROM "
+                        "tool_definition.definitions "
+                        "WHERE namespace=%s AND security_domain=%s AND "
+                        "published_revision_id "
+                        "IS NOT NULL ORDER BY tool_id LIMIT 200"
+                    ),
+                    (scope.namespace, scope.security_domain),
+                ).fetchall()
+                items = []
+                for row in rows:
+                    try:
+                        value = read(row["tool_id"], row["published_revision_id"])
+                    except AuthorityError:
+                        continue
+                    items.append(value)
+                return {
+                    "items": items,
+                    "complete": len(rows) < 200,
+                    "executionAuthorized": False,
+                }
+            if call.operation == "READ_TOOL_HISTORY":
+                from .tool_lifecycle import history
+
+                tool_id = call.path["tool_id"]
+                read(tool_id)
+                revisions, receipts = history(
+                    repository, call.connection, scope, tool_id
+                )
+                all_validations = [
+                    item
+                    for receipt in receipts
+                    if receipt.get("commandKind") == "VALIDATE"
+                    for item in receipt["items"]
+                    if item["toolId"] == tool_id
+                ]
+                visible = []
+                for revision in revisions:
+                    try:
+                        require(call, "READ", tool_id + ":" + revision["revisionId"])
+                    except AuthorityError:
+                        continue
+                    visible.append(revision)
+                revisions = visible
+                # Both original actor and current exact revision READ are needed.
+                visible_receipts = []
+                for receipt in receipts:
+                    if receipt.get("actorId") != call.context.principal_id:
+                        continue
+                    try:
+                        for item in receipt["items"]:
+                            require(
+                                call, "READ", item["toolId"] + ":" + item["revisionId"]
+                            )
+                    except AuthorityError:
+                        continue
+                    visible_receipts.append(receipt)
+                receipts = visible_receipts
+                references = []
+                if call.connection.execute(
+                    "SELECT to_regclass('digital_employee_definition.revisions') name"
+                ).fetchone()["name"]:
+                    from .workbench_business_problem import OwnerPrincipal
+
+                    principal = OwnerPrincipal(
+                        call.context.principal_id,
+                        scope.namespace,
+                        scope.security_domain,
+                    )
+                    rows = call.connection.execute(
+                        (
+                            "SELECT definition_id,revision_id,record FROM "
+                            "digital_employee_definition.revisions WHERE "
+                            "namespace=%s AND "
+                            "security_domain=%s AND EXISTS(SELECT 1 FROM "
+                            "jsonb_array_elements(record->'members') m "
+                            "WHERE m->>'kind'='TOOL' AND "
+                            "m->>'resource_id'=%s) ORDER BY "
+                            "definition_id,revision_id LIMIT 201"
+                        ),
+                        (scope.namespace, scope.security_domain, tool_id),
+                    ).fetchall()
+                    for row in rows[:200]:
+                        try:
+                            call.authority.require(
+                                principal,
+                                "EMPLOYEE",
+                                "READ",
+                                "employee:"
+                                + row["definition_id"]
+                                + ":"
+                                + row["revision_id"],
+                            )
+                        except AuthorityError:
+                            continue
+                        references.append(
+                            {
+                                "kind": "EMPLOYEE",
+                                "identity": row["definition_id"],
+                                "revisionId": row["revision_id"],
+                                "members": [
+                                    m
+                                    for m in row["record"]["members"]
+                                    if m["kind"] == "TOOL"
+                                    and m["resource_id"] == tool_id
+                                ],
+                            }
+                        )
+                return {
+                    "revisions": revisions,
+                    "validations": [
+                        {"revisionId": v["revisionId"], "digest": v["digest"]}
+                        for v in all_validations
+                        if any(
+                            r["revisionId"] == v["revisionId"]
+                            and r["digest"] == v["digest"]
+                            for r in revisions
+                        )
+                    ],
+                    "commands": receipts,
+                    "references": references,
+                    "executionAuthorized": False,
+                    "impactComplete": False,
+                    "automaticMigration": False,
+                }
             if call.operation in {"PREVIEW_TOOL_IMPORT", "IMPORT_TOOL_DRAFTS"}:
                 model = (
                     ImportTools
@@ -308,7 +462,36 @@ def tool_definition_operations(repository, cursors):
             ExactGrant(OWNER, action, COLLECTION),
         )
 
+    from .tool_lifecycle import ToolCommand
+
     return (
+        WorkbenchOperation(
+            "TOOL_EMPLOYEE_CANDIDATES",
+            "GET",
+            ROOT + "/candidates",
+            None,
+            None,
+            admission("LIST"),
+            handle,
+        ),
+        WorkbenchOperation(
+            "TOOL_LIFECYCLE_COMMAND",
+            "POST",
+            ROOT + "/{tool_id}/commands",
+            ToolCommand,
+            None,
+            admission("LIST"),
+            handle,
+        ),
+        WorkbenchOperation(
+            "READ_TOOL_HISTORY",
+            "GET",
+            ROOT + "/{tool_id}/history",
+            None,
+            None,
+            admission("LIST"),
+            handle,
+        ),
         WorkbenchOperation(
             "READ_TOOL_IMPORT_ACCESS",
             "GET",

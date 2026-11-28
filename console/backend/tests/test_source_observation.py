@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from agent_console import conversation_sources as source_module
+from agent_console import planning_candidates
 from agent_console import question_member_capabilities as members
 from agent_console.authority_contracts import AuthorityError
 from agent_console.conversation_capability import describe
@@ -47,12 +48,15 @@ def observation(monkeypatch):
         lambda *a, **k: pytest.fail("must not scan latest employee directory"),
     )
 
-    def read(c, s, kind, ref):
+    def read(c, s, kind, ref, *, _published_binding=False):
+        assert kind == "EMPLOYEE" or _published_binding is True
         assert ref == refs[kind]
         calls.append(kind)
         return contents[kind], "published"
 
     monkeypatch.setattr(members, "read_published", read)
+    # Keep real read_employee_member membership validation and its frozen flag.
+    monkeypatch.setattr(planning_candidates, "read_published", read)
     monkeypatch.setattr(members, "require_read", lambda *args: None)
     monkeypatch.setattr(members, "validate", lambda *args, **kwargs: None)
     call = NS(
@@ -252,11 +256,15 @@ def test_catalogue_passes_current_matched_scope_to_real_observer(
         ],
     )
     monkeypatch.setattr(source_module, "require_read", lambda *args: None)
-    monkeypatch.setattr(
-        source_module,
-        "read_published",
-        lambda *args: (content, "Exact production source"),
-    )
+
+    def published_source(connection, scope, work, kind, reference):
+        assert connection is e.call.connection
+        # A catalogue observation has no task authority: the work slot is None.
+        assert work is None
+        assert kind == "KNOWLEDGE" and reference == e.scope.source
+        return content, "Exact production source"
+
+    monkeypatch.setattr(source_module, "read_owned_published", published_source)
     monkeypatch.setattr(
         source_module,
         "validate",

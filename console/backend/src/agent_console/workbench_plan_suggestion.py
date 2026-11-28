@@ -220,7 +220,15 @@ class PlanningOwnerAdapter:
 
                     for kind in ("SKILL", "KNOWLEDGE", "WORKFLOW"):
                         readers[kind] = ExactPlanningOwnerReader(
-                            call.connection, scope, call.authority, kind
+                            call.connection,
+                            scope,
+                            call.authority,
+                            kind,
+                            (
+                                r.selected
+                                for r in proposal.semantics.requirements
+                                if r.kind == "EMPLOYEE" and r.selected is not None
+                            ),
                         )
                     snapshot = PlanningResourceResolver(readers).resolve(
                         principal, proposal

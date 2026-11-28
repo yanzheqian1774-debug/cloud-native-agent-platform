@@ -8,11 +8,12 @@ type Entry = { to: string; label: string; icon: NavigationIconName };
 const resources: Entry[] = [
   {to:"/skills",label:"技能",icon:"skill"},
   {to:"/mcp",label:"MCP 服务",icon:"mcp"},
+  {to:"/ontology",label:"本体",icon:"network"},
   {to:"/knowledge",label:"知识",icon:"knowledge"},
   {to:"/tools",label:"工具",icon:"tool"},
-  {to:"/workflow-definitions",label:"工作流",icon:"flow"},
 ];
 const advanced: Entry[] = [
+  {to:"/workflow-definitions",label:"工作流",icon:"flow"},
   {to:"/runtime-profiles",label:"运行环境",icon:"runtime"},
   {to:"/evidence",label:"证据记录",icon:"record"},
   {to:"/authorization-admin",label:"独立授权审批",icon:"shield"},

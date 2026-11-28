@@ -48,7 +48,7 @@ def setup(monkeypatch):
     )
     monkeypatch.setattr(
         module,
-        "read_published",
+        "read_employee_member",
         lambda *args: (
             {"documents": [{"chunks": [{"content": '{"synthetic":true}'}]}]},
             "Source",

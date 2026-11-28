@@ -20,7 +20,7 @@ def require_tool_grant(call, grant):
     except AuthorityError as error:
         if str(error) != "AUTHORIZATION_NOT_FOUND":
             raise
-        if grant.owner != OWNER or grant.action not in {"READ", "REVISE"}:
+        if grant.owner != OWNER or grant.action not in {"READ", "REVISE", "VALIDATE"}:
             raise
 
     # Scope grants must never mask a revocation of the requested exact target.

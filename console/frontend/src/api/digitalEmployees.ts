@@ -1,6 +1,6 @@
 import {listReadableResources} from "./resourceDirectory";
 export type EmployeeMember = {
-  kind: "AGENT" | "WORKFLOW" | "SKILL" | "MCP" | "KNOWLEDGE" | "RUNTIME_PROFILE";
+  kind: "AGENT" | "WORKFLOW" | "SKILL" | "MCP" | "KNOWLEDGE" | "RUNTIME_PROFILE" | "TOOL";
   resourceId: string;
   revisionId: string;
   digest: string;

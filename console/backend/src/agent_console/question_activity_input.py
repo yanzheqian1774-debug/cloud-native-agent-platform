@@ -192,7 +192,7 @@ class QuestionActivityInput:
                 source = approved_source(SimpleNamespace(boundaries=row["boundaries"]))
                 require_read(call.authority, p, "KNOWLEDGE", source)
                 content, name = read_published(
-                    call.connection, scope, "KNOWLEDGE", source
+                    call.connection, scope, "KNOWLEDGE", source, _published_binding=True
                 )
                 check = validate("knowledge", content, work)
                 token = canonical_digest(

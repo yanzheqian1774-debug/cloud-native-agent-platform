@@ -370,3 +370,38 @@ def test_bound_original_model_owner_and_budget(bound, mode):
     )
 
     run(bound, mode, first_event=bound.event)
+
+
+def test_bound_service_keeps_exact_source_after_later_publication(bound):
+    from copy import deepcopy
+
+    f = bound
+    with f.repository.pool.connection() as c, c.transaction():
+        c.row_factory = dict_row
+        record = c.execute(
+            "SELECT record FROM knowledge_operation.knowledge WHERE knowledge_id=%s",
+            (f.source.resource_id,),
+        ).fetchone()["record"]
+        old = next(
+            r for r in record["revisions"] if r["revisionId"] == f.source.revision_id
+        )
+        record.setdefault("facts", []).append(
+            {
+                "event": "KNOWLEDGE_PUBLISHED",
+                "revisionId": old["revisionId"],
+                "digest": old["digest"],
+                "actor": "explicit-isolated-publication-fixture",
+            }
+        )
+        later = deepcopy(old)
+        later.update(revisionId="isolated-later-publication", digest="c" * 64)
+        record["revisions"].append(later)
+        record["publishedRevisionId"] = later["revisionId"]
+        c.execute(
+            "UPDATE knowledge_operation.knowledge SET record=%s WHERE knowledge_id=%s",
+            (Jsonb(record), f.source.resource_id),
+        )
+    first = f.registry.prepare(f.context, f.event, f.req, f.record)
+    assert first["admission"]["ready"]
+    assert f.registry.prepare(f.context, f.event, f.req, f.record) == first
+    assert f.source.revision_id == "r"

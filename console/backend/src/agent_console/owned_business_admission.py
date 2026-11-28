@@ -22,6 +22,29 @@ def require(condition, reason):
         raise AuthorityError("OWNED_BUSINESS_" + reason)
 
 
+def observed_source(metadata, content):
+    """Validate retained content without granting its future business use."""
+    import json
+
+    from .native_data_adapters import capabilities
+    from .resource_automation_policy import source_digest
+
+    require(
+        source_digest(content) == metadata.get("sourceContentDigest"), "SOURCE_CHANGED"
+    )
+    raw = json.loads(content["documents"][0]["chunks"][0]["content"])
+    require(
+        raw.get("synthetic") is True
+        and raw.get("schemaVersion") == metadata.get("sourceSchema")
+        and (
+            metadata.get("sourceSchema")
+            in {"document-review-source.v1", "sales-diagnostic-source.v1"}
+            or bool(capabilities(metadata.get("sourceSchema")))
+        ),
+        "SOURCE_NOT_AUTHORIZED",
+    )
+
+
 class OwnedBusinessAdmission:
     def __init__(self, root, path, *, retained_history_paths=()):
         self.root, self.path = root, path
@@ -159,6 +182,7 @@ class OwnedBusinessAdmission:
             ScopeIdentity(context.scope.tenant_id, context.scope.security_domain),
             "KNOWLEDGE",
             selected.source,
+            _published_binding=True,
         )
         self.policy.validate_source(value.input_source, content)
         return (*evidence[:5], selected, evidence[5])
@@ -328,13 +352,12 @@ class OwnedBusinessAdmission:
             ScopeIdentity(context.scope.tenant_id, context.scope.security_domain),
             "KNOWLEDGE",
             source_ref,
+            _published_binding=True,
         )
-        from .resource_automation_policy import source_digest
-
-        require(
-            source_digest(content) == value.input_source.get("sourceContentDigest"),
-            "SOURCE_CHANGED",
-        )
+        # The original owned context binds this exact source. Current READ and
+        # immutable content still apply; the current business scope is checked
+        # separately by _source before any future business admission.
+        observed_source(value.input_source, content)
         return row, account, now, expires, value, ancestry
 
     def admit(self, c, context, invocation_id):

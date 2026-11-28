@@ -5,7 +5,7 @@ export type ToolOperation={name:string;description:string;inputSchema:Record<str
 export type ToolPreview={files?:{path:string;bytes:number;digest:string}[];sourceDigest:string;operations:ToolOperation[];persisted:false;executionAuthorized:false};
 export type ToolContent={name:string;purpose:string;inputSchema:Record<string,unknown>|null;outputSchema:Record<string,unknown>|null;sideEffect:'UNCONFIRMED'|'read-only'|'creates-file'|'external-write'};
 export type ToolDraft={toolId:string;revisionId:string;digest:string;aggregateVersion:number;draftRevisionId:string|null;publishedRevisionId:string|null;record:{name:string;purpose:string;operation:ToolOperation;validation:unknown;state:string};executionAuthorized:false};
-export type ToolReceipt={items:{toolId:string;revisionId:string;aggregateVersion:number;changed:boolean}[];executionAuthorized:false};
+export type ToolReceipt={items:{toolId:string;revisionId:string;digest?:string;aggregateVersion:number;changed:boolean}[];executionAuthorized:false};
 export class ToolRequestError extends Error {
  readonly code:string;readonly status:number;readonly outcomeUnknown:boolean;
  constructor(code:string,status:number,outcomeUnknown=false){super(code);this.code=code;this.status=status;this.outcomeUnknown=outcomeUnknown}
@@ -43,3 +43,10 @@ export function encodeToolSource(bytes:Uint8Array):string{
  let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);
  return btoa(binary);
 }
+
+export type ToolLifecycleCommand={action:'validate'|'successor'|'test'|'publish';commandId:string;expectedVersion:number;revisionId:string;digest:string;testName?:string;input?:Record<string,unknown>;expectedOutput?:Record<string,unknown>;comparison?:'exact'|'subset'};
+export type ToolTestResult={status:string;actual:unknown;actualExecution:boolean;reasonCode:string;verificationLevel?:string;revisionId:string;revisionDigest:string;durationMs?:number};
+export type ToolLifecycleReceipt=ToolReceipt&{commandKind:string;testResult?:ToolTestResult;testCase?:{name:string;input:unknown;expected:unknown};validation?:{status:string;scope:string;executionVerified:false}};
+export const runToolCommand=(id:string,command:ToolLifecycleCommand,principal:string,signal:AbortSignal)=>request<ToolLifecycleReceipt>('/'+encodeURIComponent(id)+'/commands',principal,signal,command,true);
+export const readToolHistory=(id:string,principal:string,signal:AbortSignal)=>request<{revisions:ToolDraft[];commands:ToolLifecycleReceipt[];validations:{revisionId:string;digest:string}[];references:{kind:string;identity:string;revisionId:string;members:unknown[]}[];impactComplete:false;automaticMigration:false}>('/'+encodeURIComponent(id)+'/history',principal,signal);
+export const listToolCandidates=(principal:string,signal:AbortSignal)=>request<{items:ToolDraft[];complete:boolean}>('/candidates',principal,signal);

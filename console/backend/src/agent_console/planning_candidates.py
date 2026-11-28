@@ -2,7 +2,7 @@
 """P08 bounded discovery over existing owners, never an execution authority."""
 
 from .authority_contracts import AuthorityError
-from .digital_employee_definition import EmployeeRevision
+from .digital_employee_definition import EmployeeDefinitionError, EmployeeRevision
 from .digital_employee_definition_postgres import PostgresEmployeeDefinitionRepository
 from .plan_suggestion_domain import ExactReference, PlanningError, ResourceObservation
 from .resource_use_domain import canonical_digest
@@ -60,7 +60,7 @@ def require_read(authority, principal, kind, ref):
     authority.require(principal, owner, action, target)
 
 
-def read_published(c, scope, kind, ref, *, historical=False):
+def read_published(c, scope, kind, ref, *, historical=False, _published_binding=False):
     if kind == "EMPLOYEE":
         value = PostgresEmployeeDefinitionRepository._read(
             c, scope, ref.resource_id, ref.revision_id
@@ -68,13 +68,14 @@ def read_published(c, scope, kind, ref, *, historical=False):
         if not value["published"] or value["digest"] != ref.digest:
             raise PlanningError("CANDIDATE_VERSION_UNAVAILABLE")
         PostgresEmployeeDefinitionRepository.validate_members(
-            c, EmployeeRevision.from_record(value["revision"])
+            c, EmployeeRevision.from_record(value["revision"]), published_binding=True
         )
         return value["revision"], value["revision"].get("role", ref.resource_id)
     table, col, _, _ = OWNERS[kind]
     row = c.execute(
         f"SELECT record FROM {table} WHERE namespace=%s AND security_domain=%s AND {col}=%s"
-        + (" AND kind=%s" if kind in {"SKILL", "MCP"} else ""),
+        + (" AND kind=%s" if kind in {"SKILL", "MCP"} else "")
+        + " FOR SHARE",
         (
             scope.namespace,
             scope.security_domain,
@@ -89,22 +90,45 @@ def read_published(c, scope, kind, ref, *, historical=False):
         (r for r in record.get("revisions", []) if r["revisionId"] == ref.revision_id),
         None,
     )
-    if (
-        (
-            not historical
-            and (
-                record.get("archived")
-                or record.get("enabled", True) is not True
-                or record.get("publishedRevisionId") != ref.revision_id
-            )
+    from .resource_publication import eligible
+
+    if historical:
+        valid = bool(
+            revision
+            and revision.get("state") in {"PUBLISHED", "DEPRECATED"}
+            and str(revision.get("digest", "")).removeprefix("sha256:") == ref.digest
         )
-        or not revision
-        or revision.get("state")
-        not in ({"PUBLISHED", "DEPRECATED"} if historical else {"PUBLISHED"})
-        or str(revision.get("digest", "")).removeprefix("sha256:") != ref.digest
-    ):
+    else:
+        valid = eligible(record, revision, ref, frozen=_published_binding)
+    if not valid:
         raise PlanningError("CANDIDATE_VERSION_UNAVAILABLE")
     return revision["content"], record.get("name", ref.resource_id)
+
+
+def read_employee_member(c, scope, employee, kind, ref):
+    try:
+        definition, _ = read_published(c, scope, "EMPLOYEE", employee)
+    except EmployeeDefinitionError as exc:
+        raise PlanningError("BOUND_DEFINITION_NOT_ELIGIBLE") from exc
+    wanted_kind = "RUNTIME_PROFILE" if kind == "RUNTIME" else kind
+    if not any(
+        m["kind"] == wanted_kind
+        and m["resource_id"] == ref.resource_id
+        and m["revision_id"] == ref.revision_id
+        and m["digest"].removeprefix("sha256:") == ref.digest
+        for m in definition["members"]
+    ):
+        raise PlanningError("BOUND_RESOURCE_MISMATCH")
+    return read_published(c, scope, kind, ref, _published_binding=True)
+
+
+def read_owned_published(c, scope, work, kind, ref):
+    from . import owned_business_resource_adapter as owned
+
+    if not isinstance(work, owned.OwnedResourceWork):
+        return read_published(c, scope, kind, ref)
+    owned.require_reference(work, "runtime" if kind == "RUNTIME" else kind.lower(), ref)
+    return read_published(c, scope, kind, ref, _published_binding=True)
 
 
 def identities(c, scope, kind, limit=200):
@@ -156,7 +180,19 @@ def declaration(c, scope, authority, principal, kind, content, operations):
             )
             try:
                 require_read(authority, principal, "SKILL", ref)
-                skill, _ = read_published(c, scope, "SKILL", ref)
+                skill, _ = read_employee_member(
+                    c,
+                    scope,
+                    ExactReference(
+                        resource_id=content["definitionId"],
+                        revision_id=content["revisionId"],
+                        digest=EmployeeRevision.from_record(
+                            content
+                        ).digest.removeprefix("sha256:"),
+                    ),
+                    "SKILL",
+                    ref,
+                )
             except (AuthorityError, PlanningError):
                 return {
                     "status": "MEMBER_CONFIGURATION_UNREADABLE",
@@ -336,14 +372,28 @@ def discover(c, scope, authority, principal, proposal, requirement):
 
 
 class ExactPlanningOwnerReader:
-    def __init__(self, c, scope, authority, kind):
+    def __init__(self, c, scope, authority, kind, employees=()):
         self.c, self.scope, self.authority, self.kind = c, scope, authority, kind
+        self.employees = tuple(employees)
 
     def observe(self, principal, requirement):
         ref = requirement.selected
         try:
             require_read(self.authority, principal, self.kind, ref)
-            read_published(self.c, self.scope, self.kind, ref)
+            try:
+                read_published(self.c, self.scope, self.kind, ref)
+            except PlanningError:
+                for employee in self.employees:
+                    require_read(self.authority, principal, "EMPLOYEE", employee)
+                    try:
+                        read_employee_member(
+                            self.c, self.scope, employee, self.kind, ref
+                        )
+                        break
+                    except PlanningError:
+                        continue
+                else:
+                    raise
         except AuthorityError:
             return ResourceObservation(
                 requirement_id=requirement.requirement_id,

@@ -4,6 +4,7 @@
 from types import SimpleNamespace as NS
 
 import pytest
+from agent_console import planning_candidates
 from agent_console import question_member_capabilities as module
 from agent_console.authority_contracts import AuthorityError
 from agent_console.question_activity_input import entry_grants
@@ -41,7 +42,13 @@ def test_owned_observation_is_exact_and_operations_are_bounded(
         if unreadable and kind == "SKILL":
             raise AuthorityError("AUTHORIZATION_NOT_FOUND")
 
-    def published(c, s, kind, reference):
+    def published(c, s, kind, reference, *, _published_binding=False):
+        assert c == "same"
+        assert (s.namespace, s.security_domain) == (
+            a.context.scope.tenant_id,
+            a.context.scope.security_domain,
+        )
+        assert kind == "EMPLOYEE" or _published_binding is True
         if kind == "EMPLOYEE":
             return {"members": members}, "Employee"
         return {"operations": [{"name": "READ_DATA"}, {"name": "ANALYZE_DATA"}]}, kind
@@ -51,6 +58,8 @@ def test_owned_observation_is_exact_and_operations_are_bounded(
     )
     monkeypatch.setattr(module, "require_read", require)
     monkeypatch.setattr(module, "read_published", published)
+    # Exercise the real five-argument frozen employee-member reader.
+    monkeypatch.setattr(planning_candidates, "read_published", published)
     monkeypatch.setattr(module, "validate", lambda *a, **k: None)
     value = module.observe(
         NS(services=True, sales_v2_candidate=False),

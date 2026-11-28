@@ -1,3 +1,5 @@
+import {OwnedSkillMaintenanceLink} from './OwnedSkillMaintenanceLink';
+import {capabilityLabels} from './capabilityLabels';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {Link,useNavigate,useSearchParams} from 'react-router-dom';
 import {readWorkbenchSession,type WorkbenchSession} from '../api/businessWorkspace';
@@ -14,7 +16,6 @@ import {findResourceReadContext,resourceReadScope,saveResourceReadContext,type R
 const scopeKey=(subject:string,scope:{tenantId:string;securityDomain:string})=>JSON.stringify([subject,scope.tenantId,scope.securityDomain]);
 const itemKey=(item:DirectoryItem)=>JSON.stringify([item.kind,item.identity,item.revisionId,item.digest]);
 const text=(value:unknown,fallback='未提供')=>typeof value==='string'?value:fallback;
-const capabilityLabels:Record<string,string>={READ_DATA:'读取资料',VALIDATE_DATA:'核对资料',SUMMARIZE:'汇总信息',ANALYZE_DATA:'分析变化',RENDER_REPORT:'形成报告'};
 const strings=(value:unknown)=>Array.isArray(value)?value.filter((x):x is string=>typeof x==='string'):[];
 function TypeMark({kind}:{kind:'skill'|'mcp'|'knowledge'|'agent'}){return <span className="resource-type-mark" data-resource-kind={kind}><NavigationIcon name={kind}/><span>{kind==='skill'?'Skill 技能':kind==='mcp'?'MCP 连接':kind==='agent'?'Agent职责':'知识资料'}</span></span>}
 
@@ -83,6 +84,7 @@ function ExactResourceDetail({item,expectedScope,conversation,sourceExecution,ve
   {!conversation&&!params.get('returnTools')&&<EmployeeResourceReturn item={item}/>}
   <div className="f3-detail-banner"><span>{item.isCurrentPublished?'当前发布内容':item.isCurrentDraft?'修改草稿':'历史内容'} · 只读</span>{history?<button onClick={()=>changeView('content')}>返回内容</button>:<button onClick={()=>changeView('history')}>历史记录</button>}</div>
   <header className="f3-detail-heading"><div><TypeMark kind={item.kind as 'skill'|'mcp'|'knowledge'|'agent'}/><h1>{detail.name}</h1>{(isSkill||item.kind==='mcp')?<p>{text(c.description,'当前版本未提供用途说明。')}</p>:item.kind==='agent'?<p>{text(c.businessPurpose,'未提供业务用途')}</p>:null}</div></header>
+  {isSkill&&import.meta.env.VITE_RESOURCE_AUTHORING_ENABLED==='true'&&loaded&&<OwnedSkillMaintenanceLink identity={item.identity} subject={loaded.session.principal.principalId} tenantId={loaded.session.principal.tenantId} securityDomain={loaded.session.principal.securityDomain}/>}
   {professional&&!history&&(isSkill?<section aria-label="当前可读范围"><h2>当前可读范围</h2><p className="resource-detail-boundary">这里只读展示当前授权版本。发布、连接测试、工具发现、工具调用及业务执行分别核对，历史权限或历史成功不代表当前可执行。</p><p>读取身份和范围已与当前会话核对；本页可读不授予管理、维护、发布或使用权限。</p></section>:(item.kind==='mcp'?<p className="resource-detail-boundary">这里只读展示当前授权版本。发布、连接测试、工具发现、工具调用及业务执行分别核对，历史权限或历史成功不代表当前可执行。</p>:<p className="resource-detail-boundary">这里只查看保存的{item.kind==='knowledge'?'知识正文与出处':'Agent职责和绑定'}。已有员工与工作保留原版本；查看和发布不会自动启动{item.kind==='knowledge'?'索引、检索或业务执行':'实例或业务执行'}。</p>))}
   {history&&<section className="f3-detail-card" aria-label="历史记录"><h2>历史记录</h2><p>仅列出当前目录已加载、符合筛选且获准读取的同一资源版本；未显示不代表不存在。{hasMore?'还有更多可读版本，请返回目录加载后查看。':''}</p><ul className="f3-detail-history-list">{versions.map(version=>{const next=new URLSearchParams(params);next.set('selected',version.identity);next.set('resourceRevision',version.revisionId);next.set('resourceDigest',version.digest);next.set('resourceSection','content');next.delete('resourceView');next.delete('resourceContext');if(version.revisionId!==item.revisionId||version.digest!==item.digest)next.delete('fromExecution');return <li key={itemKey(version)}><div><strong>{version.isCurrentPublished?'当前发布内容':version.isCurrentDraft?'修改草稿':'历史内容'}</strong><p>{version.revisionId}</p><small>{version.createdAt?formatTime(version.createdAt):'时间未记录'}</small></div><Link to={'?'+next}>查看内容</Link></li>})}</ul><p>历史内容只读，查看不会修改版本或已有引用。</p></section>}
   {!history&&<>

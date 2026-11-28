@@ -572,6 +572,9 @@ class ResourceAutomation:
                             expected_source_schema,
                             source_ref,
                             source_revision,
+                            employee_binding=employee[0]
+                            if employee and employee[1]["published"]
+                            else None,
                         )
                         results.append(result)
                 except Exception as exc:
@@ -639,7 +642,17 @@ class ResourceAutomation:
                 )
             }
             for kind in ("SKILL", "MCP", "KNOWLEDGE", "WORKFLOW"):
-                readers[kind] = ExactPlanningOwnerReader(c, scope, call.authority, kind)
+                readers[kind] = ExactPlanningOwnerReader(
+                    c,
+                    scope,
+                    call.authority,
+                    kind,
+                    (
+                        r.selected
+                        for r in plan.semantics.requirements
+                        if r.kind == "EMPLOYEE" and r.selected is not None
+                    ),
+                )
             proposal = app.repository.proposal(
                 cur, scope, identity, plan.source_proposal_revision
             )
@@ -732,6 +745,12 @@ class ResourceAutomation:
                     r.selected.resource_id,
                     r.selected.revision_id,
                 )
+                if value["published"]:
+                    PostgresEmployeeDefinitionRepository.validate_members(
+                        call.connection,
+                        EmployeeRevision.from_record(value["revision"]),
+                        published_binding=True,
+                    )
                 if value["digest"] != r.selected.digest:
                     raise WorkbenchOwnerError("RESOURCE_EMPLOYEE_DIGEST_MISMATCH", 409)
                 if isinstance(work, owned_resources.OwnedResourceWork):
@@ -817,6 +836,7 @@ class ResourceAutomation:
         expected_source_schema=None,
         source_ref=None,
         source_revision=None,
+        employee_binding=None,
     ):
         owned_resources.require_reference(work, kind, ref)
         c = call.connection
@@ -834,6 +854,20 @@ class ResourceAutomation:
         if not row:
             raise AuthorityError("RESOURCE_EXACT_VERSION_UNAVAILABLE")
         record = row["record"]
+        frozen = False
+        if employee_binding is not None:
+            from .planning_candidates import read_employee_member
+
+            read_employee_member(
+                c,
+                ScopeIdentity(
+                    call.context.scope.tenant_id, call.context.scope.security_domain
+                ),
+                employee_binding,
+                "RUNTIME" if kind == "runtime" else kind.upper(),
+                ref,
+            )
+            frozen = True
         rev = next(
             (r for r in record["revisions"] if r["revisionId"] == ref.revision_id), None
         )
@@ -842,11 +876,14 @@ class ResourceAutomation:
             or rev["digest"].removeprefix("sha256:") != ref.digest
             or record.get("archived")
             or record.get("enabled", True) is not True
-            or ref.revision_id
-            not in {
-                record.get("publishedRevisionId"),
-                record.get("currentDraftRevisionId"),
-            }
+            or (
+                not frozen
+                and ref.revision_id
+                not in {
+                    record.get("publishedRevisionId"),
+                    record.get("currentDraftRevisionId"),
+                }
+            )
         ):
             raise AuthorityError("RESOURCE_EXACT_VERSION_UNAVAILABLE")
         if isinstance(work, owned_resources.OwnedResourceWork) and kind == "skill":
@@ -862,9 +899,8 @@ class ResourceAutomation:
             expected_source_schema=expected_source_schema,
             sales_v2_candidate=self.sales_v2_candidate,
         )
-        existing = (
-            rev["state"] == "PUBLISHED"
-            and record.get("publishedRevisionId") == ref.revision_id
+        existing = rev["state"] == "PUBLISHED" and (
+            frozen or record.get("publishedRevisionId") == ref.revision_id
         )
         if isinstance(work, owned_resources.OwnedResourceWork) and not existing:
             raise AuthorityError("OWNED_BUSINESS_PUBLISHED_RESOURCE_REQUIRED")
@@ -1003,7 +1039,9 @@ class ResourceAutomation:
             )
 
             revision = EmployeeRevision.from_record(employee[1]["revision"])
-            PostgresEmployeeDefinitionRepository.validate_members(c, revision)
+            PostgresEmployeeDefinitionRepository.validate_members(
+                c, revision, published_binding=employee[1]["published"]
+            )
             if employee[1]["published"]:
                 return {
                     "state": "ASSEMBLED",
@@ -1181,12 +1219,21 @@ class ResourceAutomation:
         scope = ScopeIdentity(
             call.context.scope.tenant_id, call.context.scope.security_domain
         )
+        assembled = record.get("assembly", {}).get("definition")
         for item in record["resources"]:
             if item["state"] == "READY":
                 try:
-                    read_published(
+                    from .planning_candidates import read_employee_member
+
+                    reader = read_published
+                    args = ()
+                    if assembled is not None:
+                        reader = read_employee_member
+                        args = (ExactReference.model_validate(assembled),)
+                    reader(
                         call.connection,
                         scope,
+                        *args,
                         item["kind"].upper()
                         if item["kind"] != "runtime"
                         else "RUNTIME",

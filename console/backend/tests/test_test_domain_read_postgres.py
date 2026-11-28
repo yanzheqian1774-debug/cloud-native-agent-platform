@@ -478,7 +478,15 @@ def test_published_employee_and_new_draft_are_distinct_read_targets(
 ):
     e = domain
     # Real immutable lifecycle writer; member availability is a controlled port.
-    monkeypatch.setattr(e.employees, "validate_members", lambda *args: None)
+    member_checks = []
+
+    def validate_members(connection, revision, *, published_binding=False):
+        assert hasattr(connection, "execute")
+        assert revision.definition_id == e.emp.definition_id
+        assert published_binding is False  # Controlled lifecycle validation port.
+        member_checks.append((revision.revision_id, published_binding))
+
+    monkeypatch.setattr(e.employees, "validate_members", validate_members)
     with e.repo.connection_scope() as c:
         for version, action in enumerate(("VALIDATE", "APPROVE", "PUBLISH"), 1):
             e.employees.decide_for_workbench(
@@ -507,6 +515,7 @@ def test_published_employee_and_new_draft_are_distinct_read_targets(
             authorized=True,
         )
     result = e.run()
+    assert member_checks  # Lifecycle called the updated keyword-compatible port.
     resources = {
         item["resource"]
         for item in result["items"]

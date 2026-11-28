@@ -114,7 +114,9 @@ class PostgresDigitalEmployeeRepository:
                 raise DigitalEmployeeError("INSTANCE_IDENTITY_CONFLICT")
             if not definition["published"]:
                 raise DigitalEmployeeError("DEFINITION_INELIGIBLE")
-            PostgresEmployeeDefinitionRepository.validate_members(conn, revision)
+            PostgresEmployeeDefinitionRepository.validate_members(
+                conn, revision, published_binding=True
+            )
             conn.execute(
                 "INSERT INTO execution_authority.digital_employee_instances(namespace,security_domain,digital_employee_instance_id,definition_revision_id,aggregate_version,record) VALUES (%s,%s,%s,%s,%s,%s::jsonb)",
                 (*key, value.definition.revision_id, value.version, json.dumps(record)),

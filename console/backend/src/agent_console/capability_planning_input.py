@@ -9,7 +9,7 @@ from .capability_conversation_source import verify_work_association
 from .capability_execution_constraints import exclusion_boundaries, verify_current
 from .plan_suggestion_domain import ExactReference, Identity, ProblemTarget
 from .plan_suggestion_invocation import PlanningRequest
-from .planning_candidates import read_published, require_read
+from .planning_candidates import read_employee_member, require_read
 from .planning_contracts import PlanningPolicy
 from .question_activity_input import member_contract_answers
 from .question_member_capabilities import observe
@@ -77,8 +77,12 @@ class CapabilityPlanningInput:
         semantics = document_binding(call, resolved)
         source = ExactReference.model_validate(sources[0])
         require_read(call.authority, principal, "KNOWLEDGE", source)
-        content, _ = read_published(
-            call.connection, app.scope(principal), "KNOWLEDGE", source
+        content, _ = read_employee_member(
+            call.connection,
+            app.scope(principal),
+            ExactReference.model_validate(employees[0]["reference"]),
+            "KNOWLEDGE",
+            source,
         )
         work = a.work(call.context, target.problem, a.grants.clock())
         check = validate("knowledge", content, work)

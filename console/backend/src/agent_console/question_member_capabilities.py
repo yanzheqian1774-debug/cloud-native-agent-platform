@@ -3,7 +3,12 @@
 from .authority_contracts import AuthorityError
 from .execution_domain import ScopeIdentity
 from .plan_suggestion_domain import ExactReference, PlanningError
-from .planning_candidates import identities, read_published, require_read
+from .planning_candidates import (
+    identities,
+    read_employee_member,
+    read_published,
+    require_read,
+)
 from .planning_contracts import INPUTS, OUTPUTS
 from .resource_automation_validation import validate
 from .workbench_business_problem import OwnerPrincipal
@@ -132,7 +137,9 @@ def observe(
                     digest=member["digest"].removeprefix("sha256:"),
                 )
                 _require_observation_read(call.authority, principal, kind, ref)
-                content, _ = read_published(call.connection, scope, kind, ref)
+                content, _ = read_employee_member(
+                    call.connection, scope, employee, kind, ref
+                )
                 contents.setdefault(kind, []).append(content)
                 if kind == "KNOWLEDGE":
                     sources.append(ref)

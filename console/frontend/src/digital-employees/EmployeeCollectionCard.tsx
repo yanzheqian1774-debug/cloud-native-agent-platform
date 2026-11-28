@@ -1,6 +1,6 @@
 import type {EmployeeAuthoring,EmployeeDefinitionSummary,EmployeeDefinition} from '../api/digitalEmployees';
 import './EmployeeCollectionCard.css';
-const resourceKinds={SKILL:'技能',MCP:'MCP',KNOWLEDGE:'知识'} as const;
+const resourceKinds={SKILL:'技能',MCP:'MCP',KNOWLEDGE:'知识',TOOL:'工具'} as const;
 export function EmployeeCollectionCard({revisions,value,ready,error,stale=false,selectedRevision,onSelect}:{revisions:EmployeeDefinitionSummary[];value:EmployeeAuthoring|null|undefined;ready:boolean;error?:string;stale?:boolean;selectedRevision?:string;onSelect:(item:EmployeeDefinitionSummary)=>void}){
  const publication=value?.publication.status==='AVAILABLE'?value.publication.definition:null;
  const draft=value?.draft.status==='AVAILABLE'?value.draft.definition:null;

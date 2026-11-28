@@ -252,3 +252,20 @@ def test_no_source_requires_current_conversation_and_original_message(
             "c",
             "m",
         )
+
+
+def test_only_canonical_saved_source_port_enables_retained_publication(monkeypatch):
+    automation, call, selected, original, _calls = setup(monkeypatch)
+    invoked = []
+
+    def published(*args, **kwargs):
+        invoked.append(kwargs)
+        return (
+            {"documents": [{"chunks": [{"content": json.dumps(original)}]}]},
+            "actual name",
+        )
+
+    monkeypatch.setattr(source, "read_published", published)
+    source.read_selected(automation, call, selected)
+    source.read_selected(automation, call, selected, frozen_binding=True)
+    assert invoked == [{}, {"_published_binding": True}]

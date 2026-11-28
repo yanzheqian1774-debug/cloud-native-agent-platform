@@ -11,7 +11,7 @@ from .plan_suggestion_domain import (
     PlanningError,
     SyntheticValidationOrigin,
 )
-from .planning_candidates import read_published, require_read
+from .planning_candidates import read_owned_published, require_read
 from .planning_contracts import validation_report
 from .planning_source_change import approved_source, validate_confirmation
 from .resource_automation_validation import validate
@@ -103,7 +103,9 @@ class PolicyPlanConfirmation:
             validate_confirmation(app, p, cur.connection, proposal)
             source = approved_source(proposal.semantics)
             require_read(call.authority, p, "KNOWLEDGE", source)
-            content, _ = read_published(cur.connection, scope, "KNOWLEDGE", source)
+            content, _ = read_owned_published(
+                cur.connection, scope, work, "KNOWLEDGE", source
+            )
             validate("knowledge", content, work)
             actions = [
                 ExactGrant("PLAN", action, "plan:v2:" + identity)

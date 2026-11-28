@@ -786,11 +786,25 @@ def install_management(manager, authorizer):
                     call.context.principal_id, scope.namespace, scope.security_domain
                 )
                 items = []
+                candidates = []
                 for row in rows:
                     if not row["identity"] or not manager.owned(
                         call, kind, row["identity"]
                     ):
                         continue
+                    if kind == "skill" and not for_call(call):
+                        from .owned_skill_access import access_candidates
+
+                        candidates.extend(
+                            access_candidates(
+                                call,
+                                manager,
+                                row["identity"],
+                                service,
+                                scope,
+                                principal,
+                            )
+                        )
                     try:
                         call.authority.require(
                             principal,
@@ -804,6 +818,7 @@ def install_management(manager, authorizer):
                 return {
                     "kind": kind,
                     "items": items,
+                    **({"accessCandidates": candidates} if kind == "skill" else {}),
                     "subject": call.context.principal_id,
                     "scope": {
                         "tenantId": scope.namespace,

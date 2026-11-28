@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from .authority_contracts import AuthorityError
 from .owned_business_resource_adapter import OwnedResourceWork
 from .plan_suggestion_domain import ExactReference, PlanningError
-from .planning_candidates import identities, read_published, require_read
+from .planning_candidates import identities, read_owned_published, require_read
 from .resource_automation_policy import source_digest
 from .resource_automation_validation import validate
 from .workbench_business_problem import OwnerPrincipal
@@ -57,7 +57,9 @@ def sources(automation, call, root=None):
                 digest=item["digest"].removeprefix("sha256:"),
             )
             require_read(call.authority, principal, "KNOWLEDGE", ref)
-            content, name = read_published(call.connection, scope, "KNOWLEDGE", ref)
+            content, name = read_owned_published(
+                call.connection, scope, task_work, "KNOWLEDGE", ref
+            )
             work = task_work or ReadableSourceValidation((source_digest(content),))
             check = validate("knowledge", content, work)
             raw = json.loads(content["documents"][0]["chunks"][0]["content"])

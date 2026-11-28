@@ -53,7 +53,9 @@ def validate_lineage(
     ):
         raise ExecutionConflict("EMPLOYEE_NOT_EXECUTABLE")
     PostgresEmployeeDefinitionRepository.validate_members(
-        conn, EmployeeRevision.from_record(definition["revision"])
+        conn,
+        EmployeeRevision.from_record(definition["revision"]),
+        published_binding=True,
     )
     assignment = conn.execute(
         "SELECT digital_employee_instance_id,record FROM execution_authority.assignments WHERE namespace=%s AND security_domain=%s AND assignment_id=%s FOR SHARE",

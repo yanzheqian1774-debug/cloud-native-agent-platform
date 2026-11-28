@@ -516,7 +516,15 @@ class PostgresEmployeeDefinitionRepository:
             ]
 
     @staticmethod
-    def validate_members(conn, revision):
+    def validate_members(conn, revision, *, published_binding=False):
+        if published_binding:
+            proof = PostgresEmployeeDefinitionRepository._read(
+                conn, revision.scope, revision.definition_id, revision.revision_id
+            )
+            if not proof["published"] or not _same_sha256_digest(
+                proof["digest"], revision.digest
+            ):
+                raise EmployeeDefinitionError("BOUND_DEFINITION_NOT_PUBLISHED")
         tables = {
             MemberKind.AGENT: ("agent_definition.definitions", "definition_id"),
             MemberKind.KNOWLEDGE: ("knowledge_operation.knowledge", "knowledge_id"),
@@ -532,6 +540,46 @@ class PostgresEmployeeDefinitionRepository:
             MemberKind.MCP: ("skill_mcp_resource.resources", "resource_id"),
         }
         for member in revision.members:
+            if member.kind is MemberKind.TOOL:
+                from .tool_definition_postgres import (
+                    PostgresToolDefinitionRepository,
+                    ToolStorageError,
+                )
+
+                conn.execute(
+                    "SELECT tool_id FROM tool_definition.definitions WHERE "
+                    "namespace=%s AND security_domain=%s AND tool_id=%s FOR SHARE",
+                    (
+                        revision.scope.namespace,
+                        revision.scope.security_domain,
+                        member.resource_id,
+                    ),
+                )
+                try:
+                    tool = PostgresToolDefinitionRepository.read(
+                        conn, revision.scope, member.resource_id, member.revision_id
+                    )
+                except ToolStorageError as exc:
+                    reason = (
+                        "BOUND_RESOURCE_NOT_FOUND"
+                        if str(exc) == "TOOL_NOT_FOUND"
+                        else "BOUND_RESOURCE_MISMATCH"
+                    )
+                    raise EmployeeDefinitionError(reason) from exc
+                if not _same_sha256_digest(tool["digest"], member.digest):
+                    raise EmployeeDefinitionError("BOUND_RESOURCE_MISMATCH")
+                if tool["publishedRevisionId"] != member.revision_id and not (
+                    published_binding
+                    and PostgresToolDefinitionRepository.was_published(
+                        conn,
+                        revision.scope,
+                        member.resource_id,
+                        member.revision_id,
+                        tool["digest"],
+                    )
+                ):
+                    raise EmployeeDefinitionError("BOUND_RESOURCE_INELIGIBLE")
+                continue
             table, column = tables[member.kind]
             clause = (
                 " AND kind=%s"
@@ -564,16 +612,12 @@ class PostgresEmployeeDefinitionRepository:
                 exact.get("digest"), member.digest
             ):
                 raise EmployeeDefinitionError("BOUND_RESOURCE_MISMATCH")
+            from .resource_publication import eligible
+
             if (
-                record.get("publishedRevisionId") != member.revision_id
-                or exact.get("state") != "PUBLISHED"
-                or (
-                    member.kind in {MemberKind.AGENT, MemberKind.SKILL, MemberKind.MCP}
-                    and record.get("enabled") is not True
-                )
-                or record.get("archived") is True
-                or record.get("lifecycleState") in {"DEPRECATED", "ARCHIVED"}
-            ):
+                member.kind in {MemberKind.AGENT, MemberKind.SKILL, MemberKind.MCP}
+                and record.get("enabled") is not True
+            ) or not eligible(record, exact, member, frozen=published_binding):
                 raise EmployeeDefinitionError("BOUND_RESOURCE_INELIGIBLE")
 
     @staticmethod
@@ -842,7 +886,9 @@ class PostgresEmployeeDefinitionRepository:
             raise EmployeeDefinitionError("INVALID_EMPLOYEE_TRANSITION")
         if action in {"VALIDATE", "APPROVE", "PUBLISH", "GRANT_MATCH"}:
             self.validate_members(
-                connection, EmployeeRevision.from_record(current["revision"])
+                connection,
+                EmployeeRevision.from_record(current["revision"]),
+                published_binding=action == "GRANT_MATCH" and current["published"],
             )
         connection.execute(
             "UPDATE digital_employee_definition.definitions SET aggregate_version=aggregate_version+1 WHERE namespace=%s AND security_domain=%s AND definition_id=%s AND aggregate_version=%s",
@@ -914,7 +960,9 @@ class PostgresEmployeeDefinitionRepository:
                 raise EmployeeDefinitionError("INVALID_EMPLOYEE_TRANSITION")
             if action in {"VALIDATE", "APPROVE", "PUBLISH", "GRANT_MATCH"}:
                 self.validate_members(
-                    conn, EmployeeRevision.from_record(current["revision"])
+                    conn,
+                    EmployeeRevision.from_record(current["revision"]),
+                    published_binding=action == "GRANT_MATCH" and current["published"],
                 )
             conn.execute(
                 "UPDATE digital_employee_definition.definitions SET aggregate_version=aggregate_version+1 WHERE namespace=%s AND security_domain=%s AND definition_id=%s AND aggregate_version=%s",
@@ -950,4 +998,9 @@ class PostgresEmployeeDefinitionRepository:
         )
         if not value["published"] or value["digest"] != expected_digest:
             raise EmployeeDefinitionError("EMPLOYEE_PLAN_REFERENCE_INVALID")
+        self.validate_members(
+            connection,
+            EmployeeRevision.from_record(value["revision"]),
+            published_binding=True,
+        )
         return value

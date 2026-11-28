@@ -255,7 +255,9 @@ def validate_participant(connection, scope, participant):
     if not definition["published"] or definition["digest"] != ref.digest:
         raise ExecutionPreparationError("PREPARED_DEFINITION_NOT_PUBLISHED")
     revision = EmployeeRevision.from_record(definition["revision"])
-    PostgresEmployeeDefinitionRepository.validate_members(connection, revision)
+    PostgresEmployeeDefinitionRepository.validate_members(
+        connection, revision, published_binding=True
+    )
     skill = participant.skill.reference
     if not any(
         str(m.kind) == "SKILL"

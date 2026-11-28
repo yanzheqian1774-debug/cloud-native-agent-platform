@@ -15,7 +15,12 @@ from .digital_employee_definition import EmployeeDefinitionError
 from .execution_domain import ScopeIdentity
 from .execution_preparation import ExecutionPreparationError
 from .plan_suggestion_domain import ConfirmedPlanRevision, ExactReference, PlanningError
-from .planning_candidates import identities, read_published, require_read
+from .planning_candidates import (
+    identities,
+    read_employee_member,
+    read_published,
+    require_read,
+)
 from .planning_source_change import approved_source
 from .resource_automation_validation import validate
 from .resource_policy_lineage import require_supported_lineage
@@ -230,7 +235,7 @@ def coverage(automation, call, plan):
                 )
                 owned_resources.require_reference(work, kind.lower(), exact)
                 require_read(call.authority, p, kind, exact)
-                content, member_name = read_published(c, scope, kind, exact)
+                content, member_name = read_employee_member(c, scope, ref, kind, exact)
                 contents[KINDS[m["kind"]]] = content
                 if kind == "SKILL":
                     contents["_skills"].append((exact, content))

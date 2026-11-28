@@ -192,6 +192,16 @@ class EmployeeDefinitionCommandOwnerAdapter:
             call.context.scope.security_domain,
         )
         for member in revision.members:
+            if member.kind is MemberKind.TOOL:
+                from .tool_definition_authorization import require_tool_grant
+
+                require_tool_grant(
+                    call,
+                    ExactGrant(
+                        "TOOL", "READ", member.resource_id + ":" + member.revision_id
+                    ),
+                )
+                continue
             if self.prepared_resource_reads and member.kind in {
                 MemberKind.SKILL,
                 MemberKind.MCP,
@@ -260,6 +270,27 @@ class EmployeeDefinitionCommandOwnerAdapter:
                     )
                     is not None,
                 )
+                tools = tuple(m for m in revision.members if m.kind is MemberKind.TOOL)
+                if tools:
+                    from types import SimpleNamespace
+
+                    from .digital_employee_definition_postgres import (
+                        PostgresEmployeeDefinitionRepository,
+                    )
+                    from .tool_definition_authorization import require_tool_grant
+
+                    for member in tools:
+                        require_tool_grant(
+                            call,
+                            ExactGrant(
+                                "TOOL",
+                                "READ",
+                                member.resource_id + ":" + member.revision_id,
+                            ),
+                        )
+                    PostgresEmployeeDefinitionRepository.validate_members(
+                        call.connection, SimpleNamespace(scope=scope, members=tools)
+                    )
                 value = self.repository.create_for_workbench(
                     call.connection,
                     revision,

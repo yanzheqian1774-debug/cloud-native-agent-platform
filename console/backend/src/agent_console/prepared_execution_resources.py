@@ -4,7 +4,7 @@ from .execution_preparation import ExecutionPreparationError
 from .resource_use_domain import canonical_digest
 
 
-def published(connection, scope, kind, ref):
+def published(connection, scope, kind, ref, *, employee=None):
     tables = {
         "SKILL": ("skill_mcp_resource.resources", "resource_id"),
         "KNOWLEDGE": ("knowledge_operation.knowledge", "knowledge_id"),
@@ -27,14 +27,21 @@ def published(connection, scope, kind, ref):
         (r for r in record.get("revisions", []) if r["revisionId"] == ref.revision_id),
         None,
     )
-    if (
-        revision is None
-        or str(revision.get("digest", "")).removeprefix("sha256:") != ref.digest
-        or record.get("publishedRevisionId") != ref.revision_id
-        or revision.get("state") != "PUBLISHED"
-        or record.get("archived")
-        or (kind == "SKILL" and not record.get("enabled"))
+    from .resource_publication import eligible
+
+    if not eligible(record, revision, ref) or (
+        kind == "SKILL" and not record.get("enabled")
     ):
+        if employee is not None:
+            from .plan_suggestion_domain import PlanningError
+            from .planning_candidates import read_employee_member
+
+            try:
+                return read_employee_member(connection, scope, employee, kind, ref)[0]
+            except PlanningError as exc:
+                raise ExecutionPreparationError(
+                    "PREPARED_RESOURCE_REVISION_UNAVAILABLE"
+                ) from exc
         raise ExecutionPreparationError("PREPARED_RESOURCE_REVISION_UNAVAILABLE")
     return revision["content"]
 
@@ -60,7 +67,13 @@ def validate_resources(connection, scope, preparation, participant):
             raise ExecutionPreparationError("DOCUMENT_RULE_PREPARATION_V3_REQUIRED")
 
     validate_semantics(connection, scope, preparation, participant)
-    skill = published(connection, scope, "SKILL", participant.skill.reference)
+    skill = published(
+        connection,
+        scope,
+        "SKILL",
+        participant.skill.reference,
+        employee=participant.definition,
+    )
     from .synthetic_delivery_skill import SyntheticDeliverySkillExecutor
 
     if participant.executor_id == SyntheticDeliverySkillExecutor.revision.executor_id:
@@ -101,12 +114,30 @@ def validate_resources(connection, scope, preparation, participant):
         participant.executor_digest,
     ):
         validate_operation(operation, bounded=True)
-    profile = published(connection, scope, "RUNTIME", participant.profile)
+    profile = published(
+        connection,
+        scope,
+        "RUNTIME",
+        participant.profile,
+        employee=participant.definition,
+    )
     if profile.get("provider") != "NATIVE_KUBERNETES":
         raise ExecutionPreparationError("PREPARED_NATIVE_PROFILE_REQUIRED")
-    published(connection, scope, "KNOWLEDGE", preparation.source_snapshot)
+    published(
+        connection,
+        scope,
+        "KNOWLEDGE",
+        preparation.source_snapshot,
+        employee=participant.definition,
+    )
     for resource in participant.resources:
-        published(connection, scope, resource.kind, resource.reference)
+        published(
+            connection,
+            scope,
+            resource.kind,
+            resource.reference,
+            employee=participant.definition,
+        )
     return operation
 
 

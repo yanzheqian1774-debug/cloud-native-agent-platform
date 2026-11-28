@@ -47,7 +47,7 @@ def bind_attachment(value):
         _attachment.reset(token)
 
 
-def read_selected(automation, call, selected):
+def read_selected(automation, call, selected, *, frozen_binding=False):
     """Resolve the exact selected revision with current owner authorization."""
     from .conversation_sources import ReadableSourceValidation
 
@@ -59,7 +59,13 @@ def read_selected(automation, call, selected):
     )
     require_read(call.authority, principal, "KNOWLEDGE", ref)
     scope = automation.bound_app(call).scope(principal)
-    content, name = read_published(call.connection, scope, "KNOWLEDGE", ref)
+    content, name = read_published(
+        call.connection,
+        scope,
+        "KNOWLEDGE",
+        ref,
+        **({"_published_binding": True} if frozen_binding else {}),
+    )
     checked = validate(
         "knowledge", content, ReadableSourceValidation((source_digest(content),))
     )
@@ -123,7 +129,9 @@ def source_reader(
                     raise ConversationError("CONVERSATION_ROUTING_CONTEXT_CHANGED", 409)
             elif state.get("userMessageId") != message_id:
                 raise ConversationError("CONVERSATION_REQUEST_MESSAGE_MISMATCH", 409)
-            return read_selected(automation, call, state["source"])
+            # Only the owned canonical saved journal may freeze a selected source;
+            # fresh browser choices still use the current-only read port.
+            return read_selected(automation, call, state["source"], frozen_binding=True)
 
         try:
             # Absence of a selected resource is a private-conversation fact.

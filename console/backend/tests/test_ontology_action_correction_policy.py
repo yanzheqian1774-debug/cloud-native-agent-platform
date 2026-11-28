@@ -84,3 +84,33 @@ def test_changed_business_content_is_not_an_action_correction():
         pytest.raises(AuthorityError, match="BUSINESS_RULES_CHANGED"),
     ):
         verify_compatibility(None, None, p, NS(scope=scope))
+
+
+def test_verified_owned_action_binding_keeps_exact_published_skill(monkeypatch):
+    old, new, scope = case()
+    p = NS(oldBinding=scope.documentRules, newBinding=scope.documentRules)
+    revision = NativeTypedQuestionDocumentSkillExecutor.revision
+    content = {
+        "operations": [
+            {
+                "name": operation,
+                "executorId": revision.executor_id,
+                "executorRevision": revision.executor_revision,
+                "executorConfigurationDigest": revision.configuration_digest,
+            }
+            for operation in scope.operations
+        ]
+    }
+    with (
+        patch(
+            "agent_console.ontology_action_correction_policy.published_content",
+            side_effect=[old, new],
+        ),
+        patch(
+            "agent_console.planning_candidates.read_published",
+            return_value=(content, "exact retained skill"),
+        ) as read,
+    ):
+        verify_compatibility(None, None, p, NS(scope=scope))
+    assert read.call_args.args == (None, None, "SKILL", scope.skills[0])
+    assert read.call_args.kwargs == {"_published_binding": True}

@@ -68,7 +68,9 @@ def require_bound_source(c, context, policy, saved, authorization, kwargs):
         == (True,),
         "FIXED_WORK_BOUND_SOURCE_READ_REQUIRED",
     )
-    content, _ = read_published(c, ScopeIdentity(*scope), "KNOWLEDGE", source)
+    content, _ = read_published(
+        c, ScopeIdentity(*scope), "KNOWLEDGE", source, _published_binding=True
+    )
     require(
         source_digest(content) == selected["sourceContentDigest"],
         "FIXED_WORK_BOUND_SOURCE_CHANGED",
