@@ -9,3 +9,16 @@ export async function conversationRequest<T>(path='',csrf?:string,body?:unknown,
 }
 
 export const readConversationHead=(identity:string)=>conversationRequest<Pick<PrivateConversation,'conversation'>>('/'+encodeURIComponent(identity)+'/head');
+
+export type ConversationMessagePage={conversation:PrivateConversation['conversation'];messages:PrivateMessage[];page:{hasMore:boolean;nextCursor:string|null;resumeCursor?:string|null}};
+export async function readConversationMessages(identity:string,before?:string,signal?:AbortSignal){
+ const value=await conversationRequest<ConversationMessagePage>('/'+encodeURIComponent(identity)+'/messages?'+new URLSearchParams({limit:'50',...(before?{before}:{})}),undefined,undefined,signal);
+ if(value?.conversation?.conversation_id!==identity||!Number.isSafeInteger(value.conversation.version)||!Array.isArray(value.messages)||typeof value.page?.hasMore!=='boolean'||!(value.page.nextCursor===null||typeof value.page.nextCursor==='string')||value.page.hasMore&&!value.page.nextCursor||!(value.page.resumeCursor===undefined||value.page.resumeCursor===null||typeof value.page.resumeCursor==='string'))throw new WorkbenchRequestError('CONVERSATION_MESSAGE_PAGE_INVALID',503);
+ return value;
+}
+export const readConversationWorkLinks=(identity:string,signal?:AbortSignal)=>conversationRequest<Pick<PrivateConversation,'conversation'|'links'>>('/'+encodeURIComponent(identity)+'/work-links',undefined,undefined,signal);
+
+export type CapabilityConversationContext={conversation:PrivateConversation['conversation'];message:PrivateMessage|null};
+export const readCapabilityConversationContext=(identity:string,signal?:AbortSignal)=>conversationRequest<CapabilityConversationContext>('/'+encodeURIComponent(identity)+'/capability-context',undefined,undefined,signal);
+export type UnderstandingSuccessPage={conversation:PrivateConversation['conversation'];items:{message:PrivateMessage;userMessage:PrivateMessage|null}[];page:{hasMore:boolean;nextCursor:string|null;resumeCursor?:string|null};unavailable:boolean};
+export const readUnderstandingSuccessPage=(identity:string,before?:string)=>conversationRequest<UnderstandingSuccessPage>('/'+encodeURIComponent(identity)+'/understanding-successes?'+new URLSearchParams({limit:'50',...(before?{before}:{})}));

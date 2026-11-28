@@ -5,10 +5,12 @@ import {formatTime} from "../journey/formatTime";
 import {fieldLabels,sourceLabels,understandingDisplay,isUnstructuredStatement} from "./problemUnderstandingModel";
 import type {DraftTurn,ProblemDraft} from "./problemConversationModel";
 
-export function ConversationFrame({children,composer,newMessageKey,startAtTop=false,viewScope,viewId}:{viewScope?:string;viewId?:string;children:ReactNode;composer:ReactNode;newMessageKey:string;startAtTop?:boolean}){
-  const {stream,away,unread,onScroll,latest}=useConversationScroll({newMessageKey,startAtTop,viewScope,viewId});
+type HistoryPageControls={hasMore:boolean;busy:boolean;error:string;onMore:()=>Promise<void>;onLatest?:()=>Promise<void>;onAnchor?:(messageId:string,offset:number)=>void;restoredAnchor?:{messageId:string;offset:number}|null;historicalPage?:boolean};
+export function ConversationFrame({children,composer,newMessageKey,startAtTop=false,viewScope,viewId,history}:{history?:HistoryPageControls;viewScope?:string;viewId?:string;children:ReactNode;composer:ReactNode;newMessageKey:string;startAtTop?:boolean}){
+  const {stream,away,unread,onScroll,latest:scrollLatest,preparePrepend}=useConversationScroll({newMessageKey,startAtTop,viewScope,viewId,onReachStart:history?.hasMore&&!history.busy?history.onMore:undefined,onMessageAnchor:history?.onAnchor,restoreMessageAnchor:history?.restoredAnchor});
+  const latest=()=>{scrollLatest();void history?.onLatest?.()};
   return <section className="px-conversation" aria-label="业务问题对话">
-    <div className="px-message-stream" ref={stream} onScroll={onScroll}>{children}</div>
+    <div className="px-message-stream" ref={stream} onScroll={onScroll}>{history?.historicalPage&&<p role="status">已恢复先前阅读位置，内容已重新核对。<button type="button" onClick={latest}>读取最新消息</button></p>}{history?.hasMore&&<button type="button" disabled={history.busy} onClick={()=>{preparePrepend();void history.onMore()}}>{history.busy?"正在读取更早消息…":"读取更早消息"}</button>}{history?.error&&<p role="status">{history.error}</p>}{children}</div>
     {away&&<div className="conversation-scroll-controls"><button type="button" className="conversation-scroll-latest" title="回到最新消息" aria-label="回到最新消息" onClick={latest}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14m-6-6 6 6 6-6"/></svg></button>{unread&&<span role="status">有新消息</span>}</div>}
     {composer}
   </section>;

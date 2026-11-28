@@ -54,11 +54,16 @@ class OwnedBusinessPlanningStartRead(OwnedBusinessCriterionRead):
             ExactGrant("PLAN", "PREPARE", "plan:prepare:" + target.resource_id),
         ):
             self._require_read(c, ctx, now, grant)
-        admission = c.execute(
-            "SELECT record FROM authorization_admin.owned_business_admissions "
-            "WHERE admission_id=%s AND record_digest=%s",
-            (binding.admission_id, binding.record_digest),
-        ).fetchone()
+        from .owned_business_admission_successor import read_exact
+
+        admission = read_exact(
+            c,
+            binding.admission_id,
+            ctx.scope.tenant_id,
+            ctx.scope.security_domain,
+            ctx.principal_id,
+            expected_digest=binding.record_digest,
+        )
         problem = c.execute(
             "SELECT p.current_state,r.digest FROM "
             "business_problem_authority.problems p "

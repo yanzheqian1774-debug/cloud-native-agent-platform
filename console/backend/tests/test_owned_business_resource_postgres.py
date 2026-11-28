@@ -66,10 +66,16 @@ def bind_owned(a):
     )
     state = {"revoked": False, "reads": 0}
 
-    def work(c, context, problem, *, source_digest=None, history=False):
+    def work(c, context, problem, *, source_digest=None, history=False, plan=None):
         assert c is not None
         assert context.principal_id == binding.subject_id and problem == binding.problem
         assert source_digest in (None, scope.sourceContentDigest)
+        if plan is not None:
+            from agent_console.planning_source_change import approved_source
+
+            assert plan.plan_id == a.e.p.plan_id
+            assert plan.semantics.target.problem == binding.problem
+            assert approved_source(plan.semantics) == scope.source
         state["reads"] += 1
         if state["revoked"]:
             raise AuthorityError("OWNED_BUSINESS_ADMISSION_REVOKED")
@@ -266,10 +272,11 @@ def test_owned_document_rules_use_actual_published_contract_without_named_old_wo
         update={"works": ()}
     )
 
-    def current(context, problem, now, *, connection, source_digest):
+    def current(context, problem, now, *, connection, source_digest, plan=None):
         assert connection is not None and context == d.context
         assert problem == d.work.problem
         assert source_digest == d.work.sourceContentDigests[0]
+        assert plan is None, "this legacy fixture has no adopted Plan"
         return d.work
 
     d.automation.work = current

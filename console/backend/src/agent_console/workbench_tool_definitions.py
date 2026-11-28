@@ -109,7 +109,9 @@ class ToolDefinitionTargets:
         )
 
 
-def tool_definition_operations(repository, cursors, *, testing=None):
+def tool_definition_operations(
+    repository, cursors, *, testing=None, source_testing=None
+):
     def require(call, action, target=COLLECTION):
         return require_tool_grant(call, ExactGrant(OWNER, action, target))
 
@@ -126,7 +128,23 @@ def tool_definition_operations(repository, cursors, *, testing=None):
                 revision or head["draft_revision_id"] or head["published_revision_id"]
             )
             require(call, "READ", tool_id + ":" + revision)
-            return repository.read(call.connection, scope, tool_id, revision)
+            value = repository.read(call.connection, scope, tool_id, revision)
+            from .tool_source_validation import read_resolution
+
+            resolution = read_resolution(call.connection, scope, value)
+            from .tool_source_presentation import read_source_presentation
+
+            source_presentation = read_source_presentation(
+                call.connection, scope, value, resolution, call.context.principal_id
+            )
+            return {
+                **value,
+                "sourceValidation": resolution,
+                "sourceRuntimeReadback": source_presentation,
+                "effectiveBlockingIssues": resolution["blockingIssues"]
+                if resolution
+                else value["record"]["operation"].get("blockingIssues", []),
+            }
 
         try:
             if call.operation == "TOOL_LIFECYCLE_COMMAND":
@@ -151,9 +169,18 @@ def tool_definition_operations(repository, cursors, *, testing=None):
                     actor_id=call.context.principal_id,
                     decision_id=decision.decision_id,
                     run_test=(
-                        lambda current, command: testing.run(call, current, command)
+                        lambda current, command: (source_testing or testing).run(
+                            call, current, command
+                        )
                     )
-                    if testing
+                    if source_testing or testing
+                    else None,
+                    validate_runtime=(
+                        lambda current, command: source_testing.validate_runtime(
+                            call, current, command
+                        )
+                    )
+                    if source_testing
                     else None,
                 )
             if call.operation == "TOOL_EMPLOYEE_CANDIDATES":
@@ -373,6 +400,8 @@ def tool_definition_operations(repository, cursors, *, testing=None):
                     "namespace=%s AND security_domain=%s AND command_id=%s",
                     (scope.namespace, scope.security_domain, call.path["command_id"]),
                 ).fetchone()
+                if not row and source_testing:
+                    return source_testing.receipt(call, call.path["command_id"])
                 if not row or row["actor_id"] != call.context.principal_id:
                     raise ToolStorageError("TOOL_COMMAND_NOT_FOUND")
                 if row["result"].get("commandKind", "IMPORT") == "IMPORT":

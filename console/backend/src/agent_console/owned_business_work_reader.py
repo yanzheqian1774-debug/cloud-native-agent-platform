@@ -42,6 +42,7 @@ class OwnedBusinessBinding:
     expires_at: datetime
     history_only: bool = False
     ontology_correction: dict | None = None
+    assembly_adoption: dict | None = None
 
 
 class OwnedBusinessWorkReader:
@@ -147,18 +148,16 @@ class OwnedBusinessWorkReader:
         p = self.policy
         require(p.enabled and OwnedBusinessPolicy.load(self.path) == p, "DISABLED")
         proof = planning["record"].get("owned_business") or {}
-        row = c.execute(
-            "SELECT record,record_digest FROM "
-            "authorization_admin.owned_business_admissions "
-            "WHERE admission_id=%s AND tenant_id=%s AND security_domain=%s "
-            "AND subject_id=%s",
-            (
-                proof.get("admissionId"),
-                planning["tenant_id"],
-                planning["security_domain"],
-                planning["subject_id"],
-            ),
-        ).fetchone()
+        from .owned_business_admission_successor import read_exact
+
+        row = read_exact(
+            c,
+            proof.get("admissionId"),
+            planning["tenant_id"],
+            planning["security_domain"],
+            planning["subject_id"],
+            expected_digest=proof.get("recordDigest"),
+        )
         from .resource_use_domain import canonical_digest
 
         require(
@@ -183,7 +182,7 @@ class OwnedBusinessWorkReader:
             < min(p.expiresAt, datetime.fromisoformat(record["expiresAt"])),
             "POLICY_BINDING_CHANGED",
         )
-        require_not_revoked(c, proof["admissionId"])
+        # read_exact validated every real admission/context revocation ancestor.
         require(
             not c.execute(
                 "SELECT 1 FROM authorization_admin.context_call_decisions d JOIN "
@@ -203,12 +202,23 @@ class OwnedBusinessWorkReader:
         source_digest=None,
         history=False,
         _apply_correction=True,
+        plan=None,
+        _selection_record=None,
     ):
         require(not self.retained_read_only or history, "HISTORY_ONLY")
         p, now = self.policy, datetime.now(UTC)
         require(isinstance(problem, ExactReference), "EXACT_PROBLEM_REQUIRED")
         require(p.enabled and OwnedBusinessPolicy.load(self.path) == p, "DISABLED")
-        if history and self.retained_history:
+        from .owned_business_admission_successor import for_plan
+        from .owned_resource_assembly import MODE
+
+        exact_admission = None
+        if plan is not None and any(
+            getattr(scope, "trustedAssemblyAdoption", None) == MODE
+            for scope in p.scopes
+        ):
+            exact_admission = for_plan(c, context, plan)
+        if history and self.retained_history and exact_admission is None:
             from .owned_business_retained_history import select_reader
 
             retained = select_reader(self, c, context, problem)
@@ -263,9 +273,30 @@ class OwnedBusinessWorkReader:
             (p.tenantId, p.securityDomain, problem.resource_id),
         ).fetchone()
         require(bound is not None, "BUSINESS_BINDING_REQUIRED")
+        from .owned_business_admission_successor import for_plan, read_exact
+
         stored = saved(c, context, bound["invocation_id"])
+        if not history and _selection_record is not None:
+            stored = _selection_record
+        elif exact_admission is not None:
+            stored = exact_admission
         require(stored is not None, "ADMISSION_REQUIRED")
-        require_not_revoked(c, stored["admission_id"])
+        if stored["admission_id"].startswith("owned-business-successor:"):
+            if _selection_record is None:
+                stored = read_exact(
+                    c,
+                    stored["admission_id"],
+                    p.tenantId,
+                    p.securityDomain,
+                    p.subjectId,
+                    expected_digest=stored["record_digest"],
+                )
+        else:
+            require_not_revoked(c, stored["admission_id"])
+        require(
+            stored["record"]["invocationId"] == bound["invocation_id"],
+            "BUSINESS_BINDING_CHANGED",
+        )
         r = stored["record"]
         require(
             r["policyDigest"] == p.digest
@@ -483,5 +514,7 @@ class OwnedBusinessWorkReader:
         if _apply_correction:
             from .ontology_action_correction import project
 
-            return project(self, c, context, result)
-        return result
+            result = project(self, c, context, result)
+        from .owned_resource_assembly import project as project_assembly
+
+        return project_assembly(self, c, context, result, plan)

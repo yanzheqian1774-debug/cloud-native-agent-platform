@@ -360,36 +360,7 @@ class OwnedBusinessAdmission:
         observed_source(value.input_source, content)
         return row, account, now, expires, value, ancestry
 
-    def admit(self, c, context, invocation_id):
-        source, account, now, expires, value, selected, ancestry = self._source(
-            c, context, invocation_id
-        )
-        previous = saved(c, context, invocation_id)
-        bound_problem = c.execute(
-            "SELECT invocation_id,resource_id FROM "
-            "authorization_admin.context_call_objects "
-            "WHERE context_id=%s AND owner='BUSINESS_PROBLEM'",
-            (value.context_id,),
-        ).fetchone()
-        if bound_problem is not None:
-            require(
-                bound_problem["invocation_id"] == invocation_id,
-                "BUSINESS_BINDING_CHANGED",
-            )
-        else:
-            from .conversation_goal_selection import selected_journal
-
-            journey = selected_journal(
-                c, context, source["record"]["conversation_id"], invocation=value
-            )
-            state = journey["state"] if journey else {}
-            require(
-                state.get("phase") == "CREATE"
-                and not state.get("problem")
-                and (state.get("draft") or {}).get("invocationId") == invocation_id
-                and (state.get("draft") or {}).get("inputSource") == value.input_source,
-                "CURRENT_GOAL_CHANGED",
-            )
+    def _record(self, c, context, source, account, expires, value, selected, ancestry):
         record = {
             "schemaVersion": "owned-business-admission.v1",
             "policyDigest": self.policy.digest,
@@ -426,6 +397,41 @@ class OwnedBusinessAdmission:
         goal_origin = self._goal_origin(c, context, value, ancestry)
         if goal_origin is not None:
             record["goalAdoptionDigest"] = goal_origin["record_digest"]
+        return record
+
+    def admit(self, c, context, invocation_id):
+        source, account, now, expires, value, selected, ancestry = self._source(
+            c, context, invocation_id
+        )
+        previous = saved(c, context, invocation_id)
+        bound_problem = c.execute(
+            "SELECT invocation_id,resource_id FROM "
+            "authorization_admin.context_call_objects "
+            "WHERE context_id=%s AND owner='BUSINESS_PROBLEM'",
+            (value.context_id,),
+        ).fetchone()
+        if bound_problem is not None:
+            require(
+                bound_problem["invocation_id"] == invocation_id,
+                "BUSINESS_BINDING_CHANGED",
+            )
+        else:
+            from .conversation_goal_selection import selected_journal
+
+            journey = selected_journal(
+                c, context, source["record"]["conversation_id"], invocation=value
+            )
+            state = journey["state"] if journey else {}
+            require(
+                state.get("phase") == "CREATE"
+                and not state.get("problem")
+                and (state.get("draft") or {}).get("invocationId") == invocation_id
+                and (state.get("draft") or {}).get("inputSource") == value.input_source,
+                "CURRENT_GOAL_CHANGED",
+            )
+        record = self._record(
+            c, context, source, account, expires, value, selected, ancestry
+        )
         previous = saved(c, context, invocation_id)
         if previous:
             if value.aggregate_version != previous["record"]["aggregateVersion"]:
@@ -479,9 +485,11 @@ class OwnedBusinessAdmission:
         row["owned_business_record_digest"] = binding.record_digest
         return row, account, now, min(expires, binding.expires_at)
 
-    def work(self, c, context, problem, *, source_digest=None, history=False):
+    def work(
+        self, c, context, problem, *, source_digest=None, history=False, plan=None
+    ):
         return self.work_reader.work(
-            c, context, problem, source_digest=source_digest, history=history
+            c, context, problem, source_digest=source_digest, history=history, plan=plan
         )
 
 

@@ -94,12 +94,16 @@ class OwnedBusinessCriterionRead:
         binding = self.owner.work(c, ctx, target)
         if binding.history_only:
             raise ConversationError("CONVERSATION_CRITERION_STATUS_ACCESS_DENIED", 403)
-        admission = c.execute(
-            "SELECT record FROM authorization_admin.owned_business_admissions "
-            "WHERE admission_id=%s AND record_digest=%s AND tenant_id=%s "
-            "AND security_domain=%s AND subject_id=%s",
-            (binding.admission_id, binding.record_digest, *scope, ctx.principal_id),
-        ).fetchone()
+        from .owned_business_admission_successor import read_exact
+
+        admission = read_exact(
+            c,
+            binding.admission_id,
+            ctx.scope.tenant_id,
+            ctx.scope.security_domain,
+            ctx.principal_id,
+            expected_digest=binding.record_digest,
+        )
         # work() proved current value is the exact original or its lawful link.
         # The journal may retain that original version, never an arbitrary echo.
         if not (

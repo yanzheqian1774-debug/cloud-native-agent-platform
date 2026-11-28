@@ -40,6 +40,7 @@ def successor_perimeter(policy):
     for scope in value["scopes"]:
         scope.pop("skills")
         scope.pop("employees")
+        scope.pop("trustedAssemblyAdoption", None)
     return value
 
 

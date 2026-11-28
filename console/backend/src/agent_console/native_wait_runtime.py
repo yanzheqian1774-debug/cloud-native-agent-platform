@@ -51,10 +51,10 @@ class NativeWaitRuntimeSession:
             return reader.read(c, self.context, self.command, self.preparation)
         if self.runtime.owned_business is None:
             raise AuthorityError("NATIVE_WAIT_OWNED_BUSINESS_REQUIRED")
-        bound = self.runtime.owned_business.work(
-            c,
-            self.context,
-            self.preparation.semantics.target.problem,
+        from .owned_resource_assembly import prepared_binding
+
+        bound = prepared_binding(
+            self.runtime.owned_business, c, self.context, self.command, self.preparation
         )
         if bound.scope.source != self.preparation.source_snapshot:
             raise AuthorityError("NATIVE_WAIT_SOURCE_BINDING_CHANGED")
@@ -111,17 +111,16 @@ class NativeWaitRuntimeSession:
                 principal_id=self.command.principal_id,
                 conversation_id=bound.conversation_id,
             )
-        row = c.execute(
-            "SELECT record FROM authorization_admin.owned_business_admissions "
-            "WHERE tenant_id=%s AND security_domain=%s AND admission_id=%s "
-            "AND record_digest=%s",
-            (
-                bound.tenant_id,
-                bound.security_domain,
-                bound.admission_id,
-                bound.record_digest,
-            ),
-        ).fetchone()
+        from .owned_business_admission_successor import read_exact
+
+        row = read_exact(
+            c,
+            bound.admission_id,
+            bound.tenant_id,
+            bound.security_domain,
+            self.command.principal_id,
+            expected_digest=bound.record_digest,
+        )
         if not row or row["record"]["subject"] != self.command.principal_id:
             raise AuthorityError("NATIVE_WAIT_ORIGINAL_CONVERSATION_REQUIRED")
         return WaitIdentity(

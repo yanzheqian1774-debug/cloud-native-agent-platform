@@ -55,11 +55,40 @@ def select_employee(automation, call, *, automatic_coverage=None):
         require_supported_lineage(app, cur, scope, old)
         if baseline["digest"] != request.digest:
             raise WorkbenchOwnerError("RESOURCE_SELECTION_PLAN_DIGEST_MISMATCH", 409)
-        work = automation.work(
-            call.context,
-            old.semantics.target.problem,
-            automation.grants.clock(),
-            connection=c,
+        work = automation.selection_work(call, old, key=request.idempotencyKey)
+        from .owned_resource_assembly import (
+            finish_proof,
+            selection_semantics,
+            selection_work,
+        )
+
+        ontology_request = request.ontologySuccessor
+        if ontology_request is None:
+            previous_selection = c.execute(
+                "SELECT record FROM execution_authority.resource_policy_plan_commands "
+                "WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND "
+                "request_key=%s",
+                (
+                    scope.namespace,
+                    scope.security_domain,
+                    principal.principal_id,
+                    request.idempotencyKey,
+                ),
+            ).fetchone()
+            if previous_selection:
+                adopted = previous_selection["record"].get("assemblyAdoption") or {}
+                prior_ontology = adopted.get("body", {}).get("ontologySuccessor")
+                if prior_ontology:
+                    ontology_request = ExactReference.model_validate(
+                        prior_ontology["ontology"]
+                    )
+        work, assembly_proof = selection_work(
+            automation,
+            call,
+            work,
+            old,
+            request.employee,
+            ontology_successor=ontology_request,
         )
         owned_resources.require_reference(work, "employee", request.employee)
         target = old.semantics.target
@@ -105,6 +134,12 @@ def select_employee(automation, call, *, automatic_coverage=None):
             if employees != [request.employee.model_dump(mode="json")]:
                 raise WorkbenchOwnerError("CAPABILITY_PREPARED_EMPLOYEE_MISMATCH", 409)
         payload = request.model_dump(mode="json")
+        if request.ontologySuccessor is None:
+            payload.pop("ontologySuccessor", None)
+        if assembly_proof is not None and assembly_proof.get("ontologySuccessor"):
+            payload["ontologySuccessor"] = assembly_proof["ontologySuccessor"][
+                "ontology"
+            ]
         if request.capabilityConversationId is None:
             for field in (
                 "capabilityConversationId",
@@ -116,7 +151,10 @@ def select_employee(automation, call, *, automatic_coverage=None):
             owned_resources.digest_basis([payload, automation.policy.digest], work)
         )
         replay = c.execute(
-            "SELECT record,payload_digest FROM execution_authority.resource_policy_plan_commands WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
+            "SELECT record,payload_digest FROM "
+            "execution_authority.resource_policy_plan_commands WHERE "
+            "namespace=%s AND security_domain=%s AND subject_id=%s AND "
+            "request_key=%s",
             (
                 scope.namespace,
                 scope.security_domain,
@@ -130,7 +168,8 @@ def select_employee(automation, call, *, automatic_coverage=None):
             automation.recheck(call, replay["record"]["preflight"])
             return replay["record"]
         head = c.execute(
-            "SELECT max(revision) revision FROM workflow_planning.proposals WHERE namespace=%s AND security_domain=%s AND proposal_id=%s",
+            "SELECT max(revision) revision FROM workflow_planning.proposals "
+            "WHERE namespace=%s AND security_domain=%s AND proposal_id=%s",
             (scope.namespace, scope.security_domain, identity),
         ).fetchone()["revision"]
         if (
@@ -142,6 +181,13 @@ def select_employee(automation, call, *, automatic_coverage=None):
         for r in probe["requirements"]:
             if r["kind"] == "EMPLOYEE":
                 r["selected"] = request.employee.model_dump(mode="json")
+        if assembly_proof is not None:
+            rebound = selection_semantics(
+                FlexiblePlanSemantics.model_validate(probe),
+                work.businessScope,
+                ontology_reference=work.selectedOntologySuccessor,
+            )
+            probe = rebound.model_dump(mode="json")
         from .pending_member_requirements import read_and_resolve
 
         prospective_semantics = FlexiblePlanSemantics.model_validate(probe)
@@ -164,7 +210,12 @@ def select_employee(automation, call, *, automatic_coverage=None):
             update={"semantics": FlexiblePlanSemantics.model_validate(probe)}
         )
         refs, employee = automation.derive(
-            call, prospective, "selection:" + request.idempotencyKey, work, issuer
+            call,
+            prospective,
+            "selection:" + request.idempotencyKey,
+            work,
+            issuer,
+            **({"selection_predecessor": old} if assembly_proof is not None else {}),
         )
         if not employee:
             raise AuthorityError("RESOURCE_EMPLOYEE_COMMITMENT_REQUIRED")
@@ -344,6 +395,11 @@ def select_employee(automation, call, *, automatic_coverage=None):
         }
         if owned_resources.evidence(work):
             result["ownedBusiness"] = owned_resources.evidence(work)
+        if assembly_proof is not None:
+            from .owned_resource_assembly import admission_basis
+
+            result["ownedBusiness"] = admission_basis(work)
+            result["assemblyAdoption"] = finish_proof(assembly_proof, confirmed)
         if capability:
             result["capabilitySource"] = {
                 "conversationId": request.capabilityConversationId,
@@ -353,7 +409,8 @@ def select_employee(automation, call, *, automatic_coverage=None):
         if automatic_coverage is not None:
             result["automaticCoverage"] = automatic_coverage
         c.execute(
-            "INSERT INTO execution_authority.resource_policy_plan_commands VALUES(%s,%s,%s,%s,%s,%s)",
+            "INSERT INTO execution_authority.resource_policy_plan_commands "
+            "VALUES(%s,%s,%s,%s,%s,%s)",
             (
                 scope.namespace,
                 scope.security_domain,
@@ -390,6 +447,7 @@ def read_selection(automation, call):
             automation.grants.clock(),
             connection=cur.connection,
             history=True,
+            plan=plan,
         )
         owned_resources.require_plan(work, plan)
         owned_resources.require_capability(automation, call, work)
@@ -399,7 +457,8 @@ def read_selection(automation, call):
         capability = validate_source(automation, call, request, plan, current)
         row = cur.connection.execute(
             "SELECT record FROM execution_authority.resource_policy_plan_commands "
-            "WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
+            "WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND "
+            "request_key=%s",
             (
                 scope.namespace,
                 scope.security_domain,
@@ -410,9 +469,39 @@ def read_selection(automation, call):
         if row is None:
             raise WorkbenchOwnerError("RESOURCE_SELECTION_NOT_FOUND", 404)
         result = row["record"]
-        if owned_resources.evidence(work) and result.get(
-            "ownedBusiness"
-        ) != owned_resources.evidence(work):
+        from .owned_resource_assembly import admission_basis
+
+        if (
+            not isinstance(result, dict)
+            or "proposal" not in result
+            or "confirmation" not in result
+        ):
+            raise WorkbenchOwnerError("RESOURCE_SELECTION_NOT_FOUND", 404)
+        evidence_work = work
+        if result.get("assemblyAdoption"):
+            adopted_plan = ConfirmedPlanRevision.model_validate(
+                result["confirmation"]["plan"]
+            )
+            adopted_work = automation.work(
+                call.context,
+                plan.semantics.target.problem,
+                automation.grants.clock(),
+                connection=cur.connection,
+                history=True,
+                plan=adopted_plan,
+            )
+            if (adopted_work.assemblyAdoption or {}).get("digest") != result[
+                "assemblyAdoption"
+            ]["digest"]:
+                raise AuthorityError("OWNED_ASSEMBLY_BINDING_CHANGED")
+            if adopted_work.admissionId.startswith("owned-business-successor:"):
+                evidence_work = adopted_work
+        expected_evidence = (
+            admission_basis(evidence_work)
+            if result.get("assemblyAdoption")
+            else owned_resources.evidence(work)
+        )
+        if expected_evidence and result.get("ownedBusiness") != expected_evidence:
             raise AuthorityError("OWNED_BUSINESS_PREPARATION_CHANGED")
         successor = ProposalRevision.model_validate(result["proposal"])
         expected = ExactReference(

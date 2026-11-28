@@ -289,15 +289,19 @@ def test_same_owned_problem_confirms_prepares_and_worker_reads(
             assert c.execute(
                 "SELECT count(*) n FROM execution_authority.workflow_runs"
             ).fetchone()["n"] == getattr(e, "consumer_expected_run_count", 1)
-            c.execute(
-                "INSERT INTO authorization_admin.owned_business_revocations"
-                "(admission_id,actor_id,reason_code) VALUES(%s,%s,%s)",
-                (
-                    ready["ownedBusiness"]["admissionId"],
-                    e.context.principal_id,
-                    "USER_REQUESTED",
-                ),
-            )
+            revoke_owner = getattr(e, "consumer_revocation_owner", None)
+            if revoke_owner is None:
+                c.execute(
+                    "INSERT INTO authorization_admin.owned_business_revocations"
+                    "(admission_id,actor_id,reason_code) VALUES(%s,%s,%s)",
+                    (
+                        ready["ownedBusiness"]["admissionId"],
+                        e.context.principal_id,
+                        "USER_REQUESTED",
+                    ),
+                )
+        if revoke_owner is not None:
+            revoke_owner(ready)
         assert worker.dispatches() == ()
         after_revoke = getattr(e, "consumer_after_revoke", None)
         if after_revoke is not None:

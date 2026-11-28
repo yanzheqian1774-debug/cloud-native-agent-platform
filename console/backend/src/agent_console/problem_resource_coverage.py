@@ -58,7 +58,13 @@ class CoverageRecovery(CoverageQuery):
 def gap_for(reason):
     if any(
         token in reason
-        for token in ("UNREADABLE", "NOT_READABLE", "PERMISSION", "AUTHORIZ")
+        for token in (
+            "UNREADABLE",
+            "NOT_READABLE",
+            "READ_DENIED",
+            "PERMISSION",
+            "AUTHORIZ",
+        )
     ):
         return "PERMISSION"
     if "SOURCE" in reason.split("_") or "KNOWLEDGE" in reason:
@@ -181,12 +187,7 @@ def coverage(automation, call, plan):
         call.context.principal_id, scope.namespace, scope.security_domain
     )
     automation.authenticate(call.context)
-    work = automation.work(
-        call.context,
-        plan.semantics.target.problem,
-        automation.grants.clock(),
-        connection=c,
-    )
+    work = automation.selection_work(call, plan)
     owned_resources.require_plan(work, plan, check_references=False)
     owned_resources.require_capability(automation, call, work)
     automation.bound_app(call).validate_target(p, plan.semantics.target, c)
@@ -202,6 +203,7 @@ def coverage(automation, call, plan):
             for ref in work.businessScope.employees
         ]
         if isinstance(work, owned_resources.OwnedResourceWork)
+        and getattr(work.businessScope, "trustedAssemblyAdoption", None) is None
         else identities(c, scope, "EMPLOYEE", limit=201)
     )
     for row in rows:
@@ -222,6 +224,24 @@ def coverage(automation, call, plan):
             "executionReady": False,
         }
         try:
+            candidate_work = work
+            candidate_semantics = plan.semantics
+            if (
+                isinstance(work, owned_resources.OwnedResourceWork)
+                and ref not in work.businessScope.employees
+            ):
+                from .owned_resource_assembly import selection_semantics, selection_work
+
+                candidate_work, _ = selection_work(automation, call, work, plan, ref)
+                if candidate_work.selectedOntologySuccessor is not None:
+                    item["ontologySuccessor"] = (
+                        candidate_work.selectedOntologySuccessor.model_dump(mode="json")
+                    )
+                candidate_semantics = selection_semantics(
+                    plan.semantics,
+                    candidate_work.businessScope,
+                    ontology_reference=candidate_work.selectedOntologySuccessor,
+                )
             definition, name = read_published(c, scope, "EMPLOYEE", ref)
             item.update(name=name, publication="PUBLISHED")
             contents = {"_skills": []}
@@ -233,7 +253,7 @@ def coverage(automation, call, plan):
                     revision_id=m["revision_id"],
                     digest=m["digest"].removeprefix("sha256:"),
                 )
-                owned_resources.require_reference(work, kind.lower(), exact)
+                owned_resources.require_reference(candidate_work, kind.lower(), exact)
                 require_read(call.authority, p, kind, exact)
                 content, member_name = read_employee_member(c, scope, ref, kind, exact)
                 contents[KINDS[m["kind"]]] = content
@@ -247,10 +267,10 @@ def coverage(automation, call, plan):
                     }
                 )
             checks = assess(
-                plan.semantics,
+                candidate_semantics,
                 definition["members"],
                 contents,
-                work,
+                candidate_work,
                 runtime,
                 sales_v2_candidate=automation.sales_v2_candidate,
             )
@@ -390,7 +410,10 @@ class ProblemResourceCoverage:
             owned_resources.require_capability(a, call, work)
             key = args.get("key", args.get("idempotencyKey"))
             old = call.connection.execute(
-                "SELECT record FROM execution_authority.resource_policy_plan_commands WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
+                "SELECT record FROM "
+                "execution_authority.resource_policy_plan_commands WHERE "
+                "namespace=%s AND security_domain=%s AND subject_id=%s AND "
+                "request_key=%s",
                 (
                     scope.namespace,
                     scope.security_domain,
@@ -444,8 +467,15 @@ class ProblemResourceCoverage:
             report = coverage(a, call, plan)
             if report["selection"] is None:
                 raise WorkbenchOwnerError("AUTOMATIC_SELECTION_COVERAGE_BLOCKED", 409)
+            selected_candidate = next(
+                item
+                for item in report["candidates"]
+                if item["reference"] == report["selection"]
+            )
             command = SelectEmployeeResources(
-                **request.model_dump(), employee=report["selection"]
+                **request.model_dump(),
+                employee=report["selection"],
+                ontologySuccessor=selected_candidate.get("ontologySuccessor"),
             )
             return a.select_employee(
                 replace(

@@ -171,6 +171,7 @@ def test_plan_source_operation_and_target_rechecked(case, monkeypatch):
         target=NS(problem=ref("problem")),
         tasks=[NS(operation="READ_DATA")],
         requirements=[],
+        boundaries=[],
     )
     plan = NS(semantics=semantics)
     require_plan(case.work, plan)

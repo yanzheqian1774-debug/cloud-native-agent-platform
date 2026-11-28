@@ -45,7 +45,27 @@ async function authorizationWrite<T>(path:string,csrfToken:string,idempotencyKey
 }
 
 export const newIdempotencyKey=(operation:string)=>`${operation}:${crypto.randomUUID()}`;
-export const readWorkbenchSession=async(signal?:AbortSignal)=>decode<WorkbenchSession>(await fetch(`${PREFIX}/session`,{credentials:"same-origin",headers:{Accept:"application/json"},signal}));
+// Share only overlapping reads. A completed identity is never cached.
+let sessionFlight:{promise:Promise<WorkbenchSession>;controller:AbortController}|null=null;
+function invalidateSessionRead(){const old=sessionFlight;sessionFlight=null;old?.controller.abort()}
+window.addEventListener('workbench-session-expired',invalidateSessionRead);
+window.addEventListener('focus',invalidateSessionRead);
+export function readWorkbenchSession(signal?:AbortSignal):Promise<WorkbenchSession>{
+ if(signal?.aborted)return Promise.reject(signal.reason??new DOMException('Aborted','AbortError'));
+ if(!sessionFlight){
+  const controller=new AbortController();
+  const flight={controller,promise:fetch(`${PREFIX}/session`,{credentials:"same-origin",headers:{Accept:"application/json"},signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15000)])}).then(decode<WorkbenchSession>)};
+  flight.promise=flight.promise.finally(()=>{if(sessionFlight===flight)sessionFlight=null});
+  sessionFlight=flight;
+ }
+ const promise=sessionFlight.promise;
+ if(!signal)return promise;
+ return new Promise((resolve,reject)=>{
+  const abort=()=>reject(signal.reason??new DOMException('Aborted','AbortError'));
+  signal.addEventListener('abort',abort,{once:true});
+  promise.then(value=>{signal.removeEventListener('abort',abort);if(!signal.aborted)resolve(value)},error=>{signal.removeEventListener('abort',abort);if(!signal.aborted)reject(error)});
+ });
+}
 export const listBusinessProblems=(signal?:AbortSignal)=>read<{problems:BusinessProblemRevision[]}>("/problems",signal);
 export const readBusinessProblem=(problemId:string,signal?:AbortSignal)=>read<BusinessProblemDetail>(`/problems/${encodeURIComponent(problemId)}`,signal);
 export const readCriteriaSets=(problemId:string)=>read<{revisions:CriteriaSetRevision[]}>(`/problems/${encodeURIComponent(problemId)}/criteria-sets`);
@@ -105,11 +125,13 @@ export function transitionBusinessProblem(csrfToken:string,problemId:string,inpu
 }
 
 export async function logoutWorkbenchSession(){
+ invalidateSessionRead();
  let session:WorkbenchSession;
  try{session=await readWorkbenchSession(AbortSignal.timeout(8000))}catch(error){if(error instanceof WorkbenchRequestError&&error.status===401)return;throw error}
  const response=await fetch(`${PREFIX}/session`,{method:"DELETE",credentials:"same-origin",signal:AbortSignal.timeout(8000),headers:{"X-CSRF-Token":session.csrfToken,Accept:"application/json"}});
- if(response.status===401)return;
+ if(response.status===401){invalidateSessionRead();return;}
  if(!response.ok)await decode(response);
+ invalidateSessionRead();
 }
 
 export const readConversationUnderstandingCapability=()=>read<{conversationUnderstanding:boolean;conversationRelationRouting?:boolean;initialUnderstandingAdoption?:boolean;selectedSourceContext?:"METADATA_ONLY"|"BODY_SUPPORTED"|"UNAVAILABLE"}>("/draft-assistance/capabilities");

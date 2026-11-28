@@ -1,0 +1,2 @@
+import {defineConfig} from '@playwright/test';
+export default defineConfig({reporter:[['list'],['junit',{outputFile:'../../browser.xml'}]],testDir:'./tests/resource-preparation',testMatch:'history-resource-nonblocking.spec.ts',workers:1,retries:0,timeout:30000,outputDir:'./test-results/history-resource-nonblocking',use:{baseURL:'http://127.0.0.1:4297',trace:'off',launchOptions:{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}},webServer:{command:'npm run preview -- --host 127.0.0.1 --port 4297',url:'http://127.0.0.1:4297',reuseExistingServer:false}});

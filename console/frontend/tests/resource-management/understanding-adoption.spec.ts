@@ -15,6 +15,7 @@ function freshState(needsData=false){
 async function installRoutes(page:Page,state:ReturnType<typeof freshState>,initial:ReturnType<typeof freshState>['journal']['state']['draft']){
  await page.route('**/api/**',async route=>{
   const req=route.request(),url=new URL(req.url()),p=url.pathname,b=req.method()==='POST'?req.postDataJSON():null,result=(v:unknown)=>route.fulfill({json:{result:v}});
+  if(!p.startsWith('/api/'))return route.continue();
   if(b)state.writes.push(p);
   if(p.endsWith('/session'))return route.fulfill({json:{principal:{principalId:'human:alice',tenantId:'tenant',securityDomain:'domain'},csrfToken:'csrf',session:{}}});
   if(p.endsWith('/development-administrator'))return result({enabled:false});
@@ -261,4 +262,12 @@ test('persisted successor is read after new login without dispatch or automatic 
  const successor={...d,invocationId:'already-succeeded',contextId:'new-context',turnId:'new-turn',resultKind:'NEEDS_CLARIFICATION',clarificationQuestion:'确认检查边界',conversationDelivery:{state:'SAVED',messageId:'saved-response'},conversationRoute:{relation:'CURRENT_QUESTION',currentQuestionToken:'token',contextDigest:'d'.repeat(64)}};
  await page.route('**/conversations/adoption/understanding-failures',route=>route.fulfill({json:{result:{items:[{invocationId:'failed-call',messageId:'failed-user',originalText:'生产环境',state:'FAILED',reasonCode:'OUTPUT_SCHEMA_INVALID',target,continuationEligible:false,successorRequestKey:'fixed-successor',successor}],complete:true}}}));
  await page.goto('/work?conversation=adoption');await expect(page.getByRole('button',{name:'继续提交这条回答',exact:true})).toBeVisible();expect(s.calls).toHaveLength(0);expect(s.adoptions).toHaveLength(0);expect(s.writes).toHaveLength(0);
+});
+
+
+test('redundancy: source metadata shares the current Loader observation and focus renews it',async({page})=>{
+ const state=await fixture(page,true);state.journal.state.source=source;state.sourceCapability='METADATA_ONLY';state.sourceObservation={state:'METADATA_ONLY',invocationId:'initial',aggregateVersion:5,source,basis:'RECORDED_ADAPTER_CONTRACT'};
+ let capabilities=0,sourceReads=0;page.on('request',request=>{const path=new URL(request.url()).pathname;if(path.endsWith('/draft-assistance/capabilities'))capabilities++;if(path.endsWith('/draft-assistance/invocations/initial'))sourceReads++});
+ await page.goto('/work?conversation=adoption');await expect.poll(()=>sourceReads).toBe(1);await expect.poll(()=>capabilities).toBe(1);await page.waitForTimeout(200);expect(capabilities).toBe(1);expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect.poll(()=>sourceReads).toBe(2);expect(capabilities).toBe(2);expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);
 });

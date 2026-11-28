@@ -2,31 +2,34 @@ import {useEffect,useLayoutEffect,useRef,useState,type UIEvent} from 'react';
 import {readConversationView,writeConversationView} from './conversationViewState';
 
 type Anchor={node:Element;offset:number};
-export function useConversationScroll({newMessageKey,startAtTop,viewScope,viewId}:{newMessageKey:string;startAtTop:boolean;viewScope?:string;viewId?:string}){
+export function useConversationScroll({newMessageKey,startAtTop,viewScope,viewId,onReachStart,onMessageAnchor,restoreMessageAnchor}:{onMessageAnchor?:(messageId:string,offset:number)=>void;restoreMessageAnchor?:{messageId:string;offset:number}|null;onReachStart?:()=>Promise<void>;newMessageKey:string;startAtTop:boolean;viewScope?:string;viewId?:string}){
  const stream=useRef<HTMLDivElement>(null),following=useRef(!startAtTop),restoring=useRef(false),anchor=useRef<Anchor|null>(null);
+ const pagingIntent=useRef(false),latestRequested=useRef(false);
  const [away,setAway]=useState(false),[unread,setUnread]=useState(false);
  const previousKey=useRef(newMessageKey),first=useRef(true),programmatic=useRef(false),expectedScroll=useRef<number|null>(null),interaction=useRef(0),awaitingReply=useRef(false);
  function capture(){const n=stream.current;if(!n)return;const top=n.getBoundingClientRect().top;const candidates=n.querySelectorAll('.private-message p,.private-message tr,.private-message h1,.private-message h2,.private-message h3,.private-message header,.private-message summary,.px-message p,.journey-progress p');const item=Array.from(candidates).find(e=>e.getBoundingClientRect().bottom>top+2);anchor.current=item?{node:item,offset:item.getBoundingClientRect().top-top}:null}
- function save(){const n=stream.current;if(n&&viewScope&&viewId&&!restoring.current)writeConversationView(viewScope,viewId,{scrollTop:n.scrollTop})}
+ function save(){const n=stream.current;if(n&&viewScope&&viewId&&!restoring.current){writeConversationView(viewScope,viewId,{scrollTop:n.scrollTop});const top=n.getBoundingClientRect().top;const messages=Array.from(n.querySelectorAll<HTMLElement>('.private-message[data-message-id]'));const message=messages.find(item=>item.getBoundingClientRect().bottom>top+2)??messages.at(-1);if(message?.dataset.messageId)onMessageAnchor?.(message.dataset.messageId,message.getBoundingClientRect().top-top)}}
  function position(){const n=stream.current;if(!n)return;programmatic.current=true;if(following.current&&!restoring.current)n.scrollTop=n.scrollHeight;else if(!restoring.current&&anchor.current?.node.isConnected)n.scrollTop+=anchor.current.node.getBoundingClientRect().top-n.getBoundingClientRect().top-anchor.current.offset;expectedScroll.current=n.scrollTop;programmatic.current=false;const off=n.scrollHeight-n.clientHeight-n.scrollTop>72;setAway(off);if(!off)setUnread(false);save()}
- function latest(){awaitingReply.current=true;following.current=true;restoring.current=false;anchor.current=null;setUnread(false);setAway(false);const token=++interaction.current;position();requestAnimationFrame(()=>{if(token===interaction.current)position()})}
- function onScroll(event:UIEvent<HTMLDivElement>){const n=event.currentTarget;const off=n.scrollHeight-n.scrollTop-n.clientHeight>72;setAway(off);if(!programmatic.current&&!restoring.current){if(expectedScroll.current===null||Math.abs(expectedScroll.current-n.scrollTop)>1)following.current=!off;if(off)capture();save()}if(!off)setUnread(false)}
+ function latest(){latestRequested.current=true;awaitingReply.current=true;following.current=true;restoring.current=false;anchor.current=null;setUnread(false);setAway(false);const token=++interaction.current;position();requestAnimationFrame(()=>{if(token===interaction.current)position()})}
+ function preparePrepend(){restoring.current=false;following.current=false;interaction.current++;capture();pagingIntent.current=false}
+ function onScroll(event:UIEvent<HTMLDivElement>){const n=event.currentTarget;const off=n.scrollHeight-n.scrollTop-n.clientHeight>72;setAway(off);if(!programmatic.current&&!restoring.current){if(expectedScroll.current===null||Math.abs(expectedScroll.current-n.scrollTop)>1)following.current=!off;if(off)capture();save()}if(!off)setUnread(false);if(n.scrollTop<=32&&pagingIntent.current&&onReachStart){preparePrepend();void onReachStart()}}
  useLayoutEffect(()=>{
   const n=stream.current;if(!n)return;
-  const saved=viewScope&&viewId?readConversationView(viewScope,viewId).scrollTop:undefined;
-  restoring.current=saved!==undefined;following.current=saved===undefined&&!startAtTop;
+  const wanted=latestRequested.current?null:restoreMessageAnchor;
+  const saved=!latestRequested.current&&viewScope&&viewId?readConversationView(viewScope,viewId).scrollTop:undefined;latestRequested.current=false;
+  restoring.current=Boolean(wanted)||saved!==undefined;following.current=!restoring.current&&!startAtTop;
   let frame:number|undefined,replyFrame:number|undefined;
   let pendingReply:{messageId:string;token:number}|null=null;
   let preview=Array.from(n.querySelectorAll('.journey-progress,.native-live-progress')).map(e=>e.textContent).join('\n');
-  const restoreOrPosition=()=>{if(restoring.current&&saved!==undefined){programmatic.current=true;n.scrollTop=saved;expectedScroll.current=n.scrollTop;programmatic.current=false;setAway(n.scrollHeight-n.scrollTop-n.clientHeight>72);capture()}else position()};
+  const restoreOrPosition=()=>{const message=wanted?n.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(wanted.messageId)}"]`):null;if(restoring.current&&(message||saved!==undefined)){programmatic.current=true;if(message&&wanted)n.scrollTop+=message.getBoundingClientRect().top-n.getBoundingClientRect().top-wanted.offset;else if(saved!==undefined)n.scrollTop=saved;expectedScroll.current=n.scrollTop;programmatic.current=false;setAway(n.scrollHeight-n.scrollTop-n.clientHeight>72);capture()}else position()};
   const schedule=()=>{if(frame===undefined)frame=requestAnimationFrame(()=>{frame=undefined;restoreOrPosition()})};
   const resize=new ResizeObserver(schedule);resize.observe(n);const observeChildren=()=>{for(const child of n.children)resize.observe(child)};observeChildren();
   const changes=new MutationObserver(()=>{observeChildren();const next=Array.from(n.querySelectorAll('.journey-progress,.native-live-progress')).map(e=>e.textContent).join('\n');if(next&&next!==preview&&!following.current&&!restoring.current)setUnread(true);preview=next;schedule();if(pendingReply)placeReply()});
   changes.observe(n,{subtree:true,childList:true,characterData:true});
-  const stopRestore=()=>{awaitingReply.current=false;pendingReply=null;expectedScroll.current=null;restoring.current=false;interaction.current++;capture()};
-  const wheel=()=>{stopRestore();following.current=false};
-  const touch=()=>{stopRestore();following.current=false};
-  const key=(event:KeyboardEvent)=>{if(['ArrowUp','PageUp','Home','PageDown','ArrowDown','End'].includes(event.key)){stopRestore();following.current=false}};
+  const stopRestore=()=>{latestRequested.current=false;awaitingReply.current=false;pendingReply=null;expectedScroll.current=null;restoring.current=false;interaction.current++;capture()};
+  const wheel=(event:WheelEvent)=>{stopRestore();following.current=false;if(event.deltaY<0)pagingIntent.current=true};
+  const touch=()=>{stopRestore();following.current=false;pagingIntent.current=true};
+  const key=(event:KeyboardEvent)=>{if(['ArrowUp','PageUp','Home','PageDown','ArrowDown','End'].includes(event.key)){stopRestore();following.current=false;if(['ArrowUp','PageUp','Home'].includes(event.key))pagingIntent.current=true}};
   const pointer=(event:PointerEvent)=>{stopRestore();if(event.clientX>=n.getBoundingClientRect().left+n.clientWidth)following.current=false};
   const details=(event:MouseEvent)=>{const summary=(event.target as Element).closest('summary');if(!summary||!n.contains(summary))return;stopRestore();following.current=false;anchor.current={node:summary,offset:summary.getBoundingClientRect().top-n.getBoundingClientRect().top};schedule()};
   const accepted=(event:Event)=>{const id=(event as CustomEvent<{conversation:string}>).detail?.conversation;if(id&&viewId?.startsWith('private:'+id+':'))latest()};
@@ -54,11 +57,11 @@ export function useConversationScroll({newMessageKey,startAtTop,viewScope,viewId
   return()=>{resize.disconnect();changes.disconnect();if(frame!==undefined)cancelAnimationFrame(frame);if(replyFrame!==undefined)cancelAnimationFrame(replyFrame);n.removeEventListener('wheel',wheel);n.removeEventListener('touchstart',touch);n.removeEventListener('keydown',key);n.removeEventListener('pointerdown',pointer);n.removeEventListener('click',details,true);window.removeEventListener('conversation-message-sent',accepted);window.removeEventListener('conversation-reply-ready',replyReady)};
  // The observers read mutable refs; recreate only when the persisted view changes.
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[viewScope,viewId]);
+ },[viewScope,viewId,restoreMessageAnchor?.messageId,restoreMessageAnchor?.offset]);
  useEffect(()=>{const changed=previousKey.current!==newMessageKey;previousKey.current=newMessageKey;if(first.current){first.current=false;return}if(restoring.current)return;if(following.current)position();else if(changed)setUnread(true);
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[newMessageKey]);
- return {stream,away,unread,onScroll,latest};
+ return {stream,away,unread,onScroll,latest,preparePrepend};
 }
 export function notifyConversationSend(conversation:string){window.dispatchEvent(new CustomEvent('conversation-message-sent',{detail:{conversation}}))}
 

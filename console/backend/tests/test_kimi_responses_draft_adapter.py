@@ -538,7 +538,9 @@ def test_redirect_disconnect_observe_and_cancel_do_not_retry(kimi_mock):
     assert transport.dispatch_count == calls
 
 
-def test_read_timeout_is_ambiguous_and_dispatched_once(kimi_mock):
+def test_read_timeout_is_ambiguous_and_dispatched_once(kimi_mock, record_property):
+    from dataclasses import asdict
+
     server, cert, tmp_path = kimi_mock
     credential_file = _credential_file(tmp_path)
     configuration = KimiResponsesConfiguration(
@@ -576,6 +578,16 @@ def test_read_timeout_is_ambiguous_and_dispatched_once(kimi_mock):
             ),
             profile=_profile(),
         )
+    try:
+        observed_metrics = transport.last_deadline_metrics
+        record_property(
+            "deadline_metrics",
+            asdict(observed_metrics) if observed_metrics is not None else None,
+        )
+        record_property("endpoint_requests", len(_KimiHandler.requests))
+        record_property("dispatch_count", transport.dispatch_count)
+    except Exception:
+        pass  # Observation must not replace the original assertions.
     assert len(_KimiHandler.requests) == transport.dispatch_count == 1
 
 

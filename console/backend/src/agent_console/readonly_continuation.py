@@ -278,6 +278,7 @@ class ReadonlyContinuation:
                     connection=c,
                     source_digest=digest,
                     history=call.operation == "READ_READONLY_CONTINUATION",
+                    plan=plan,
                 )
                 if isinstance(resource_work, owned_resources.OwnedResourceWork):
                     if not self.policy.enabled:

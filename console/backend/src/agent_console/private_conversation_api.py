@@ -505,6 +505,7 @@ def install_private_conversations(
         return {
             "result": {
                 "enabled": bool(service),
+                "historyMessagePaging": bool(service),
                 "schemaVersion": 1,
                 "historyReadPreparation": bool(history and history(context)),
                 "fixedWorkActivity": bool(fixed and fixed(context)),
@@ -538,6 +539,35 @@ def install_private_conversations(
     @app.get(PREFIX + "/conversations/{identity}")
     def read(request: Request, identity: str):
         return safe(request, lambda ctx: service.read(ctx, identity))
+
+    @app.get(PREFIX + "/conversations/{identity}/messages")
+    def messages(
+        request: Request, identity: str, limit: int = 50, before: str | None = None
+    ):
+        return safe(
+            request,
+            lambda ctx: service.read_messages(
+                ctx, identity, limit=limit, before=before
+            ),
+        )
+
+    @app.get(PREFIX + "/conversations/{identity}/capability-context")
+    def capability_context(request: Request, identity: str):
+        return safe(request, lambda ctx: service.capability_context(ctx, identity))
+
+    @app.get(PREFIX + "/conversations/{identity}/understanding-successes")
+    def understanding_successes(
+        request: Request,
+        identity: str,
+        limit: int = 50,
+        before: str | None = None,
+    ):
+        return safe(
+            request,
+            lambda ctx: service.understanding_successes(
+                ctx, identity, limit=limit, before=before
+            ),
+        )
 
     @app.get(PREFIX + "/conversations/{identity}/sources")
     def conversation_sources(request: Request, identity: str):

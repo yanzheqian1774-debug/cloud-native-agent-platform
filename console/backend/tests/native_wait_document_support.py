@@ -88,7 +88,11 @@ def compose(
         if bound_service_execution is not None:
             bound_service_execution.read(c, context, command, p)
         else:
-            e.business_owner.work(c, context, p.semantics.target.problem)
+            from agent_console.authority_contracts import AuthorityError
+            from agent_console.owned_business_resource_adapter import authorize_dispatch
+
+            if not authorize_dispatch(e.business_owner, c, command, context):
+                raise AuthorityError("NATIVE_WAIT_CURRENT_DISPATCH_DENIED")
         return context, adapter
 
     runtime.authorize_current = lambda c, command: bool(authority(c, command))

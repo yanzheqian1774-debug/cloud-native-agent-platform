@@ -1,10 +1,13 @@
-import {useEffect, useState, type ReactNode} from 'react';
+import {useLocation} from 'react-router-dom';
+import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {readWorkbenchSession} from '../api/businessWorkspace';
 
 import {ensureTestResourceAccess,resourceAccessChanged,publishedTestResourcesChanged,type ResourceAccessState as State} from './testResourcePreparation';
 
 /** An interrupted request retains its original key; no execution or model calls. */
 export function TestResourceAccess({identity, children}:{identity:string|null;children:ReactNode}) {
+  const location=useLocation(),savedConversation=location.pathname==='/work'&&new URLSearchParams(location.search).has('conversation');
+  const consumedRetry=useRef(0);
   const [state,setState] = useState<State>({kind:'checking'});
   const [retry,setRetry] = useState(0);
   useEffect(()=>{
@@ -16,9 +19,10 @@ export function TestResourceAccess({identity, children}:{identity:string|null;ch
     window.addEventListener(resourceAccessChanged,observed);
     const published=()=>{void run(true)};
     window.addEventListener(publishedTestResourcesChanged,published);
-    void run();
+    const manual=retry>consumedRetry.current;consumedRetry.current=retry;
+    if(!savedConversation||manual)void run();
     return()=>{active=false;window.removeEventListener(resourceAccessChanged,observed);window.removeEventListener(publishedTestResourcesChanged,published);};
-  },[identity,retry]);
-  if(state.kind==='checking')return <p className="journey-test-source" role="status">{identity?'正在准备可用的测试资源…':'正在核对登录状态，请稍候或使用右上角登录入口。'}</p>;
-  return <>{state.kind!=='ready'&&<div className="journey-test-source" role="status"><span>{state.detail}</span>{state.kind==='unknown'&&<button type="button" onClick={()=>{setState({kind:'recovering',detail:'正在核对原请求…'});setRetry(value=>value+1);}}>核对原请求</button>}{state.updated&&<button type="button" onClick={()=>{const updated=state.updated;if(!updated)return;if(sessionStorage.getItem(updated.pointer)===updated.original)sessionStorage.removeItem(updated.pointer);setState({kind:'recovering',detail:'正在准备新版资料的读取权限…'});setRetry(value=>value+1);}}>读取新版资料</button>}{state.renewal&&<button type="button" onClick={()=>{const renewal=state.renewal;if(!renewal)return;if(sessionStorage.getItem(renewal.marker)===renewal.key)sessionStorage.removeItem(renewal.marker);setState({kind:'recovering',detail:'正在重新准备已过期的测试资源…'});setRetry(value=>value+1);}}>重新准备已过期资源</button>}</div>}{children}</>;
+  },[identity,retry,savedConversation]);
+  if(state.kind==='checking'&&!identity)return <p className="journey-test-source" role="status">正在核对登录状态，请稍候或使用右上角登录入口。</p>;
+  return <>{state.kind==='checking'&&savedConversation?null:state.kind==='checking'?<p className="journey-test-source" role="status">正在准备可用的测试资源…已有会话和成果可继续读取，操作资格仍按实际权限核对。</p>:state.kind!=='ready'&&<div className="journey-test-source" role="status"><span>{state.detail}</span>{state.kind==='unknown'&&<button type="button" onClick={()=>{setState({kind:'recovering',detail:'正在核对原请求…'});setRetry(value=>value+1);}}>核对原请求</button>}{state.updated&&<button type="button" onClick={()=>{const updated=state.updated;if(!updated)return;if(sessionStorage.getItem(updated.pointer)===updated.original)sessionStorage.removeItem(updated.pointer);setState({kind:'recovering',detail:'正在准备新版资料的读取权限…'});setRetry(value=>value+1);}}>读取新版资料</button>}{state.renewal&&<button type="button" onClick={()=>{const renewal=state.renewal;if(!renewal)return;if(sessionStorage.getItem(renewal.marker)===renewal.key)sessionStorage.removeItem(renewal.marker);setState({kind:'recovering',detail:'正在重新准备已过期的测试资源…'});setRetry(value=>value+1);}}>重新准备已过期资源</button>}</div>}{children}</>;
 }

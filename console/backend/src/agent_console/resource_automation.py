@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from . import owned_business_resource_adapter as owned_resources
 from .authority_contracts import AuthorityError, ExactGrant
@@ -51,7 +51,15 @@ class SelectEmployeeResources(CapabilityPlanSource):
     digest: str = Field(pattern="^[a-f0-9]{64}$")
     expectedProposalRevision: int = Field(ge=1)
     employee: ExactReference
+    ontologySuccessor: ExactReference | None = None
     idempotencyKey: str = Field(min_length=1, max_length=120)
+
+    @model_serializer(mode="wrap")
+    def compatible_selection(self, handler):
+        result = handler(self)
+        if self.ontologySuccessor is None:
+            result.pop("ontologySuccessor", None)
+        return result
 
 
 class ReadEmployeeSelection(CapabilityPlanSource):
@@ -71,21 +79,26 @@ def migrate(c):
     checksum = hashlib.sha256(path.read_bytes()).hexdigest()
     c.execute("SELECT pg_advisory_xact_lock(3240044)")
     c.execute(
-        "CREATE TABLE IF NOT EXISTS execution_authority.resource_policy_migrations (version integer PRIMARY KEY,checksum text NOT NULL)"
+        "CREATE TABLE IF NOT EXISTS "
+        "execution_authority.resource_policy_migrations (version integer PRIMARY "
+        "KEY,checksum text NOT NULL)"
     )
     previous = c.execute(
-        "SELECT checksum FROM execution_authority.resource_policy_migrations WHERE version=44"
+        "SELECT checksum FROM execution_authority.resource_policy_migrations "
+        "WHERE version=44"
     ).fetchone()
     if previous and previous["checksum"] != checksum:
         raise AuthorityError("RESOURCE_POLICY_SCHEMA_INCOMPATIBLE")
     versions = c.execute(
-        "SELECT version,checksum FROM execution_authority.resource_policy_migrations ORDER BY version"
+        "SELECT version,checksum FROM "
+        "execution_authority.resource_policy_migrations ORDER BY version"
     ).fetchall()
     if versions and versions != [{"version": 44, "checksum": checksum}]:
         raise AuthorityError("RESOURCE_POLICY_SCHEMA_INCOMPATIBLE")
     c.execute(path.read_text())
     c.execute(
-        "INSERT INTO execution_authority.resource_policy_migrations VALUES(44,%s) ON CONFLICT DO NOTHING",
+        "INSERT INTO execution_authority.resource_policy_migrations "
+        "VALUES(44,%s) ON CONFLICT DO NOTHING",
         (checksum,),
     )
 
@@ -133,7 +146,15 @@ class ResourceAutomation:
         return self.policy.authenticate(self.grants, context)
 
     def work(
-        self, context, root, now, *, connection=None, source_digest=None, history=False
+        self,
+        context,
+        root,
+        now,
+        *,
+        connection=None,
+        source_digest=None,
+        history=False,
+        plan=None,
     ):
         from .development_administrator import for_service
         from .resource_automation_policy import AdministratorWorkScope
@@ -164,7 +185,47 @@ class ResourceAutomation:
                 root,
                 source_digest=source_digest,
                 history=history,
+                plan=plan,
             )
+
+    def selection_work(self, call, plan, *, key=None):
+        try:
+            return self.work(
+                call.context,
+                plan.semantics.target.problem,
+                self.grants.clock(),
+                connection=call.connection,
+                plan=plan,
+            )
+        except AuthorityError as exc:
+            if (
+                str(exc) != "OWNED_BUSINESS_POLICY_BINDING_CHANGED"
+                or self.owned_business is None
+            ):
+                raise
+        from .owned_business_admission_successor import fresh
+
+        owner = self.owned_business
+        stored = fresh(owner, call.connection, call.context, plan, key=key)
+        binding = owner.work_reader.work(
+            call.connection,
+            call.context,
+            plan.semantics.target.problem,
+            plan=plan,
+            _selection_record=stored,
+        )
+        work = owned_resources.from_binding(
+            binding, call.context, plan.semantics.target.problem
+        )
+        return work.model_copy(
+            update={
+                "selectionAdmission": {
+                    "identity": stored["admission_id"],
+                    "preview": key is None,
+                    "predecessor": plan.model_dump(mode="json"),
+                }
+            }
+        )
 
     def decide(
         self,
@@ -180,13 +241,52 @@ class ResourceAutomation:
         if isinstance(work, owned_resources.OwnedResourceWork):
             if work.historyRead:
                 raise AuthorityError("OWNED_BUSINESS_HISTORY_NOT_EXECUTABLE")
-            current = owned_resources.derive_work(
-                self.owned_business,
-                call.connection,
-                call.context,
-                work.problem,
-                source_digest=work.businessScope.sourceContentDigest,
-            )
+            if work.selectionAdmission is not None:
+                from .owned_business_admission_successor import read_exact
+
+                selected = work.selectionAdmission
+                if selected["preview"]:
+                    raise AuthorityError("OWNED_BUSINESS_SUCCESSOR_PREVIEW_ONLY")
+                stored = read_exact(
+                    call.connection,
+                    selected["identity"],
+                    work.namespace,
+                    work.securityDomain,
+                    work.subject,
+                    expected_digest=work.admissionRecordDigest,
+                )
+                predecessor = ConfirmedPlanRevision.model_validate(
+                    selected["predecessor"]
+                )
+                from .owned_resource_assembly import plan_reference
+
+                if stored["successor"]["identityBasis"][
+                    "predecessorPlan"
+                ] != plan_reference(predecessor).model_dump(mode="json"):
+                    raise AuthorityError("OWNED_BUSINESS_SUCCESSOR_PLAN_CHANGED")
+                binding = self.owned_business.work_reader.work(
+                    call.connection,
+                    call.context,
+                    work.problem,
+                    plan=predecessor,
+                    _selection_record=stored,
+                )
+                current = owned_resources.from_binding(
+                    binding, call.context, work.problem
+                )
+            else:
+                current = owned_resources.derive_work(
+                    self.owned_business,
+                    call.connection,
+                    call.context,
+                    work.problem,
+                    source_digest=work.businessScope.sourceContentDigest,
+                    plan=(
+                        ExactReference.model_validate(work.assemblyAdoption["plan"])
+                        if work.assemblyAdoption is not None
+                        else None
+                    ),
+                )
             if owned_resources.evidence(current) != owned_resources.evidence(work):
                 raise AuthorityError("OWNED_BUSINESS_ADMISSION_CHANGED")
         members = tuple(
@@ -332,6 +432,7 @@ class ResourceAutomation:
                 plan.semantics.target.problem,
                 self.grants.clock(),
                 connection=cur.connection,
+                plan=plan,
             )
             owned_resources.require_plan(work, plan)
             owned_resources.require_capability(self, call, work)
@@ -434,6 +535,7 @@ class ResourceAutomation:
                 self.grants.clock(),
                 connection=cur.connection,
                 history=call.operation == "READ_RESOURCE_AUTOMATION",
+                plan=plan,
             )
             owned_resources.require_plan(work, plan)
             owned_resources.require_capability(self, call, work)
@@ -457,7 +559,9 @@ class ResourceAutomation:
                 ),
             )
             prior = c.execute(
-                "SELECT payload_digest,record FROM execution_authority.resource_automation WHERE namespace=%s AND security_domain=%s AND subject_id=%s AND request_key=%s",
+                "SELECT payload_digest,record FROM "
+                "execution_authority.resource_automation WHERE namespace=%s AND "
+                "security_domain=%s AND subject_id=%s AND request_key=%s",
                 (scope.namespace, scope.security_domain, principal.principal_id, key),
             ).fetchone()
             if prior:
@@ -472,7 +576,8 @@ class ResourceAutomation:
             if call.operation == "READ_RESOURCE_AUTOMATION":
                 raise WorkbenchOwnerError("RESOURCE_PREPARATION_NOT_FOUND", 404)
             head = c.execute(
-                "SELECT max(version) version FROM workflow_planning.plans WHERE namespace=%s AND security_domain=%s AND plan_id=%s",
+                "SELECT max(version) version FROM workflow_planning.plans WHERE "
+                "namespace=%s AND security_domain=%s AND plan_id=%s",
                 (scope.namespace, scope.security_domain, identity),
             ).fetchone()
             if head["version"] != version:
@@ -528,7 +633,8 @@ class ResourceAutomation:
                 self.decide(call, source_read, key + ":test-source-read", work, issuer)
                 self.proof_grants(call, source_read)
                 source_row = c.execute(
-                    "SELECT record FROM knowledge_operation.knowledge WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s",
+                    "SELECT record FROM knowledge_operation.knowledge WHERE "
+                    "namespace=%s AND security_domain=%s AND knowledge_id=%s",
                     (scope.namespace, scope.security_domain, source_ref.resource_id),
                 ).fetchone()
                 if not source_row:
@@ -696,7 +802,10 @@ class ResourceAutomation:
             if owned_resources.evidence(work):
                 record["ownedBusiness"] = owned_resources.evidence(work)
             c.execute(
-                "INSERT INTO execution_authority.resource_automation(namespace,security_domain,subject_id,request_key,plan_id,plan_version,payload_digest,record) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO "
+                "execution_authority.resource_automation(namespace,security_domai"
+                "n,subject_id,request_key,plan_id,plan_version,payload_digest,rec"
+                "ord) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
                 (
                     scope.namespace,
                     scope.security_domain,
@@ -710,8 +819,10 @@ class ResourceAutomation:
             )
             return record
 
-    def derive(self, call, plan, key, work, issuer):
-        owned_resources.require_plan(work, plan)
+    def derive(self, call, plan, key, work, issuer, *, selection_predecessor=None):
+        owned_resources.require_plan(
+            work, plan, selection_predecessor=selection_predecessor
+        )
         selections = {
             r.selected
             for r in plan.semantics.requirements
@@ -773,7 +884,9 @@ class ResourceAutomation:
                 for member in value["revision"]["members"]:
                     if member["kind"] == "KNOWLEDGE":
                         data = call.connection.execute(
-                            "SELECT record FROM knowledge_operation.knowledge WHERE namespace=%s AND security_domain=%s AND knowledge_id=%s",
+                            "SELECT record FROM knowledge_operation.knowledge "
+                            "WHERE namespace=%s AND security_domain=%s AND "
+                            "knowledge_id=%s",
                             (
                                 scope.namespace,
                                 scope.security_domain,

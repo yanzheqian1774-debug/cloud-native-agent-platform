@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from .authority_contracts import AuthorityError
 from .ontology_execution import DocumentSemanticsBinding
@@ -30,6 +30,14 @@ class OwnedBusinessScope(BaseModel):
     effectPolicy: Literal["READ_ONLY"]
     externalWrites: Literal[False]
     documentRules: DocumentSemanticsBinding | None = None
+    trustedAssemblyAdoption: Literal["SAME_SCOPE_SELECTED_V1"] | None = None
+
+    @model_serializer(mode="wrap")
+    def compatible_scope(self, handler):
+        value = handler(self)
+        if self.trustedAssemblyAdoption is None:
+            value.pop("trustedAssemblyAdoption", None)
+        return value
 
     @model_validator(mode="after")
     def exact_document(self):

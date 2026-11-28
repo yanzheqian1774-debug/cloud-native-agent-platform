@@ -236,32 +236,206 @@ class PrivateConversations:
 
     @measured("conversation.read")
     def read(self, ctx, identity):
+        return self._read(ctx, identity)
+
+    @measured("conversation.messages")
+    def read_messages(self, ctx, identity, *, limit=50, before=None):
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ConversationError("CONVERSATION_PAGE_INVALID", 422)
+        return self._read(ctx, identity, page_limit=limit, before=before)
+
+    def capability_context(self, ctx, identity):
+        value = self._read(ctx, identity, page_limit=1, source_kind="CAPABILITY")
+        return {
+            "conversation": value["conversation"],
+            "message": value["messages"][-1] if value["messages"] else None,
+        }
+
+    def understanding_successes(self, ctx, identity, *, limit=50, before=None):
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ConversationError("CONVERSATION_PAGE_INVALID", 422)
+        reads = {}
+        value = self._read(
+            ctx,
+            identity,
+            page_limit=limit,
+            before=before,
+            source_kind="UNDERSTANDING_SUCCESS",
+            source_reads=reads,
+        )
+        ids = {m.get("facts", {}).get("userMessageId") for m in value["messages"]}
+        ids.discard(None)
+        users = (
+            self._read(
+                ctx,
+                identity,
+                page_limit=100,
+                exact_message_ids=sorted(ids),
+                source_reads=reads,
+            )["messages"]
+            if ids
+            else []
+        )
+        by_id = {m["message_id"]: m for m in users}
+        items, unavailable = [], False
+        for message in value["messages"]:
+            facts = message.get("facts", {})
+            user = by_id.get(facts.get("userMessageId"))
+            if user and (
+                user["author_id"] != ctx.principal_id
+                or user.get("facts", {}).get("assistantResponse")
+            ):
+                user = None
+            blocked = (
+                facts.get("readable") is False
+                or user is None
+                or user.get("facts", {}).get("readable") is False
+            )
+            unavailable = unavailable or blocked
+            items.append({"message": message, "userMessage": user})
+        return {
+            "conversation": value["conversation"],
+            "items": items,
+            "page": value["page"],
+            "unavailable": unavailable,
+        }
+
+    def _read(
+        self,
+        ctx,
+        identity,
+        *,
+        page_limit=None,
+        before=None,
+        source_kind=None,
+        exact_message_ids=None,
+        source_reads=None,
+    ):
+        paging = page_limit is not None
         with self.connect() as c:
+            if paging:
+                c.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             row = self.owned(c, ctx, identity)
             scope = (*self.scope(ctx), identity)
+            facts_reader = getattr(self, "facts_reader", None)
+            page = None
+            if paging:
+                from .conversation_message_cursor import decode_cursor, encode_cursor
+
+                cursor = decode_cursor(before, (*scope, ctx.principal_id))
+                where, parameters = "", list(scope)
+                if cursor:
+                    where = (
+                        " AND (sequence,message_id)<= (%s,%s) AND "
+                        "(sequence,message_id)"
+                        + ("<=" if cursor.get("inclusive") else "<")
+                        + "(%s,%s)"
+                    )
+                    parameters.extend((*cursor["ceiling"], *cursor["before"]))
+                if exact_message_ids is not None:
+                    where += " AND message_id=ANY(%s)"
+                    parameters.append(exact_message_ids)
+                if source_kind is not None:
+                    where += (
+                        " AND EXISTS (SELECT 1 FROM "
+                        "private_conversation.message_facts f "
+                        "WHERE f.tenant_id=private_conversation.messages.tenant_id "
+                        "AND f.security_domain="
+                        "private_conversation.messages.security_domain "
+                        "AND f.conversation_id="
+                        "private_conversation.messages.conversation_id "
+                        "AND f.message_id=private_conversation.messages.message_id "
+                        "AND f.kind='SOURCE' AND f.facts#>>'{source,kind}'=%s"
+                    )
+                    if source_kind == "UNDERSTANDING_SUCCESS":
+                        where += (
+                            " AND f.facts->>'assistantResponse'='true' "
+                            "AND f.facts->>'invokedBy'=%s "
+                            "AND f.facts->>'state'='SUCCEEDED' "
+                            "AND f.facts#>>'{response,conversationRoute,relation}'="
+                            "'CURRENT_QUESTION' AND "
+                            "COALESCE(f.facts->>'requestKey','')<>'' "
+                            "AND COALESCE(f.facts->>'userMessageId','')<>''"
+                        )
+                        parameters.extend(("DRAFT", ctx.principal_id))
+                    else:
+                        parameters.append(source_kind)
+                    where += ")"
+                messages = c.execute(
+                    "SELECT message_id,sequence,author_id,content,focus_link_id,"
+                    "disposition,created_at,request_key FROM "
+                    "private_conversation.messages "
+                    "WHERE tenant_id=%s AND security_domain=%s AND conversation_id=%s"
+                    + where
+                    + " ORDER BY sequence DESC,message_id DESC LIMIT %s",
+                    (*parameters, page_limit + 1),
+                ).fetchall()
+                more = len(messages) > page_limit
+                messages = messages[:page_limit]
+                ceiling = (
+                    cursor["ceiling"]
+                    if cursor
+                    else (
+                        [messages[0]["sequence"], messages[0]["message_id"]]
+                        if messages
+                        else None
+                    )
+                )
+                messages.reverse()
+                page = {
+                    "hasMore": more,
+                    "resumeCursor": encode_cursor(
+                        (*scope, ctx.principal_id),
+                        ceiling,
+                        cursor["before"] if cursor else ceiling,
+                        inclusive=bool(cursor.get("inclusive")) if cursor else True,
+                    )
+                    if messages
+                    else None,
+                    "nextCursor": encode_cursor(
+                        (*scope, ctx.principal_id),
+                        ceiling,
+                        [messages[0]["sequence"], messages[0]["message_id"]],
+                    )
+                    if more
+                    else None,
+                }
             with c.pipeline():
-                messages_query = c.execute(
-                    "SELECT "
-                    "message_id,sequence,author_id,content,focus_link_id,"
-                    "disposition,created_at,request_key "
-                    "FROM private_conversation.messages WHERE tenant_id=%s AND "
-                    "security_domain=%s AND conversation_id=%s ORDER BY sequence",
-                    scope,
+                messages_query = (
+                    None
+                    if paging
+                    else c.execute(
+                        "SELECT message_id,sequence,author_id,content,focus_link_id,"
+                        "disposition,created_at,request_key FROM "
+                        "private_conversation.messages "
+                        "WHERE tenant_id=%s AND security_domain=%s AND "
+                        "conversation_id=%s "
+                        "ORDER BY sequence,message_id",
+                        scope,
+                    )
                 )
-                links_query = c.execute(
-                    "SELECT link_id,target FROM private_conversation.links WHERE "
-                    "tenant_id=%s AND security_domain=%s AND conversation_id=%s ORDER "
-                    "BY created_at,link_id",
-                    scope,
+                links_query = (
+                    None
+                    if paging
+                    else c.execute(
+                        "SELECT link_id,target FROM private_conversation.links WHERE "
+                        "tenant_id=%s AND security_domain=%s AND "
+                        "conversation_id=%s ORDER "
+                        "BY created_at,link_id",
+                        scope,
+                    )
                 )
-                facts_reader = getattr(self, "facts_reader", None)
+                suffix = " AND message_id=ANY(%s)" if paging else ""
+                fact_scope = (
+                    (*scope, [m["message_id"] for m in messages]) if paging else scope
+                )
                 facts_query = (
                     c.execute(
                         "SELECT message_id,kind,facts FROM "
                         "private_conversation.message_facts "
-                        "WHERE tenant_id=%s AND security_domain=%s "
-                        "AND conversation_id=%s",
-                        scope,
+                        "WHERE tenant_id=%s AND security_domain=%s AND "
+                        "conversation_id=%s" + suffix,
+                        fact_scope,
                     )
                     if facts_reader
                     else None
@@ -270,15 +444,24 @@ class PrivateConversations:
                     c.execute(
                         "SELECT intent_id,claimed_at,owner_ref FROM "
                         "private_conversation.action_intents "
-                        "WHERE tenant_id=%s AND security_domain=%s "
-                        "AND conversation_id=%s",
-                        scope,
+                        "WHERE tenant_id=%s AND security_domain=%s AND "
+                        "conversation_id=%s"
+                        + (
+                            " AND intent_id IN (SELECT facts->>'intentId' FROM "
+                            "private_conversation.message_facts WHERE tenant_id=%s "
+                            "AND security_domain=%s AND conversation_id=%s "
+                            "AND message_id=ANY(%s) AND kind='ACTION_INTENT')"
+                            if paging
+                            else ""
+                        ),
+                        (*scope, *fact_scope) if paging else scope,
                     )
                     if facts_reader
                     else None
                 )
-            messages = messages_query.fetchall()
-            links = links_query.fetchall()
+            if not paging:
+                messages = messages_query.fetchall()
+            links = links_query.fetchall() if links_query is not None else []
             facts = facts_query.fetchall() if facts_query is not None else []
             intents = intents_query.fetchall() if intents_query is not None else []
             if (
@@ -304,6 +487,8 @@ class PrivateConversations:
                         item["goalId"] = mapped[item["message_id"]]
         by_id = {f["message_id"]: f for f in facts}
         intent_by_id = {i["intent_id"]: i for i in intents}
+        if source_reads is None:
+            source_reads = {}  # Local to this HTTP response; never on the service.
         for message in messages:
             fact = by_id.get(message["message_id"])
             if not fact:
@@ -315,7 +500,15 @@ class PrivateConversations:
                     details.get("authorizationSource"),
                 ]:
                     if source:
-                        facts_reader.source_read(ctx, source)
+                        key = json.dumps(source, sort_keys=True, separators=(",", ":"))
+                        if key not in source_reads:
+                            try:
+                                facts_reader.source_read(ctx, source)
+                                source_reads[key] = None
+                            except Exception as exc:
+                                source_reads[key] = exc
+                        if source_reads[key] is not None:
+                            raise source_reads[key]
                 from .conversation_answer_retention import require_fixed_basis
 
                 require_fixed_basis(facts_reader, ctx, identity, details)
@@ -336,7 +529,7 @@ class PrivateConversations:
             except Exception as exc:
                 message["content"], message["facts"] = unavailable_message(fact, exc)
                 message["kind"] = fact["kind"]
-        visible = self.visible_links(ctx, links)
+        visible = self.visible_links(ctx, links) if not paging else None
         return {
             "conversation": {
                 k: row[k]
@@ -349,7 +542,7 @@ class PrivateConversations:
                 ]
             },
             "messages": messages,
-            "links": visible,
+            **({"page": page} if paging else {"links": visible}),
         }
 
     @measured("conversation.links")

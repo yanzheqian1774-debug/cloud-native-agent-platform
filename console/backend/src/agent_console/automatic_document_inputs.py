@@ -6,6 +6,7 @@ from .execution_domain import ScopeIdentity
 from .native_document_rule_tools import NativeDocumentRuleTools
 from .ontology_execution import published_content
 from .ontology_service import resource
+from .plan_suggestion_domain import ExactReference
 from .resource_automation_policy import source_digest
 
 
@@ -22,6 +23,11 @@ def resolve(automation, call, work, issuer, key, source_ref, source_revision):
             automation.grants.clock(),
             connection=call.connection,
             source_digest=source_digest(source_revision["content"]),
+            plan=(
+                ExactReference.model_validate(work.assemblyAdoption["plan"])
+                if work.assemblyAdoption is not None
+                else None
+            ),
         )
         if owned_resources.evidence(current) != owned_resources.evidence(work):
             raise AuthorityError("OWNED_BUSINESS_ADMISSION_CHANGED")

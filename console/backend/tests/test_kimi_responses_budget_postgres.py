@@ -141,8 +141,10 @@ def test_valid_output_with_incomplete_or_out_of_bound_usage_retains_reservation(
         ledger.close()
 
 
-def test_deadline_unknown_same_key_retains_postgres_budget(database_url, tmp_path):
-    from dataclasses import replace
+def test_deadline_unknown_same_key_retains_postgres_budget(
+    database_url, tmp_path, record_property
+):
+    from dataclasses import asdict, replace
 
     from agent_console.draft_assistance import DraftInvocationState
     from agent_console.kimi_responses_draft_adapter import (
@@ -211,6 +213,16 @@ def test_deadline_unknown_same_key_retains_postgres_budget(database_url, tmp_pat
             service.begin(
                 context(), key="deadline-same-key", content="Synthetic question"
             )
+        try:
+            observed_metrics = service.transport.last_deadline_metrics
+            record_property(
+                "deadline_metrics",
+                asdict(observed_metrics) if observed_metrics is not None else None,
+            )
+            record_property("endpoint_requests", len(_KimiHandler.requests))
+            record_property("dispatch_count", service.transport.dispatch_count)
+        except Exception:
+            pass  # Observation must not replace the original assertions.
         assert service.transport.last_deadline_metrics.reason == "TOTAL_DEADLINE"
         assert service.transport.last_deadline_metrics.reaped
         with psycopg.connect(database_url) as connection:

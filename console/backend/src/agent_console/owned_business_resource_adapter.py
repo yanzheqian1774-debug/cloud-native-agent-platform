@@ -6,6 +6,8 @@ No admission, grant, resource or execution is created by this adapter.
 from dataclasses import replace
 from typing import Any
 
+from pydantic import Field, model_serializer
+
 from .authority_contracts import AuthorityError
 from .plan_suggestion_domain import ExactReference
 from .resource_automation_policy import WorkScope
@@ -18,18 +20,33 @@ class OwnedResourceWork(WorkScope):
     businessScope: Any
     historyRead: bool = False
     ontologyCorrection: dict | None = None
+    assemblyAdoption: dict | None = None
+    selectionAdmission: dict | None = Field(default=None, exclude=True)
+    selectedOntologySuccessor: ExactReference | None = Field(default=None, exclude=True)
+
+    @model_serializer(mode="wrap")
+    def compatible_work(self, handler):
+        result = handler(self)
+        if self.assemblyAdoption is None:
+            result.pop("assemblyAdoption", None)
+        return result
 
 
 def derive_work(
-    owner, connection, context, problem, *, source_digest=None, history=False
+    owner, connection, context, problem, *, source_digest=None, history=False, plan=None
 ):
     binding = owner.work(
         connection,
         context,
         problem,
         source_digest=source_digest,
+        **({"plan": plan} if plan is not None else {}),
         **({"history": True} if history else {}),
     )
+    return from_binding(binding, context, problem, history=history)
+
+
+def from_binding(binding, context, problem, *, history=False):
     if (
         (getattr(binding, "history_only", False) and not history)
         or binding.problem != problem
@@ -54,19 +71,23 @@ def derive_work(
         businessScope=binding.scope,
         historyRead=history,
         ontologyCorrection=getattr(binding, "ontology_correction", None),
+        assemblyAdoption=getattr(binding, "assembly_adoption", None),
     )
 
 
 def evidence(work):
     if not isinstance(work, OwnedResourceWork):
         return None
-    return {
+    result = {
         "admissionId": work.admissionId,
         "recordDigest": work.admissionRecordDigest,
         "policyDigest": work.admissionPolicyDigest,
         "scopeId": work.businessScope.scopeId,
         "authorizationBasisDigest": work.businessScope.authorizationBasisDigest,
     }
+    if work.assemblyAdoption is not None:
+        result["assemblyAdoption"] = work.assemblyAdoption
+    return result
 
 
 def digest_basis(basis, work):
@@ -89,10 +110,37 @@ def require_reference(work, kind, reference):
         raise AuthorityError("OWNED_BUSINESS_RESOURCE_NOT_AUTHORIZED")
 
 
-def require_plan(work, plan, *, check_references=True):
+def require_plan(work, plan, *, check_references=True, selection_predecessor=None):
     if not isinstance(work, OwnedResourceWork):
         return
     from .planning_source_change import approved_source
+
+    if (
+        work.selectionAdmission is not None
+        and selection_predecessor is None
+        and check_references
+    ):
+        raise AuthorityError("OWNED_BUSINESS_SUCCESSOR_SELECTION_ONLY")
+    if work.assemblyAdoption is not None:
+        from .owned_resource_assembly import plan_reference
+
+        if (
+            plan_reference(selection_predecessor or plan).model_dump(mode="json")
+            != work.assemblyAdoption["plan"]
+        ):
+            raise AuthorityError("OWNED_ASSEMBLY_PLAN_CHANGED")
+    from .owned_ontology_successor import MARKER, marker
+
+    ontology_refs = [v for v in plan.semantics.boundaries if v.startswith(MARKER)]
+    if ontology_refs and (
+        work.businessScope.documentRules is None
+        or ontology_refs != [marker(work.businessScope.documentRules.ontology)]
+    ):
+        raise AuthorityError("OWNED_ONTOLOGY_SUCCESSOR_PLAN_BINDING_CHANGED")
+    if selection_predecessor is not None:
+        from .owned_resource_assembly import require_selection_rebinding
+
+        require_selection_rebinding(work, selection_predecessor, plan)
 
     if work.ontologyCorrection is not None:
         ref = ExactReference.model_validate(work.ontologyCorrection["originalPlan"])
@@ -333,6 +381,15 @@ def authorize_dispatch(owner, connection, command, context):
             context,
             preparation.semantics.target.problem,
             source_digest=receipt["sourceContentDigest"],
+            plan=(
+                ExactReference(
+                    resource_id=receipt["sourcePlanId"],
+                    revision_id=str(receipt["sourcePlanVersion"]),
+                    digest=receipt["sourcePlanDigest"],
+                )
+                if receipt["ownedBusiness"].get("assemblyAdoption")
+                else None
+            ),
         )
         if (
             evidence(work) != receipt["ownedBusiness"]

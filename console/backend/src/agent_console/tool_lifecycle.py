@@ -41,8 +41,11 @@ class ToolCommand(StrictWorkbenchModel):
         return self
 
 
-def validate_contract(record):
-    if record["operation"].get("blockingIssues"):
+def validate_contract(record, runtime_evidence=None):
+    original = record["operation"].get("blockingIssues", [])
+    resolved = ["PLUGIN_RUNTIME_VALIDATION_REQUIRED"] if runtime_evidence else []
+    issues = [issue for issue in original if issue not in resolved]
+    if issues:
         raise ToolStorageError("TOOL_UNSUPPORTED_SOURCE_CONTRACT")
     for name in ("inputSchema", "outputSchema"):
         schema = record["operation"].get(name)
@@ -59,7 +62,11 @@ def validate_contract(record):
         "status": "VALIDATED",
         "scope": "DEFINITION_CONTRACT_ONLY",
         "executionVerified": False,
-        "blockingIssues": record["operation"].get("blockingIssues", []),
+        "blockingIssues": issues,
+        "originalBlockingIssues": original,
+        "resolvedIssues": [issue for issue in original if issue in resolved],
+        "runtimeEvidence": runtime_evidence,
+        "sourceExecutionVerified": runtime_evidence is not None,
     }
 
 
@@ -87,7 +94,16 @@ def history(repository, conn, scope, tool_id):
 
 
 def command(
-    repository, conn, scope, tool_id, cmd, *, actor_id, decision_id, run_test=None
+    repository,
+    conn,
+    scope,
+    tool_id,
+    cmd,
+    *,
+    actor_id,
+    decision_id,
+    run_test=None,
+    validate_runtime=None,
 ):
     key = repository._scope(scope)
     payload = record_digest(
@@ -179,7 +195,12 @@ def command(
     else:
         if head["draft_revision_id"] != revision:
             raise ToolStorageError("TOOL_CURRENT_DRAFT_REQUIRED")
-        extra["validation"] = validate_contract(current["record"])
+        runtime = None
+        if "PLUGIN_RUNTIME_VALIDATION_REQUIRED" in current["record"]["operation"].get(
+            "blockingIssues", []
+        ):
+            runtime = validate_runtime(current, cmd) if validate_runtime else None
+        extra["validation"] = validate_contract(current["record"], runtime)
         if cmd.action == "publish":
             _, previous = history(repository, conn, scope, tool_id)
             if not any(

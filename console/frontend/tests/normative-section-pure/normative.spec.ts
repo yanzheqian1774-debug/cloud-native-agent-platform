@@ -1,0 +1,23 @@
+import {test,expect} from '@playwright/test';
+import {documentNormativeSections} from '../../src/problems/documentNormativeSection';
+import {fixture} from './fixture';
+const fresh=()=>structuredClone(fixture);
+test('synthetic saved report has four accurate section anchors without modifying any bytes',()=>{
+ const input=fresh(),before=JSON.stringify(input),sections=documentNormativeSections(input);
+ expect([...sections].map(([code,s])=>[code,s.headingLine,s.lines.at(-1)?.line])).toEqual([['release_owner',3,4],['impact_scope',5,6],['rollback',7,8],['validation',9,10]]);
+ expect(sections.get('rollback')!.lines[1].text).toContain('生产变更应提供回退步骤');
+ expect(input.documentReview.ruleResult.findings[2].evidence).toEqual([]);expect(JSON.stringify(input)).toBe(before);
+});
+test('duplicate same-title headings are not associated',()=>{const v=fresh();v.source.documents[1].text+='\n## 交接责任\n另一段\n';expect(documentNormativeSections(v).has('release_owner')).toBe(false)});
+test('missing, approximate and whitespace rule section names are not associated',()=>{for(const section of ['不存在','交接',' 交接责任']){const v=fresh();v.documentReview.ruleResult.findings[0].section=section;expect(documentNormativeSections(v).has('release_owner')).toBe(false)}});
+test('old result without section stays unassociated',()=>{const v=fresh();Reflect.deleteProperty(v.documentReview.ruleResult.findings[0],'section');expect(documentNormativeSections(v).has('release_owner')).toBe(false)});
+test('wrong policy id or scope cannot provide normative anchors',()=>{for(const kind of ['id','scope']){const v=fresh();if(kind==='id')v.documentReview.policyId='fixture-submission';else v.source.documents[1].scope='另一范围';expect(documentNormativeSections(v).size).toBe(0)}});
+test('each mismatched exact source tuple component is rejected',()=>{for(const key of ['resource_id','revision_id','digest'] as const){const v=fresh();v.documentReview.ruleBinding.source[key]=key==='digest'?'a'.repeat(64):'wrong';expect(documentNormativeSections(v).size).toBe(0)}});
+test('wrong review source snapshot, malformed binding and nonsynthetic source are rejected',()=>{for(const mutate of [(v:ReturnType<typeof fresh>)=>{v.documentReview.sourceSnapshot.digest='a'.repeat(64)},(v:ReturnType<typeof fresh>)=>{v.documentReview.ruleBinding.schema_version='wrong'},(v:ReturnType<typeof fresh>)=>{v.source.synthetic=false}]){const v=fresh();mutate(v);expect(documentNormativeSections(v).size).toBe(0)}});
+test('duplicate document identity or policy scope is rejected',()=>{for(const duplicate of [0,1]){const v=fresh();v.source.documents.push(structuredClone(v.source.documents[duplicate]));expect(documentNormativeSections(v).size).toBe(0)}});
+test('code-fenced headings cannot supply or duplicate an anchor',()=>{const v=fresh();v.source.documents[1].text='```md\n## 交接责任\n假的规范\n```\n'+v.source.documents[1].text;const s=documentNormativeSections(v).get('release_owner')!;expect(s.headingLine).toBe(7);expect(s.lines[1].text).toContain('必须明确一位唯一上线负责人')});
+test('empty normative section has no fabricated body',()=>{const v=fresh();v.source.documents[1].text=v.source.documents[1].text.replace('同一系统与同一发布批次必须明确一位唯一上线负责人；多个不同人名仅在此单值约束下算冲突。','');expect(documentNormativeSections(v).has('release_owner')).toBe(false)});
+test('legacy report without source remains valid but receives no normative anchor',()=>{const v=fresh();Reflect.deleteProperty(v,'source');expect(documentNormativeSections(v).size).toBe(0)});
+test('CRLF uses original physical line numbers without an invented trailing line',()=>{const v=fresh();v.source.documents[1].text=v.source.documents[1].text.replaceAll('\n','\r\n');const s=documentNormativeSections(v).get('validation')!;expect(s.lines.map(l=>l.line)).toEqual([9,10])});
+test('Markdown body is preserved exactly without becoming a generated clause',()=>{const v=fresh();v.source.documents[1].text=v.source.documents[1].text.replace('影响范围不得填待确认。','影响范围应**明确**；参考[说明](https://example.invalid)。');const s=documentNormativeSections(v).get('impact_scope')!;expect(s.lines[1].text).toBe('影响范围应**明确**；参考[说明](https://example.invalid)。');expect(Object.hasOwn(s,'proof')).toBe(false)});
+test('an identical policy scope under a different document ID is also ambiguous',()=>{const v=fresh();v.source.documents.push({...v.source.documents[1],id:'fixture-second-policy'});expect(documentNormativeSections(v).size).toBe(0)});

@@ -25,8 +25,9 @@ def fixture_record():
     }
 
 
+@pytest.mark.parametrize("kind", ["skill", "mcp"])
 @pytest.mark.parametrize("owner,readable", [(True, True), (True, False), (False, True)])
-def test_creator_and_current_exact_read_are_both_required(owner, readable):
+def test_creator_and_current_exact_read_are_both_required(owner, readable, kind):
     record = fixture_record()
     before = deepcopy(record)
     fetched, authorized = [], []
@@ -43,16 +44,17 @@ def test_creator_and_current_exact_read_are_both_required(owner, readable):
     value = access_candidates(
         SimpleNamespace(authority=SimpleNamespace(require=require)),
         SimpleNamespace(owned=lambda *args: owner),
-        "skill:fixture",
+        f"{kind}:fixture",
         SimpleNamespace(repository=SimpleNamespace(get=get)),
         "scope",
         "principal",
+        kind=kind,
     )
     if owner and readable:
         assert value == [
             {
-                "kind": "skill",
-                "identity": "skill:fixture",
+                "kind": kind,
+                "identity": f"{kind}:fixture",
                 "revisionId": "published",
                 "digest": "b" * 64,
             }
@@ -66,10 +68,22 @@ def test_creator_and_current_exact_read_are_both_required(owner, readable):
         action == "READ_RESOURCE" and not resource.endswith(":old")
         for _, action, resource in authorized
     )
+    if authorized:
+        prefix = (
+            "skill-invocation:prepared-mcp:" if kind == "mcp" else "skill-invocation:"
+        )
+        assert all(
+            resource.startswith(prefix + "prepared-resource:")
+            for _, _, resource in authorized
+        )
+    assert all(args[1] == kind for args in fetched)
     assert record == before
 
 
-def test_directory_get_missing_manage_exposes_only_owned_readable_hint(monkeypatch):
+@pytest.mark.parametrize("kind", ["skill", "mcp"])
+def test_directory_get_missing_manage_exposes_only_owned_readable_hint(
+    monkeypatch, kind
+):
     from agent_console import resource_management as module
 
     record = fixture_record()
@@ -86,7 +100,7 @@ def test_directory_get_missing_manage_exposes_only_owned_readable_hint(monkeypat
 
     connection = SimpleNamespace(
         execute=lambda *args: SimpleNamespace(
-            fetchall=lambda: [{"identity": "skill:fixture"}]
+            fetchall=lambda: [{"identity": f"{kind}:fixture"}]
         )
     )
     service = SimpleNamespace(
@@ -94,7 +108,7 @@ def test_directory_get_missing_manage_exposes_only_owned_readable_hint(monkeypat
         repository=SimpleNamespace(get=lambda *args: record),
     )
     manager = SimpleNamespace(
-        services={"skill": service},
+        services={kind: service},
         owned=lambda *args: True,
         scope=lambda *args: None,
         handle=lambda call: commands.append(call),
@@ -120,10 +134,38 @@ def test_directory_get_missing_manage_exposes_only_owned_readable_hint(monkeypat
         None,
     )
     with TestClient(app) as client:
-        response = client.get("/api/workbench/v1/resource-management/skill")
+        response = client.get(f"/api/workbench/v1/resource-management/{kind}")
     assert response.status_code == 200
     value = response.json()["result"]
     assert value["items"] == []
     assert len(value["accessCandidates"]) == 1
     assert "SECRET" not in str(value)
     assert commands == [] and record == before
+
+
+def test_unsupported_kind_never_reads_or_checks_an_owner():
+    def forbidden(*args):
+        pytest.fail("unsupported kind must not inspect resource/owner")
+
+    value = access_candidates(
+        SimpleNamespace(),
+        SimpleNamespace(owned=forbidden),
+        "unknown:fixture",
+        SimpleNamespace(repository=SimpleNamespace(get=forbidden)),
+        "scope",
+        "principal",
+        kind="knowledge",
+    )
+    assert value == []
+
+
+def test_original_skill_default_argument_is_compatible():
+    value = access_candidates(
+        SimpleNamespace(authority=SimpleNamespace(require=lambda *args: None)),
+        SimpleNamespace(owned=lambda *args: True),
+        "skill:fixture",
+        SimpleNamespace(repository=SimpleNamespace(get=lambda *args: fixture_record())),
+        "scope",
+        "principal",
+    )
+    assert {candidate["kind"] for candidate in value} == {"skill"}

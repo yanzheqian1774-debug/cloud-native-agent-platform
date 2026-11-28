@@ -28,6 +28,17 @@ from test_fixed_work_authoring import body
 from test_fixed_work_cycle_host_postgres import automation, case, repository, services
 
 
+def bound_schedule_fixture(anchor):
+    """One clock capture for the HH:MM slot and its original lower boundary."""
+    trigger = dict(
+        kind="SCHEDULE",
+        timezone="UTC",
+        cadence="DAILY",
+        localTime=(anchor - timedelta(minutes=1)).strftime("%H:%M"),
+    )
+    return trigger, anchor - timedelta(minutes=2)
+
+
 @pytest.mark.parametrize(
     "automation", [{"resources": "existing", "continuation": True}], indirect=True
 )
@@ -38,12 +49,8 @@ def test_bound_original_plan_to_start_composition(
     automation, monkeypatch, tmp_path, terminal
 ):
     original = body()
-    original["trigger"] = dict(
-        kind="SCHEDULE",
-        timezone="UTC",
-        cadence="DAILY",
-        localTime=(datetime.now(UTC) - timedelta(minutes=1)).strftime("%H:%M"),
-    )
+    anchor = datetime.now(UTC)
+    original["trigger"], not_before = bound_schedule_fixture(anchor)
     monkeypatch.setattr(host_test, "body", lambda: original)
 
     def setup(a, service, readonly, prior, saved, now):
@@ -130,7 +137,7 @@ def test_bound_original_plan_to_start_composition(
                 },
             )
         window = ScheduleWindow(
-            notBefore=now - timedelta(minutes=2),
+            notBefore=not_before,
             expiresAt=prior.expiresAt,
             windowSeconds=600,
         )

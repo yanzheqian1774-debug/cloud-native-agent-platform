@@ -4,11 +4,17 @@ from .authority_contracts import AuthorityError
 from .workbench_prepared_resources import reference
 
 
-def access_candidates(call, manager, identity, service, scope, principal):
-    """Expose only creator-owned current Skill tuples with current exact READ."""
-    if not identity or not manager.owned(call, "skill", identity):
+def access_candidates(
+    call, manager, identity, service, scope, principal, *, kind="skill"
+):
+    """Expose only creator-owned current Skill/MCP tuples with current exact READ."""
+    if (
+        kind not in {"skill", "mcp"}
+        or not identity
+        or not manager.owned(call, kind, identity)
+    ):
         return []
-    record = service.repository.get(scope, "skill", identity)
+    record = service.repository.get(scope, kind, identity)
     current = {
         record.get("currentDraftRevisionId"),
         record.get("publishedRevisionId"),
@@ -22,13 +28,13 @@ def access_candidates(call, manager, identity, service, scope, principal):
                 principal,
                 "SKILL",
                 "READ_RESOURCE",
-                reference("skill", identity, revision["revisionId"]),
+                reference(kind, identity, revision["revisionId"]),
             )
         except AuthorityError:
             continue
         candidates.append(
             {
-                "kind": "skill",
+                "kind": kind,
                 "identity": identity,
                 "revisionId": revision["revisionId"],
                 "digest": revision["digest"],

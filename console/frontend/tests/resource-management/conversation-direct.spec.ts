@@ -445,3 +445,30 @@ for(const variant of ['saved','new-goal','denied','wrong-message','wrong-actor',
  if(variant==='saved')await page.screenshot({path:info.outputPath('persisted-route-hint-1440.png'),fullPage:true});
  await page.reload();await expect(message).toBeVisible();await expect(message.getByText('这条补充已识别为当前问题的回答，接续状态见本会话当前工作。',{exact:true})).toHaveCount(resolved?1:0);expect(state.calls).toHaveLength(0);expect(state.writes).toHaveLength(0);
 });
+
+for(const variant of ['answer-only','linked-work','unknown-stage','needs-data','wrong-actor','leave-for-mcp'] as const)test('saved direct-answer presentation respects work and unknown facts '+variant,async({page})=>{
+ const state=await directFixture(page);
+ const response={state:'SUCCEEDED',resultKind:'DIRECT_ANSWER',invocationId:'saved-answer',answer:'这是已保存的答复。'};
+ state.journal.state={...state.journal.state,phase:variant==='unknown-stage'?'UNKNOWN':'DIRECT_DONE',draft:response};
+ state.messages.push({message_id:'a1',content:response.answer,kind:'SOURCE',author_id:'human:ordinary',facts:{assistantResponse:true,state:'SUCCEEDED',readable:true,requestKey:'saved-request',userMessageId:'q1',invokedBy:variant==='wrong-actor'?'human:other':'human:ordinary',response:{...response,resultKind:variant==='needs-data'?'NEEDS_DATA':'DIRECT_ANSWER'},source:{kind:'DRAFT',invocationId:'saved-answer',contextId:'saved-context',turnId:'saved-turn',turnVersion:1}}});
+ if(variant==='linked-work')await page.route('**/api/workbench/v1/conversations/direct',route=>route.fulfill({json:{result:{conversation:{conversation_id:'direct',title:'普通交流',version:1},messages:state.messages,links:[{link_id:'existing-work',readable:false}]}}}));
+ await page.goto('/work?conversation=direct');await expect(page.locator('#conversation-message-a1')).toBeVisible();
+ const breadcrumb=page.getByRole('navigation',{name:'页面位置'});
+ if(variant==='answer-only'||variant==='leave-for-mcp'){
+  await expect(breadcrumb).toContainText('问答会话');await expect(breadcrumb).not.toContainText('理解与确认');
+  await expect(page.getByRole('button',{name:'当前工作',exact:true})).toHaveCount(0);await expect(page.getByText('任务进展会在这里展示',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'下载答复与来源（Markdown）'})).toBeVisible();
+  await page.reload();await expect(breadcrumb).toContainText('问答会话');
+  if(variant==='leave-for-mcp'){
+   const resources=page.locator('details[data-navigation-group="resources"]');
+   if(!await resources.evaluate(el=>(el as HTMLDetailsElement).open))await resources.locator('summary').click();
+   await page.getByRole('link',{name:'MCP 服务',exact:true}).click();
+   await expect(breadcrumb).toContainText('MCP 服务');
+   await expect(breadcrumb).not.toContainText('问答会话');
+   await page.goBack();await expect(breadcrumb).toContainText('问答会话');
+  }
+ }else{
+  await expect(breadcrumb).toContainText('理解与确认');await expect(page.getByRole('button',{name:'当前工作',exact:true})).toBeDisabled();await expect(page.getByText('任务进展会在这里展示',{exact:true})).toBeVisible();
+ }
+ expect(state.calls).toHaveLength(0);expect(state.writes).toEqual([]);
+});

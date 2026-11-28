@@ -4,7 +4,7 @@ import {readFixedFocus,recordFixedFocus,type FixedCycleFocus,type FixedFocusComm
 import {routingReceiptNotice} from './conversationRoutingReceipt';
 import {useCallback,useEffect,useEffectEvent,useMemo,useRef,useState} from 'react';
 import {beginDraftAssistance,readConversationUnderstandingResult,readWorkbenchSession,WorkbenchRequestError,type DraftAssistanceResult,type WorkbenchSession} from '../api/businessWorkspace';
-import {conversationRequest,readConversationHead,type PrivateConversation} from '../api/privateConversation';
+import {conversationRequest,readConversationHead,readUnderstandingSuccessPage,type PrivateConversation} from '../api/privateConversation';
 import {conversationUnderstandingContent,type UserFactMessage} from './problemUnderstandingModel';
 import {conversationScope} from './conversationViewState';
 import {notifyConversationReply,notifyConversationSend} from './useConversationScroll';
@@ -23,7 +23,7 @@ function sameTarget(expected:RoutedOwnerTarget,actual:RoutedOwnerTarget){
  const fields: (keyof RoutedOwnerTarget)[]=expected.kind==='NATIVE'?['executionDigest','questionKey','questionDigest']:expected.kind==='UNDERSTANDING'?['journalVersion','journeyKey','contextId','turnId','turnVersion','aggregateVersion']:['journalVersion','journeyKey'];
  return fields.every(key=>expected[key]!==undefined&&expected[key]===actual[key])&&(expected.kind==='NATIVE'||expected.problemId===actual.problemId);
 }
-export function useConversationRouting({enabled,conversation,session,onMessagesChanged,onGoalRecorded,independentAdoptionReady=false,goal,naturalRouting=false,fixedMode=false,fixedFocus}:{onGoalRecorded?:(goal:GoalReference,messageId:string)=>Promise<void>;independentAdoptionReady?:boolean;naturalRouting?:boolean;goal?:GoalReference|null;fixedMode?:boolean;fixedFocus?:FixedCycleFocus|null;enabled:boolean;conversation:string|null;session:WorkbenchSession;onMessagesChanged:()=>Promise<void>}){
+export function useConversationRouting({boundedHistory=false,enabled,conversation,session,onMessagesChanged,onGoalRecorded,independentAdoptionReady=false,goal,naturalRouting=false,fixedMode=false,fixedFocus}:{boundedHistory?:boolean;onGoalRecorded?:(goal:GoalReference,messageId:string)=>Promise<void>;independentAdoptionReady?:boolean;naturalRouting?:boolean;goal?:GoalReference|null;fixedMode?:boolean;fixedFocus?:FixedCycleFocus|null;enabled:boolean;conversation:string|null;session:WorkbenchSession;onMessagesChanged:()=>Promise<void>}){
  const scope=conversationScope(session),storage='conversation-routing.v1:'+(fixedMode?JSON.stringify([session.principal.tenantId,session.principal.securityDomain,session.principal.principalId]):scope)+':'+conversation+(goal?':goal:'+goal.goalId+':'+goal.goalDigest:'');
  const [saved,setSaved]=useState<Saved|null>(()=>restored(storage)),[busy,setBusy]=useState(false),[notice,setNotice]=useState(()=>{const r=restored(storage)?.lastResult;return r?terminalNotice(r.state,r.reasonCode):''}),[preview,setPreview]=useState(()=>restored(storage)?.unacceptedPreview??''),[failedCandidate,setFailedCandidate]=useState<FailedItem|null>(null),[modelState,setModelState]=useState(saved?.lastResult?.state??'UNKNOWN'),[canResume,setCanResume]=useState(false),[ownerEpoch,setOwnerEpoch]=useState(0);
  const currentFocus=useRef({fixedMode,fixedFocus,naturalRouting});currentFocus.current={fixedMode,fixedFocus,naturalRouting};
@@ -43,13 +43,28 @@ export function useConversationRouting({enabled,conversation,session,onMessagesC
   if(fixedMode||!conversation||flight.current||before&&!['DONE','REVIEW'].includes(before.phase)||![...owners.current.values()].some(o=>o.target.kind==='UNDERSTANDING'))return;
   try{
    await verify();
-   const record=await conversationRequest<PrivateConversation>('/'+encodeURIComponent(conversation));
-   if(record.conversation.conversation_id!==conversation)return;
    const candidates:Saved[]=[];
-   for(const message of record.messages){
+   const pages: {message:import('../api/privateConversation').PrivateMessage;userMessage:import('../api/privateConversation').PrivateMessage|null}[][]=[];
+   if(boundedHistory){
+    let cursor:string|undefined,more=true;const seen=new Set<string>();
+    while(more){const page=await readUnderstandingSuccessPage(conversation,cursor);await verify();if(!isLive())return;
+     if(page?.conversation?.conversation_id!==conversation||!Array.isArray(page.items)||typeof page.unavailable!=='boolean'||typeof page.page?.hasMore!=='boolean')throw Error('CONVERSATION_SUCCESS_PAGE_INVALID');
+     if(page.unavailable||page.items.some(item=>item.message.facts?.readable===false||!item.userMessage||item.userMessage.facts?.readable===false)){setNotice('部分已保存回答当前不可读取，原记录保留；未推断为尚未提交。');return;}
+     pages.push(page.items);
+     more=page.page.hasMore;if(!more)break;
+     const next=page.page.nextCursor;if(!next||seen.has(next))throw Error('CONVERSATION_SUCCESS_CURSOR_INVALID');seen.add(next);cursor=next;
+    }
+   }else{
+    // Only an explicitly older server without the availability flag uses the
+    // original authorized compatibility read. New servers never fall back here.
+    const record=await conversationRequest<PrivateConversation>('/'+encodeURIComponent(conversation));
+    if(record.conversation.conversation_id!==conversation)return;
+    pages.push(record.messages.map(message=>{const users=record.messages.filter(user=>user.message_id===message.facts?.userMessageId&&user.author_id===session.principal.principalId&&!user.facts?.assistantResponse);return {message,userMessage:users.length===1?users[0]:null}}));
+   }
+   for(const {message,userMessage} of pages.flat()){
     const f=message.facts;
     if(!f?.assistantResponse||f.invokedBy!==session.principal.principalId||f.state!=='SUCCEEDED'||f.source?.kind!=='DRAFT'||f.response?.conversationRoute?.relation!=='CURRENT_QUESTION'||!f.requestKey||!f.userMessageId)continue;
-    const users=record.messages.filter(m=>m.message_id===f.userMessageId&&m.author_id===session.principal.principalId&&!m.facts?.assistantResponse);
+    const users=userMessage&&userMessage.message_id===f.userMessageId&&userMessage.author_id===session.principal.principalId&&!userMessage.facts?.assistantResponse?[userMessage]:[];
     if(users.length!==1||!users[0].request_key)continue;
     const user=users[0],path='/'+encodeURIComponent(conversation)+'/understanding-results/'+encodeURIComponent(user.message_id),query='?'+new URLSearchParams({requestKey:f.requestKey});
     const result=await readConversationUnderstandingResult(conversation,user.message_id,f.requestKey);

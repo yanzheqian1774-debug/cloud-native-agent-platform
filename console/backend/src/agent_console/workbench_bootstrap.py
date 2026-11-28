@@ -969,6 +969,17 @@ def build_workbench_composition(
                 tool_contract_path, resource_manager
             )
 
+        tool_source_testing = None
+        tool_source_path = os.environ.get("TOOL_SOURCE_TEST_POLICY")
+        if tool_source_path:
+            from .tool_source_testing import ToolSourceTesting
+
+            if tool_definition_repository is None:
+                raise AuthorityError("TOOL_SOURCE_REPOSITORY_REQUIRED")
+            tool_source_testing = ToolSourceTesting(
+                tool_source_path, tool_definition_repository
+            )
+
         if os.environ.get("SELECTED_RESOURCE_UPGRADES_ENABLED") == "true":
             if resource_manager is None or capability_repository is None:
                 raise AuthorityError("SELECTED_UPGRADE_DEPENDENCIES_REQUIRED")
@@ -1326,6 +1337,7 @@ def build_workbench_composition(
                         tool_definition_repository,
                         WorkbenchCursorCodec(foundation.continuation_owner.signing_key),
                         testing=tool_contract_testing,
+                        source_testing=tool_source_testing,
                     )
                     if tool_definition_repository is not None
                     else ()

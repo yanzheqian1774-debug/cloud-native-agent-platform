@@ -1,6 +1,7 @@
 import type {PrivateMessage} from '../api/privateConversation';
 
-export function capabilityWorkStatus(source:PrivateMessage,messages:PrivateMessage[]){
+export function capabilityWorkStatus(source:PrivateMessage,messages:PrivateMessage[],complete=true){
+ if(!complete)return {heading:'当前准备 · 原进展待读取',detail:'已保存的目标与准备记录保留；按原记录核对进展，不能据当前这段消息判断是否已开始。'};
  const intents=messages.filter(m=>m.kind==='ACTION_INTENT'&&m.facts?.readable!==false&&m.facts?.action==='CREATE_PROBLEM'&&m.facts?.messageId===source.message_id&&m.facts?.source?.kind==='CAPABILITY');
  if(!intents.length)return {heading:'当前准备 · 未启动',detail:'目标与资料说明已保存，尚未启动任务或调用模型。'};
  const receipts=messages.filter(m=>m.kind==='OWNER_RECEIPT'&&m.facts?.readable!==false&&m.facts?.state==='SUCCEEDED'&&m.facts?.source?.kind==='PROBLEM'&&intents.some(i=>i.facts?.intentId===m.facts?.intentId));

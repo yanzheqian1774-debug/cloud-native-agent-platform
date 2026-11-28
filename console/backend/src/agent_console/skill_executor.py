@@ -98,7 +98,7 @@ class HttpReadOnlySkillExecutor:
         }
         try:
             with httpx.Client(
-                transport=self.transport, timeout=timeout_ms / 1000.0
+                transport=self.transport, timeout=timeout_ms / 1000.0, trust_env=False
             ) as client:
                 response = client.post(
                     f"{self.endpoint}/v1/read-only/invoke", json=request

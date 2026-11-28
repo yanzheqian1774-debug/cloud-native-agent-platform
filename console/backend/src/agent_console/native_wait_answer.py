@@ -65,10 +65,30 @@ def accept_if_waiting(call, app, preparation, value):
         if operation != "ANSWER" or checkpoint != cp:
             raise AuthorityError("NATIVE_WAIT_ANSWER_OPERATION_REQUIRED")
         app.validate(preparation)
-        binding = reader.work(
-            connection,
-            call.context,
-            preparation.semantics.target.problem,
+        from .execution_postgres import PostgresExecutionAuthorityRepository
+        from .owned_resource_assembly import prepared_binding
+
+        command_row = connection.execute(
+            "SELECT payload FROM execution_authority.native_dispatch_commands "
+            "WHERE namespace=%s AND security_domain=%s AND command_id=%s "
+            "AND principal_id=%s AND authorization_resource=%s",
+            (
+                preparation.namespace,
+                preparation.security_domain,
+                cp.identity.command_id,
+                call.context.principal_id,
+                "governed-execution:prepared:" + preparation.digest,
+            ),
+        ).fetchone()
+        if command_row is None:
+            raise AuthorityError("NATIVE_WAIT_ANSWER_BINDING_CHANGED")
+        command = PostgresExecutionAuthorityRepository._dispatch_command(
+            command_row["payload"]
+        )
+        if str(command.attempt_id) != cp.identity.attempt_id:
+            raise AuthorityError("NATIVE_WAIT_ANSWER_BINDING_CHANGED")
+        binding = prepared_binding(
+            reader, connection, call.context, command, preparation
         )
         if (
             binding.scope.source != preparation.source_snapshot

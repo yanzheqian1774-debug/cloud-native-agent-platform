@@ -87,11 +87,9 @@ class NativeWaitCommandAccess:
             if cp.identity.conversation_id != binding.conversation_id:
                 raise AuthorityError("NATIVE_WAIT_SERVICE_BINDING_CHANGED")
         else:
-            binding = self.work.owned_business.work(
-                c,
-                context,
-                p.semantics.target.problem,
-            )
+            from .owned_resource_assembly import prepared_binding
+
+            binding = prepared_binding(self.work.owned_business, c, context, command, p)
             bound_source = binding.scope.source
         config = self.runtime.durable_wait
         if (
